@@ -1,0 +1,10 @@
+{
+  "extends": "@movesook/config/tsconfig.node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "verbatimModuleSyntax": false
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

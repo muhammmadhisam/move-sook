@@ -1,0 +1,31 @@
+# deps & build artifacts — rebuilt inside the image
+**/node_modules
+**/.next
+**/dist
+**/out
+**/.turbo
+**/.cache
+
+# prisma generated client (regenerated during build)
+packages/db/src/generated
+
+# local env & secrets (pass via runtime env / build args)
+.env
+.env.*
+**/.env
+**/.env.*
+
+# vcs / editor / os
+.git
+.gitignore
+**/*.log
+.DS_Store
+**/*.tsbuildinfo
+
+# local dev uploads
+apps/api/uploads
+
+# docker
+**/Dockerfile
+.dockerignore
+docker-compose.yml

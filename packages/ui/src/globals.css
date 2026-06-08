@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Untitled UI design tokens — shared by web + admin.
+   Values are HSL channels (H S% L%) so Tailwind opacity modifiers work. */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 43% 11%; /* gray-900 */
+    --card: 0 0% 100%;
+    --card-foreground: 220 43% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 43% 11%;
+
+    --primary: 357 75% 50%; /* brand-600 #E0202A — logo red */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 216 22% 96%; /* gray-100 */
+    --secondary-foreground: 217 24% 27%; /* gray-700 */
+
+    --muted: 210 20% 98%; /* gray-50 */
+    --muted-foreground: 221 13% 46%; /* gray-500 */
+
+    --accent: 210 20% 98%; /* gray-50 */
+    --accent-foreground: 220 43% 11%;
+
+    --destructive: 4 73% 49%; /* error-600 #D92D20 */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 93% 30%; /* success-600 #079455 */
+    --success-foreground: 0 0% 100%;
+
+    --warning: 28 99% 44%; /* warning-600 #DC6803 */
+    --warning-foreground: 0 0% 100%;
+
+    --border: 220 16% 93%; /* gray-200 */
+    --input: 220 16% 84%; /* gray-300 */
+    --ring: 357 78% 62%; /* brand-500 #E83C44 — red focus ring */
+
+    --radius: 0.5rem; /* 8px controls; cards use rounded-xl (12px) */
+  }
+
+  .dark {
+    --background: 222 42% 8%; /* gray-950 */
+    --foreground: 210 20% 98%; /* gray-50 */
+    --card: 220 43% 11%; /* gray-900 */
+    --card-foreground: 210 20% 98%;
+    --popover: 220 43% 11%;
+    --popover-foreground: 210 20% 98%;
+
+    --primary: 357 78% 56%; /* brand-500/600 — logo red (dark) */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 32% 17%; /* gray-800 */
+    --secondary-foreground: 216 22% 96%;
+
+    --muted: 215 32% 17%;
+    --muted-foreground: 218 15% 65%; /* gray-400 */
+
+    --accent: 215 32% 17%;
+    --accent-foreground: 210 20% 98%;
+
+    --destructive: 4 86% 58%; /* error-500 */
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 76% 30%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 33 94% 45%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 217 24% 27%; /* gray-700 */
+    --input: 217 24% 27%;
+    --ring: 357 78% 62%; /* brand-500 — red focus ring (dark) */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+}

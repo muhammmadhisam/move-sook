@@ -1,0 +1,458 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "MoveSook",
+    "languages": ["TypeScript"],
+    "frameworks": ["Hono", "Next.js", "Prisma", "Turborepo", "Zod"],
+    "description": "On-demand two-sided moving marketplace for Thailand: customers post moving jobs and nearby available drivers claim them in real time (no pre-declared trips). Covers job posting with a manual bank-transfer payment gate, driver onboarding/verification, on-demand matching, a job lifecycle state machine, a commission ledger with driver payouts, reviews/ratings, growth levers (promos, referrals, surge), and a broad admin/back-office surface including PDPA compliance.",
+    "analyzedAt": "2026-06-08T00:00:00Z",
+    "gitCommitHash": "unknown"
+  },
+  "nodes": [
+    {
+      "id": "domain:identity-access",
+      "type": "domain",
+      "name": "Identity & Access",
+      "summary": "Authenticates the platform's two separate audiences and enforces role-based access. Customers/drivers sign in with LINE id_tokens (LIFF) while admins use email+password with rate-limiting; both get a self-signed JWT but in differently-named httpOnly cookies so sessions never collide across subdomains.",
+      "tags": ["auth", "jwt", "line", "rbac", "session"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": ["User", "AdminCredential", "JWT claims (sub+role)"],
+        "businessRules": [
+          "USER/DRIVER and ADMIN use separately-named cookies (USER_COOKIE_NAME vs ADMIN_COOKIE_NAME)",
+          "RBAC has no implicit hierarchy — ADMIN is not automatically a DRIVER; each route lists exact roles",
+          "Admin login is bcrypt-verified with constant-time compare and in-memory rate-limit/lockout",
+          "Banned users are rejected at login"
+        ],
+        "crossDomainInteractions": [
+          "Issues the role that the Driver Marketplace and Admin Back-Office gate on",
+          "Refreshes the session cookie when a user is promoted to DRIVER"
+        ]
+      }
+    },
+    {
+      "id": "domain:job-marketplace",
+      "type": "domain",
+      "name": "Job Marketplace & Lifecycle",
+      "summary": "The core customer-facing domain: posting a moving job, gating it behind a manual bank-transfer payment approval, and advancing it through the shared job state machine from POSTED to DELIVERED. Includes pricing/estimates, on-demand driver matching by province, live SSE tracking, proof photos, cancellation, reviews and disputes.",
+      "tags": ["jobs", "state-machine", "pricing", "matching", "marketplace"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Job", "Customer", "Review", "Dispute", "ServiceArea", "VehiclePricing"],
+        "businessRules": [
+          "New customer jobs post as PENDING_PAYMENT and stay hidden from drivers until admin approves the transfer slip",
+          "canTransition() enforces legal job-status jumps; drivers may only advance up to PENDING_CONFIRMATION (admin confirms DELIVERED)",
+          "Acceptance is an atomic conditional updateMany on status=POSTED, driverId=null — first approved driver wins the claim race",
+          "Server recomputes price from distance + floor/helper surcharges; client-supplied price is ignored",
+          "One review per delivered job, authored by the job's customer"
+        ],
+        "crossDomainInteractions": [
+          "Acceptance snapshots commissionPct used later by the Financial Ledger",
+          "Confirming DELIVERED triggers the commission Transaction + payout in the Financial Ledger",
+          "Driver feed depends on the driver's serviceProvince and APPROVED status from Driver Marketplace",
+          "Applies promo/surge/referral levers from Growth & Engagement"
+        ]
+      }
+    },
+    {
+      "id": "domain:driver-marketplace",
+      "type": "domain",
+      "name": "Driver Onboarding & Supply",
+      "summary": "Manages the driver side of the marketplace: claiming an admin-issued invite code to become a driver, completing the application, admin verification, and controlling live supply via availability toggles and GPS broadcasts. Also surfaces the driver's earnings and gamified weekly incentives.",
+      "tags": ["drivers", "onboarding", "verification", "availability", "supply"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Driver", "User (role)", "verifyStatus", "serviceProvince"],
+        "businessRules": [
+          "Drivers are pre-registered by admins (claim code / connect); there is no public self-signup",
+          "Claiming a driver code promotes the user's role to DRIVER but does not approve them",
+          "Job acceptance is gated on verifyStatus === 'APPROVED'",
+          "A driver cannot go off-duty while holding an in-hand job (ACCEPTED/PICKED_UP/IN_TRANSIT)",
+          "Each application submission re-anchors the verify-queue SLA clock"
+        ],
+        "crossDomainInteractions": [
+          "Verification is performed by Admin Back-Office",
+          "serviceProvince + availability drive the Job Marketplace on-demand feed",
+          "Earnings and incentives read from the Financial Ledger transactions"
+        ]
+      }
+    },
+    {
+      "id": "domain:financial-ledger",
+      "type": "domain",
+      "name": "Financial Ledger & Payouts",
+      "summary": "The money domain: the commission ledger and driver payouts. A Transaction row is created idempotently inside the same DB transaction that flips a job to DELIVERED, snapshotting gross amount and the job's accept-time commission %, then accumulated into the driver's open payout round for the admin to mark paid.",
+      "tags": ["commission", "ledger", "payouts", "finance", "transactions"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["Transaction", "Payout", "AppSetting (commission_pct)"],
+        "businessRules": [
+          "commissionPct defaults from AppSetting (12%) and is snapshotted onto the Job at accept time so later changes don't rewrite history",
+          "One Transaction per job (unique jobId) — delivery confirmation is idempotent",
+          "Split math lives once in computeCommission() in @movesook/shared",
+          "Delivery confirmation is blocked unless the job has both a driver and a positive price",
+          "New transactions auto-attach to the driver's open PENDING payout round"
+        ],
+        "crossDomainInteractions": [
+          "Driven by the DELIVERED transition in the Job Marketplace",
+          "Feeds driver earnings/incentives in Driver Marketplace",
+          "Payout marking and transaction edits are Admin Back-Office actions"
+        ]
+      }
+    },
+    {
+      "id": "domain:growth-engagement",
+      "type": "domain",
+      "name": "Growth & Engagement",
+      "summary": "Demand/retention levers layered onto the marketplace: promo codes that discount a job subtotal, two-sided referral rewards paid on a referee's first confirmed delivery, surge pricing by province, in-app notifications, and driver weekly-goal incentives.",
+      "tags": ["promo", "referral", "surge", "notifications", "retention"],
+      "complexity": "moderate",
+      "domainMeta": {
+        "entities": ["PromoCode", "Customer (referral)", "Notification", "surge config"],
+        "businessRules": [
+          "Promo is preview-only on estimate; usedCount is incremented only when the job is created",
+          "A referral code can be applied once and never to oneself; reward fires on the referee's first DELIVERED job",
+          "notify() only writes in-app Notification rows and must never break the triggering action (best-effort)"
+        ],
+        "crossDomainInteractions": [
+          "Promo + surge adjust pricing in the Job Marketplace estimate/create",
+          "Referral reward fires off the DELIVERED transition",
+          "Notifications fan out across job, driver-verify and cancellation events"
+        ]
+      }
+    },
+    {
+      "id": "domain:admin-backoffice",
+      "type": "domain",
+      "name": "Admin Back-Office & Compliance",
+      "summary": "The operations control plane: stats/analytics, driver verification queue, payment-slip approval, job/transaction/payout management, disputes, blacklist, settings (commission/pricing/system/service-areas/vehicle-pricing/promos), admin invites, audit logging, and PDPA consents/export/anonymization. Every privileged action is RBAC-scoped and audit-logged.",
+      "tags": ["admin", "operations", "audit", "pdpa", "settings"],
+      "complexity": "complex",
+      "domainMeta": {
+        "entities": ["AdminCredential", "AuditLog", "Dispute", "AppSetting", "Consent", "Blacklist"],
+        "businessRules": [
+          "Admin sub-roles (SUPER/OPS/FINANCE) scope each action; finance-only routes for money/settings",
+          "Approving a payment slip flips a job PENDING_PAYMENT -> POSTED and fans out the new-job alert; rejecting bounces it back",
+          "New admins come only from seed/CLI or invite by an existing admin — never a public endpoint",
+          "Driver verification, delivery confirmation, and payout marking are admin-only",
+          "Privileged actions are written to AuditLog"
+        ],
+        "crossDomainInteractions": [
+          "Gates publication of jobs in the Job Marketplace via payment approval",
+          "Confirms DELIVERED which triggers the Financial Ledger",
+          "Verifies drivers in the Driver Marketplace",
+          "Configures commission/pricing/promos consumed across pricing and finance"
+        ]
+      }
+    },
+
+    {
+      "id": "flow:user-line-login",
+      "type": "flow",
+      "name": "Customer/Driver LINE Login",
+      "summary": "A LIFF client exchanges a LINE id_token for a MoveSook session cookie, upserting the user and issuing a role-stamped JWT.",
+      "tags": ["auth", "line", "session"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /auth/line", "entryType": "http" }
+    },
+    {
+      "id": "flow:admin-login",
+      "type": "flow",
+      "name": "Admin Email/Password Login",
+      "summary": "An admin authenticates with email+password against bcrypt with rate-limiting and receives a separate admin cookie.",
+      "tags": ["auth", "admin", "rate-limit"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /auth/admin/login", "entryType": "http" }
+    },
+
+    {
+      "id": "flow:post-job",
+      "type": "flow",
+      "name": "Post a Moving Job",
+      "summary": "A customer estimates a quote then posts a job, which is created as PENDING_PAYMENT and held hidden from drivers until payment is approved.",
+      "tags": ["jobs", "pricing", "payment-gate"],
+      "complexity": "complex",
+      "domainMeta": { "entryPoint": "POST /jobs", "entryType": "http" }
+    },
+    {
+      "id": "flow:payment-gate",
+      "type": "flow",
+      "name": "Payment Slip Approval Gate",
+      "summary": "The customer uploads a bank-transfer slip and an admin approves it, flipping the job to POSTED and alerting drivers in the area (rejection bounces it back).",
+      "tags": ["payment", "admin", "publishing"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /jobs/:id/payment-slip", "entryType": "http" }
+    },
+    {
+      "id": "flow:accept-and-deliver",
+      "type": "flow",
+      "name": "Accept & Deliver Job",
+      "summary": "An approved driver browses the on-demand feed, wins an open job via an atomic claim, then advances it through the state machine up to PENDING_CONFIRMATION for admin sign-off.",
+      "tags": ["matching", "state-machine", "driver"],
+      "complexity": "complex",
+      "domainMeta": { "entryPoint": "POST /jobs/:id/accept", "entryType": "http" }
+    },
+    {
+      "id": "flow:cancel-job",
+      "type": "flow",
+      "name": "Cancel Job",
+      "summary": "A customer cancels their own job before pickup; a cancellation fee may apply past the free-cancel window and any assigned driver is notified.",
+      "tags": ["jobs", "cancellation", "notify"],
+      "complexity": "simple",
+      "domainMeta": { "entryPoint": "POST /jobs/:id/cancel", "entryType": "http" }
+    },
+    {
+      "id": "flow:review-job",
+      "type": "flow",
+      "name": "Review Delivered Job",
+      "summary": "After delivery the customer rates the driver once; the driver's denormalised ratingAvg/ratingCount are recomputed in the same transaction.",
+      "tags": ["reviews", "ratings", "denormalisation"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /jobs/:id/review", "entryType": "http" }
+    },
+
+    {
+      "id": "flow:driver-onboarding",
+      "type": "flow",
+      "name": "Driver Onboarding & Application",
+      "summary": "A user claims an admin-issued invite code to become a DRIVER, then fills in vehicle/bank/service-province details, submitting the application for review.",
+      "tags": ["drivers", "onboarding", "claim-code"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /drivers/claim", "entryType": "http" }
+    },
+    {
+      "id": "flow:driver-verification",
+      "type": "flow",
+      "name": "Admin Driver Verification",
+      "summary": "An admin reviews the verify queue and approves/rejects/suspends a driver application, writing an audit log and notifying the applicant.",
+      "tags": ["verification", "admin", "audit"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /admin/drivers/:id/verify", "entryType": "manual" }
+    },
+    {
+      "id": "flow:driver-availability",
+      "type": "flow",
+      "name": "Driver Availability & Location",
+      "summary": "A driver toggles online/offline for the on-demand feed and broadcasts GPS for live tracking, both counting as activity that resets the idle clock.",
+      "tags": ["availability", "gps", "supply"],
+      "complexity": "simple",
+      "domainMeta": { "entryPoint": "PATCH /drivers/me/availability", "entryType": "http" }
+    },
+
+    {
+      "id": "flow:commission-ledger",
+      "type": "flow",
+      "name": "Commission Ledger on Delivery",
+      "summary": "When an admin confirms a job DELIVERED, the commission Transaction is written idempotently and attached to the driver's open payout round in one DB transaction.",
+      "tags": ["commission", "ledger", "payout"],
+      "complexity": "complex",
+      "domainMeta": { "entryPoint": "PATCH /admin/jobs/:id (status=DELIVERED)", "entryType": "manual" }
+    },
+    {
+      "id": "flow:driver-payouts",
+      "type": "flow",
+      "name": "Driver Payouts",
+      "summary": "An admin marks a driver's accumulated payout round as paid (with slip + reference) after delivery transactions have rolled into it.",
+      "tags": ["payouts", "finance", "admin"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "PATCH /admin/transactions/:id", "entryType": "manual" }
+    },
+
+    {
+      "id": "flow:promo-pricing",
+      "type": "flow",
+      "name": "Promo Code Pricing",
+      "summary": "A promo code is previewed against a quote at estimate time and consumed (usedCount incremented) only when the discounted job is actually created.",
+      "tags": ["promo", "pricing", "discount"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /jobs/estimate", "entryType": "http" }
+    },
+    {
+      "id": "flow:referral-program",
+      "type": "flow",
+      "name": "Referral Program",
+      "summary": "A customer applies a friend's referral code once; the two-sided reward is granted on that customer's first confirmed delivery.",
+      "tags": ["referral", "reward", "retention"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /me/referral/apply", "entryType": "http" }
+    },
+
+    {
+      "id": "flow:pdpa-compliance",
+      "type": "flow",
+      "name": "PDPA Consent & Anonymization",
+      "summary": "Admins record/read user consents and anonymize a user's personal data on request, satisfying Thai PDPA obligations.",
+      "tags": ["pdpa", "consent", "privacy"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "POST /admin/users/:id/anonymize", "entryType": "manual" }
+    },
+    {
+      "id": "flow:platform-settings",
+      "type": "flow",
+      "name": "Platform Settings Management",
+      "summary": "Finance/super admins configure commission, per-vehicle pricing, service areas, and system settings that the pricing and matching engines read.",
+      "tags": ["settings", "pricing", "configuration"],
+      "complexity": "moderate",
+      "domainMeta": { "entryPoint": "PUT /admin/settings/commission", "entryType": "manual" }
+    },
+
+    { "id": "step:user-line-login:verify-token", "type": "step", "name": "Verify LINE id_token", "summary": "Validate the LINE id_token against LINE with aud/iss/exp checks.", "tags": ["line", "verify"], "complexity": "moderate", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [21, 25] },
+    { "id": "step:user-line-login:upsert-user", "type": "step", "name": "Upsert user from profile", "summary": "Create or update the User by lineUserId and reject banned accounts.", "tags": ["user", "upsert"], "complexity": "simple", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [27, 34] },
+    { "id": "step:user-line-login:issue-cookie", "type": "step", "name": "Issue session cookie", "summary": "Sign a role-stamped JWT and set the USER httpOnly cookie.", "tags": ["jwt", "cookie"], "complexity": "simple", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [36, 43] },
+
+    { "id": "step:admin-login:rate-limit", "type": "step", "name": "Check rate-limit / lockout", "summary": "Gate the attempt by IP+email and 429 if too many failures.", "tags": ["rate-limit"], "complexity": "simple", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [49, 55] },
+    { "id": "step:admin-login:verify-password", "type": "step", "name": "Verify password (bcrypt)", "summary": "Constant-time bcrypt compare against the admin credential, asserting ADMIN role.", "tags": ["bcrypt", "password"], "complexity": "moderate", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [57, 69] },
+    { "id": "step:admin-login:issue-admin-cookie", "type": "step", "name": "Issue admin cookie", "summary": "Record success and set the separately-named ADMIN session cookie.", "tags": ["jwt", "cookie"], "complexity": "simple", "filePath": "apps/api/src/routes/auth.ts", "lineRange": [71, 79] },
+
+    { "id": "step:post-job:system-guards", "type": "step", "name": "System & service-area guards", "summary": "Reject if maintenance mode, inactive vehicle type, out-of-area province, or schedule window exceeded.", "tags": ["validation", "guards"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [143, 168] },
+    { "id": "step:post-job:compute-price", "type": "step", "name": "Compute server-side price", "summary": "Derive distance + floor/helper/surge surcharges via computeJobQuote and clamp into the price window; client price is ignored.", "tags": ["pricing", "quote"], "complexity": "complex", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [169, 226] },
+    { "id": "step:post-job:upsert-customer", "type": "step", "name": "Find-or-create customer", "summary": "Upsert the signed-in user's own Customer record.", "tags": ["customer", "upsert"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [228, 237] },
+    { "id": "step:post-job:create-pending", "type": "step", "name": "Create job as PENDING_PAYMENT", "summary": "Persist the job hidden from drivers and consume any applied promo in the same transaction.", "tags": ["jobs", "transaction"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [252, 299] },
+
+    { "id": "step:payment-gate:upload-slip", "type": "step", "name": "Upload transfer slip", "summary": "Customer attaches the bank-transfer slip URL; job stays PENDING_PAYMENT and any prior rejection is cleared.", "tags": ["payment", "upload"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [304, 326] },
+    { "id": "step:payment-gate:admin-approve", "type": "step", "name": "Admin approves payment", "summary": "Finance/ops admin approves the slip, flipping the job PENDING_PAYMENT -> POSTED.", "tags": ["payment", "admin", "publish"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [988, 1033] },
+    { "id": "step:payment-gate:fanout-alert", "type": "step", "name": "Fan out new-job alert", "summary": "Notify drivers in the origin province that a new job is available (notifyNewJobToArea).", "tags": ["notify", "matching"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [988, 1033] },
+    { "id": "step:payment-gate:reject-bounce", "type": "step", "name": "Reject & bounce back", "summary": "Rejecting clears the slip and returns the job to PENDING_PAYMENT for re-upload.", "tags": ["payment", "reject"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1034, 1073] },
+
+    { "id": "step:accept-and-deliver:list-feed", "type": "step", "name": "List on-demand feed", "summary": "Return open POSTED unassigned jobs whose originProvince matches the driver's serviceProvince.", "tags": ["matching", "feed"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [329, 378] },
+    { "id": "step:accept-and-deliver:gate-approved", "type": "step", "name": "Gate on APPROVED + capacity", "summary": "Reject acceptance unless the driver is APPROVED and under their max active-job cap.", "tags": ["verification", "guards"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [560, 577] },
+    { "id": "step:accept-and-deliver:atomic-claim", "type": "step", "name": "Atomic claim race", "summary": "Conditional updateMany on POSTED+driverId:null wins the claim and snapshots commissionPct.", "tags": ["concurrency", "claim"], "complexity": "complex", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [579, 616] },
+    { "id": "step:accept-and-deliver:advance-status", "type": "step", "name": "Advance through state machine", "summary": "Driver moves the job PICKED_UP -> IN_TRANSIT -> PENDING_CONFIRMATION via canTransition, capped before DELIVERED.", "tags": ["state-machine"], "complexity": "complex", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [618, 669] },
+    { "id": "step:accept-and-deliver:proof-photos", "type": "step", "name": "Attach proof photos", "summary": "Driver uploads pickup/delivery proof photo URLs to the job.", "tags": ["proof", "upload"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [462, 479] },
+    { "id": "step:accept-and-deliver:admin-confirm", "type": "step", "name": "Admin confirms DELIVERED", "summary": "Admin validates driver+price and flips the job to DELIVERED, the only path to terminal success.", "tags": ["admin", "deliver"], "complexity": "complex", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [916, 951] },
+
+    { "id": "step:cancel-job:guard-state", "type": "step", "name": "Guard cancellable state", "summary": "Allow cancel only while DRAFT/PENDING_PAYMENT/POSTED/ACCEPTED (not after transport begins).", "tags": ["cancellation", "guards"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [482, 494] },
+    { "id": "step:cancel-job:apply-fee", "type": "step", "name": "Apply cancellation fee", "summary": "Charge a fee and notify the customer if cancelled past the free-cancel window.", "tags": ["fee", "notify"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [496, 508] },
+    { "id": "step:cancel-job:notify-driver", "type": "step", "name": "Notify assigned driver", "summary": "Inform any already-assigned driver that the job was cancelled.", "tags": ["notify"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [509, 519] },
+
+    { "id": "step:review-job:guard-delivered", "type": "step", "name": "Guard delivered & owner", "summary": "Allow review only for the job's customer on a DELIVERED job with no prior review.", "tags": ["reviews", "guards"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [677, 691] },
+    { "id": "step:review-job:create-review", "type": "step", "name": "Create review", "summary": "Persist the rating + comment authored by the customer.", "tags": ["reviews"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [694, 697] },
+    { "id": "step:review-job:recompute-rating", "type": "step", "name": "Recompute driver rating", "summary": "Aggregate Review and update the driver's denormalised ratingAvg/ratingCount in the same transaction.", "tags": ["ratings", "denormalisation"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [698, 711] },
+
+    { "id": "step:driver-onboarding:claim-code", "type": "step", "name": "Claim invite code", "summary": "Link a pending admin-created Driver to the user via its claim code.", "tags": ["claim", "onboarding"], "complexity": "moderate", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [27, 50] },
+    { "id": "step:driver-onboarding:promote-role", "type": "step", "name": "Promote to DRIVER", "summary": "Set the user's role to DRIVER and reissue the session cookie so it takes effect immediately.", "tags": ["rbac", "session"], "complexity": "simple", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [44, 60] },
+    { "id": "step:driver-onboarding:submit-application", "type": "step", "name": "Submit application", "summary": "Driver fills vehicle/bank/service-province; submission anchors the verify SLA and re-queues a rejected app.", "tags": ["application", "sla"], "complexity": "moderate", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [76, 116] },
+
+    { "id": "step:driver-verification:read-queue", "type": "step", "name": "Read verify queue", "summary": "Admin lists drivers awaiting verification.", "tags": ["queue", "admin"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [240, 275] },
+    { "id": "step:driver-verification:decide", "type": "step", "name": "Approve / reject / suspend", "summary": "Set verifyStatus, drop a rejected/suspended driver from the feed, and store any reason.", "tags": ["verification", "decision"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [340, 350] },
+    { "id": "step:driver-verification:audit-notify", "type": "step", "name": "Audit & notify driver", "summary": "Write an AuditLog entry and notify the driver of the verification outcome.", "tags": ["audit", "notify"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [351, 373] },
+
+    { "id": "step:driver-availability:guard-inhand", "type": "step", "name": "Guard in-hand jobs", "summary": "Block going off-duty while the driver still holds an ACCEPTED/PICKED_UP/IN_TRANSIT job.", "tags": ["availability", "guards"], "complexity": "simple", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [125, 136] },
+    { "id": "step:driver-availability:toggle", "type": "step", "name": "Toggle availability", "summary": "Flip isAvailable and reset the idle-churn clock.", "tags": ["availability"], "complexity": "simple", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [138, 143] },
+    { "id": "step:driver-availability:broadcast-gps", "type": "step", "name": "Broadcast GPS", "summary": "Persist the driver's latest lat/lng for live SSE tracking.", "tags": ["gps", "tracking"], "complexity": "simple", "filePath": "apps/api/src/routes/drivers.ts", "lineRange": [147, 159] },
+
+    { "id": "step:commission-ledger:guard-driver-price", "type": "step", "name": "Guard driver & price", "summary": "Block delivery confirmation unless the job has both an assigned driver and a positive price.", "tags": ["finance", "guards"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [916, 935] },
+    { "id": "step:commission-ledger:create-transaction", "type": "step", "name": "Create commission transaction", "summary": "Idempotently write the Transaction snapshotting gross + commissionPct via computeCommission.", "tags": ["commission", "ledger"], "complexity": "complex", "filePath": "apps/api/src/lib/transactions.ts", "lineRange": [10, 32] },
+    { "id": "step:commission-ledger:attach-payout", "type": "step", "name": "Attach to payout round", "summary": "Accumulate the net-to-driver amount into the driver's open PENDING payout, creating one if needed.", "tags": ["payout"], "complexity": "moderate", "filePath": "apps/api/src/lib/transactions.ts", "lineRange": [42, 64] },
+
+    { "id": "step:driver-payouts:list", "type": "step", "name": "List payouts", "summary": "Admin lists driver payout rounds and their transactions.", "tags": ["payouts", "admin"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1833, 1866] },
+    { "id": "step:driver-payouts:mark-paid", "type": "step", "name": "Mark transaction paid", "summary": "Finance admin marks the payout/transaction as PAID with slip + reference.", "tags": ["finance", "paid"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1106, 1126] },
+
+    { "id": "step:promo-pricing:evaluate", "type": "step", "name": "Evaluate promo on estimate", "summary": "Preview a promo discount against the quote subtotal without consuming it.", "tags": ["promo", "preview"], "complexity": "moderate", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [115, 135] },
+    { "id": "step:promo-pricing:consume", "type": "step", "name": "Consume promo at create", "summary": "Increment the promo's usedCount in the job-create transaction.", "tags": ["promo", "consume"], "complexity": "simple", "filePath": "apps/api/src/routes/jobs.ts", "lineRange": [287, 294] },
+
+    { "id": "step:referral-program:apply-code", "type": "step", "name": "Apply referral code", "summary": "Link the customer to the referrer once, rejecting self-referral and re-use.", "tags": ["referral"], "complexity": "moderate", "filePath": "apps/api/src/routes/me.ts", "lineRange": [78, 104] },
+    { "id": "step:referral-program:issue-reward", "type": "step", "name": "Issue reward on first delivery", "summary": "Grant the two-sided reward when the referred customer's first job is confirmed DELIVERED.", "tags": ["reward", "delivery"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [968, 980] },
+
+    { "id": "step:pdpa-compliance:record-consent", "type": "step", "name": "Record / read consent", "summary": "Admin records and reads a user's PDPA consents.", "tags": ["consent", "pdpa"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1942, 1990] },
+    { "id": "step:pdpa-compliance:anonymize", "type": "step", "name": "Anonymize user", "summary": "Super admin anonymizes a user's personal data per PDPA request.", "tags": ["anonymize", "privacy"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [2049, 2077] },
+
+    { "id": "step:platform-settings:commission", "type": "step", "name": "Set commission %", "summary": "Update the commission_pct AppSetting used at job accept time.", "tags": ["commission", "settings"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1133, 1149] },
+    { "id": "step:platform-settings:pricing", "type": "step", "name": "Set pricing & vehicle rates", "summary": "Configure base pricing and per-vehicle-type rates read by the quote engine.", "tags": ["pricing", "settings"], "complexity": "moderate", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [1170, 1190] },
+    { "id": "step:platform-settings:service-areas", "type": "step", "name": "Set service areas", "summary": "Configure the provinces the platform serves, constraining posting and matching.", "tags": ["service-area", "settings"], "complexity": "simple", "filePath": "apps/api/src/routes/admin.ts", "lineRange": [2104, 2123] }
+  ],
+  "edges": [
+    { "source": "domain:identity-access", "target": "flow:user-line-login", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:identity-access", "target": "flow:admin-login", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:job-marketplace", "target": "flow:post-job", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:job-marketplace", "target": "flow:payment-gate", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:job-marketplace", "target": "flow:accept-and-deliver", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:job-marketplace", "target": "flow:cancel-job", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:job-marketplace", "target": "flow:review-job", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:driver-marketplace", "target": "flow:driver-onboarding", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:driver-marketplace", "target": "flow:driver-verification", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:driver-marketplace", "target": "flow:driver-availability", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:financial-ledger", "target": "flow:commission-ledger", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:financial-ledger", "target": "flow:driver-payouts", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:growth-engagement", "target": "flow:promo-pricing", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:growth-engagement", "target": "flow:referral-program", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:admin-backoffice", "target": "flow:pdpa-compliance", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+    { "source": "domain:admin-backoffice", "target": "flow:platform-settings", "type": "contains_flow", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:user-line-login", "target": "step:user-line-login:verify-token", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:user-line-login", "target": "step:user-line-login:upsert-user", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:user-line-login", "target": "step:user-line-login:issue-cookie", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:admin-login", "target": "step:admin-login:rate-limit", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:admin-login", "target": "step:admin-login:verify-password", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:admin-login", "target": "step:admin-login:issue-admin-cookie", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:post-job", "target": "step:post-job:system-guards", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:post-job", "target": "step:post-job:compute-price", "type": "flow_step", "direction": "forward", "weight": 0.4 },
+    { "source": "flow:post-job", "target": "step:post-job:upsert-customer", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:post-job", "target": "step:post-job:create-pending", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+
+    { "source": "flow:payment-gate", "target": "step:payment-gate:upload-slip", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:payment-gate", "target": "step:payment-gate:admin-approve", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:payment-gate", "target": "step:payment-gate:fanout-alert", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:payment-gate", "target": "step:payment-gate:reject-bounce", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:list-feed", "type": "flow_step", "direction": "forward", "weight": 0.2 },
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:gate-approved", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:atomic-claim", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:advance-status", "type": "flow_step", "direction": "forward", "weight": 0.7 },
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:proof-photos", "type": "flow_step", "direction": "forward", "weight": 0.8 },
+    { "source": "flow:accept-and-deliver", "target": "step:accept-and-deliver:admin-confirm", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:cancel-job", "target": "step:cancel-job:guard-state", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:cancel-job", "target": "step:cancel-job:apply-fee", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:cancel-job", "target": "step:cancel-job:notify-driver", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:review-job", "target": "step:review-job:guard-delivered", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:review-job", "target": "step:review-job:create-review", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:review-job", "target": "step:review-job:recompute-rating", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:driver-onboarding", "target": "step:driver-onboarding:claim-code", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:driver-onboarding", "target": "step:driver-onboarding:promote-role", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:driver-onboarding", "target": "step:driver-onboarding:submit-application", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:driver-verification", "target": "step:driver-verification:read-queue", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:driver-verification", "target": "step:driver-verification:decide", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:driver-verification", "target": "step:driver-verification:audit-notify", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:driver-availability", "target": "step:driver-availability:guard-inhand", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:driver-availability", "target": "step:driver-availability:toggle", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:driver-availability", "target": "step:driver-availability:broadcast-gps", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:commission-ledger", "target": "step:commission-ledger:guard-driver-price", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:commission-ledger", "target": "step:commission-ledger:create-transaction", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:commission-ledger", "target": "step:commission-ledger:attach-payout", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "flow:driver-payouts", "target": "step:driver-payouts:list", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:driver-payouts", "target": "step:driver-payouts:mark-paid", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:promo-pricing", "target": "step:promo-pricing:evaluate", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:promo-pricing", "target": "step:promo-pricing:consume", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:referral-program", "target": "step:referral-program:apply-code", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:referral-program", "target": "step:referral-program:issue-reward", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:pdpa-compliance", "target": "step:pdpa-compliance:record-consent", "type": "flow_step", "direction": "forward", "weight": 0.5 },
+    { "source": "flow:pdpa-compliance", "target": "step:pdpa-compliance:anonymize", "type": "flow_step", "direction": "forward", "weight": 1.0 },
+
+    { "source": "flow:platform-settings", "target": "step:platform-settings:commission", "type": "flow_step", "direction": "forward", "weight": 0.3 },
+    { "source": "flow:platform-settings", "target": "step:platform-settings:pricing", "type": "flow_step", "direction": "forward", "weight": 0.6 },
+    { "source": "flow:platform-settings", "target": "step:platform-settings:service-areas", "type": "flow_step", "direction": "forward", "weight": 0.9 },
+
+    { "source": "domain:identity-access", "target": "domain:job-marketplace", "type": "cross_domain", "direction": "forward", "description": "Issues USER/DRIVER sessions that gate all customer/driver job actions.", "weight": 0.6 },
+    { "source": "domain:identity-access", "target": "domain:admin-backoffice", "type": "cross_domain", "direction": "forward", "description": "Issues admin sessions and enforces RBAC sub-roles for back-office actions.", "weight": 0.6 },
+    { "source": "domain:driver-marketplace", "target": "domain:job-marketplace", "type": "cross_domain", "direction": "forward", "description": "Driver serviceProvince + availability + APPROVED status drive the on-demand job feed and acceptance gate.", "weight": 0.7 },
+    { "source": "domain:job-marketplace", "target": "domain:financial-ledger", "type": "cross_domain", "direction": "forward", "description": "Accept snapshots commissionPct; the DELIVERED transition triggers the commission Transaction and payout.", "weight": 0.8 },
+    { "source": "domain:financial-ledger", "target": "domain:driver-marketplace", "type": "cross_domain", "direction": "forward", "description": "Ledger transactions feed driver earnings and weekly incentives.", "weight": 0.5 },
+    { "source": "domain:growth-engagement", "target": "domain:job-marketplace", "type": "cross_domain", "direction": "forward", "description": "Promo and surge adjust the job quote; notifications fan out across job events.", "weight": 0.6 },
+    { "source": "domain:admin-backoffice", "target": "domain:job-marketplace", "type": "cross_domain", "direction": "forward", "description": "Admin payment approval publishes jobs and admin confirmation finalizes DELIVERED.", "weight": 0.7 },
+    { "source": "domain:admin-backoffice", "target": "domain:driver-marketplace", "type": "cross_domain", "direction": "forward", "description": "Admins pre-register and verify drivers, controlling who can accept jobs.", "weight": 0.6 }
+  ],
+  "layers": [],
+  "tour": []
+}

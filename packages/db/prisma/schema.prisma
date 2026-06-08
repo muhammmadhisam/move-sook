@@ -1,0 +1,466 @@
+// MoveSook — Prisma schema
+// On-demand moving marketplace: customers post jobs, nearby available drivers claim them.
+// Run `pnpm --filter @movesook/db db:generate` after editing.
+// Do NOT migrate a real DB until explicitly instructed.
+
+generator client {
+  provider      = "prisma-client-js"
+  // Generate into the package source so the client + query-engine binary travel
+  // with @movesook/db (pnpm deploy / Docker copy) instead of living in the root
+  // node_modules/.prisma — the usual pnpm-monorepo Docker footgun.
+  output        = "../src/generated/prisma"
+  // native = the build host; musl target = the Alpine runtime image.
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  DRIVER
+  ADMIN
+  SYSTEM
+}
+
+enum JobStatus {
+  DRAFT
+  PENDING_PAYMENT // customer posted; awaiting transfer-slip upload + admin payment approval before going public
+  POSTED
+  ACCEPTED
+  PICKED_UP
+  IN_TRANSIT
+  PENDING_CONFIRMATION // driver marked delivered; awaiting admin approval
+  DELIVERED
+  CANCELLED
+}
+
+enum VehicleType {
+  MOTORCYCLE
+  PICKUP
+  TRUCK_4W
+  TRUCK_6W
+}
+
+enum DriverVerifyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED // previously approved, temporarily blocked by an admin; cannot accept jobs
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+enum ConsentType {
+  TERMS // ข้อตกลงการใช้บริการ
+  PRIVACY // นโยบายความเป็นส่วนตัว (PDPA)
+  MARKETING // ยินยอมรับข่าวสาร/การตลาด
+  DRIVER_AGREEMENT // สัญญาคนขับ (contractor)
+}
+
+enum AdminRole {
+  SUPER // full access incl. settings, admin management
+  OPS // drivers, jobs, customers, disputes — no finance/settings
+  FINANCE // transactions, payouts, commission — no bans/verification
+}
+
+enum NotificationType {
+  JOB_ASSIGNED // an admin assigned this driver to a job
+  JOB_NEW_IN_AREA // a new open job appeared in the driver's province
+  JOB_STATUS // a job's status changed
+  DRIVER_VERIFY // driver approved / rejected / suspended
+  DISPUTE // a dispute update
+  GENERIC
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  REJECTED
+}
+
+enum DisputeReason {
+  ITEM_DAMAGED
+  DRIVER_NO_SHOW
+  LATE
+  OVERCHARGED
+  OTHER
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID
+}
+
+enum PromoType {
+  PERCENT // value = percent off (0..100)
+  FIXED // value = THB off
+}
+
+enum PricingMode {
+  CHARTER // เหมาลำ: flat per-vehicle fee + distance
+  PER_ITEM // หลายสินค้า: per-item rate × quantity + distance
+}
+
+model User {
+  id              String   @id @default(cuid())
+  lineUserId      String?  @unique // sub from LINE id_token (admins may not have one)
+  displayName     String?
+  pictureUrl      String?
+  phone           String?
+  role            Role     @default(USER)
+  isBanned        Boolean  @default(false)
+  driver          Driver?
+  adminCredential AdminCredential?
+  customerProfile Customer?  @relation("UserCustomer") // this user's own customer record (self-serve)
+  customersCreated Customer[] @relation("CustomerCreatedBy") // offline customers an admin entered
+  adminCreatedJobs Job[]      @relation("AdminCreatedJobs") // jobs an admin posted on behalf of a customer
+  reviewsAuthored Review[] @relation("CustomerReviews")
+  auditLogs       AuditLog[] @relation("AuditActor")
+  notifications   Notification[] @relation("UserNotifications")
+  consents        ConsentRecord[] @relation("UserConsents")
+  customerNotes   CustomerNote[] @relation("NoteAuthor")
+  anonymizedAt    DateTime? // PDPA erasure: PII scrubbed but row kept for accounting integrity
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([role])
+}
+
+model Customer {
+  // The party who needs the move. May be an app User (self-serve) OR an
+  // offline/walk-in customer an admin entered manually (userId is null).
+  id          String   @id @default(cuid())
+  userId      String?  @unique // linked app User, if the customer self-served
+  user        User?    @relation("UserCustomer", fields: [userId], references: [id], onDelete: SetNull)
+  name        String? // contact / display name (required-ish for offline customers)
+  phone       String?
+  note        String? // free-form admin note (offline customers)
+  tags        String[] // CRM segmentation tags
+  referralCode String? @unique // this customer's own referral code
+  referredById String? // customer who referred them
+  referralRewardedAt DateTime? // when the two-sided referral reward was issued (idempotency guard)
+  createdById String? // admin User who created an offline customer
+  createdBy   User?    @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  jobs        Job[]
+  notes       CustomerNote[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phone])
+}
+
+model Driver {
+  id              String             @id @default(cuid())
+  // Nullable: an admin can pre-register a driver before they have an app account,
+  // then link (connect) the record to the user once they sign up.
+  userId          String?            @unique
+  user            User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  claimCode       String?            @unique // invite code an admin hands the driver to claim this application
+  name            String? // fallback display name for an admin-added driver not yet linked
+  phone           String? // contact phone for an admin-added driver
+  vehicleType     VehicleType
+  plateNumber     String?
+  licenseTw2      String? // ใบขับขี่ ท.2
+  verifyStatus    DriverVerifyStatus @default(PENDING)
+  rejectionReason String? // admin's note when REJECTED / SUSPENDED (shown to driver, logged)
+  serviceProvince String? // province the driver operates in (on-demand matching)
+  isAvailable     Boolean            @default(false) // online / accepting jobs right now
+  ratingAvg       Float              @default(0) // denormalised from Review for fast display
+  ratingCount     Int                @default(0)
+  bankName        String? // payout: bank name
+  bankAccountName String? // payout: account holder
+  bankAccountNo   String? // payout: account number
+  // ── KYC ──
+  nationalId        String? // เลขบัตรประชาชน
+  nationalIdUrl     String? // รูปบัตรประชาชน
+  licenseNo         String? // เลขใบขับขี่
+  licenseExpiry     DateTime? // ใบขับขี่หมดอายุ
+  vehicleRegUrl     String? // รูปทะเบียนรถ
+  vehicleRegExpiry  DateTime? // ทะเบียน/พรบ. หมดอายุ
+  insuranceExpiry   DateTime? // ประกันหมดอายุ
+  // ── SLA counters (denormalised from jobs) ──
+  completedCount  Int                @default(0)
+  cancelCount     Int                @default(0)
+  // ── Onboarding / retention signals ──
+  submittedAt     DateTime? // when the application was (re)submitted for review — drives verify-queue SLA
+  lastActiveAt    DateTime? // last time the driver toggled availability / accepted / advanced a job — drives idle-nudge churn detection
+  // ── Live location (on-demand tracking) ──
+  lastLat         Float? // most recent GPS latitude (broadcast while driving an active job)
+  lastLng         Float? // most recent GPS longitude
+  locationAt      DateTime? // when lastLat/lastLng were captured (clients show "updated X ago")
+  acceptedJobs    Job[]              @relation("DriverJobs")
+  reviews         Review[]
+  transactions    Transaction[]
+  payouts         Payout[]
+  createdAt        DateTime           @default(now())
+
+  @@index([verifyStatus])
+  @@index([serviceProvince, isAvailable])
+}
+
+model Job {
+  id              String      @id @default(cuid())
+  customerId      String
+  customer        Customer    @relation(fields: [customerId], references: [id])
+  createdByAdminId String? // set when an admin posted this job on behalf of a customer
+  createdByAdmin  User?       @relation("AdminCreatedJobs", fields: [createdByAdminId], references: [id])
+  driverId        String?
+  driver          Driver?     @relation("DriverJobs", fields: [driverId], references: [id])
+  status          JobStatus   @default(DRAFT)
+  itemDescription String // human-readable summary, derived from `items` at post time
+  items           Json? // structured list: [{ name, quantity }]
+  vehicleType     VehicleType
+  originAddress   String
+  originProvince  String
+  originLat       Float?
+  originLng       Float?
+  destAddress     String
+  destProvince    String
+  destLat         Float?
+  destLng         Float?
+  scheduledAt     DateTime?
+  pricingMode     PricingMode @default(CHARTER) // how priceQuoted was computed (เหมาลำ vs หลายสินค้า)
+  contactPhone    String? // on-site contact for pickup/delivery (may differ from account phone)
+  notes           String? // free-text special instructions (fragile items, parking, etc.)
+  originFloor     Int? // floor number at pickup (null = unknown / ground)
+  originHasElevator Boolean? // lift available at pickup (null = unknown)
+  destFloor       Int? // floor number at drop-off
+  destHasElevator Boolean? // lift available at drop-off
+  itemCount       Int? // approximate number of items/boxes
+  needsHelpers    Boolean   @default(false) // customer wants movers to help carry
+  termsAcceptedAt DateTime? // when the customer accepted the posting agreement
+  // ── Up-front payment (customer pays before the job is published to drivers) ──
+  paymentSlipUrl        String? // customer's bank-transfer slip image
+  paymentSlipUploadedAt DateTime? // when the customer uploaded the current slip
+  paymentApprovedAt     DateTime? // when an admin approved the transfer (job then goes POSTED / public)
+  paymentApprovedById   String? // admin User who approved the payment
+  paymentRejectedReason String? // admin's reason when a slip was rejected (shown to customer to re-upload)
+  priceQuoted     Int? // THB
+  promoCode       String? // applied promo code (if any)
+  discountAmount  Int? // discount applied from the promo (THB)
+  commissionPct   Float? // snapshot taken at accept time
+  itemPhotos      String[] // customer's photos of the items to move
+  pickupProofUrls  String[] // driver's photos when collecting the items
+  deliveryProofUrls String[] // driver's photos on delivery
+  customerConfirmedAt DateTime? // customer confirmed they received the goods (admin decision aid)
+  review          Review?
+  transaction     Transaction?
+  disputes        Dispute[]
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([originProvince, destProvince])
+  @@index([driverId])
+}
+
+model AdminCredential {
+  // admin email/password login
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String    @unique
+  passwordHash String // bcrypt/argon2
+  adminRole    AdminRole @default(SUPER)
+  createdAt    DateTime  @default(now())
+}
+
+model AppSetting {
+  // central config store (e.g. commission_pct)
+  key       String   @id // e.g. "commission_pct"
+  value     String // string / JSON
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  // One review per completed job; the customer rates the driver.
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id])
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id])
+  rating     Int // 1..5
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@index([driverId])
+}
+
+model Transaction {
+  // Commission ledger entry, created when a job reaches DELIVERED.
+  id               String            @id @default(cuid())
+  jobId            String            @unique
+  job              Job               @relation(fields: [jobId], references: [id])
+  driverId         String
+  driver           Driver            @relation(fields: [driverId], references: [id])
+  grossAmount      Int // job priceQuoted at delivery (THB)
+  commissionPct    Float // snapshot from the job
+  commissionAmount Int // platform cut (THB)
+  netToDriver      Int // grossAmount - commissionAmount
+  status           TransactionStatus @default(PENDING)
+  slipUrl          String? // uploaded payment slip when settled
+  payoutId         String? // bundled into a payout run when paid out to the driver
+  payout           Payout?           @relation(fields: [payoutId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([status])
+  @@index([driverId])
+  @@index([payoutId])
+}
+
+model AuditLog {
+  // Immutable trail of every admin mutation (who did what, to whom, when).
+  id         String   @id @default(cuid())
+  actorId    String // the admin User who performed the action
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id])
+  action     String // e.g. "driver.verify", "user.ban", "job.patch", "transaction.update", "settings.commission"
+  targetType String // "user" | "driver" | "job" | "transaction" | "setting"
+  targetId   String
+  metadata   Json? // decision details / before-after snapshot
+  createdAt  DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetType, targetId])
+  @@index([createdAt])
+}
+
+model Notification {
+  // In-app notification for a recipient user (driver/customer). LINE push is a
+  // best-effort side channel layered on top of these rows.
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  jobId     String? // optional deep-link target
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@index([createdAt])
+}
+
+model Dispute {
+  // A complaint raised on a delivered/active job; admin resolves or rejects it.
+  id           String        @id @default(cuid())
+  jobId        String
+  job          Job           @relation(fields: [jobId], references: [id])
+  raisedById   String? // user who raised it (customer/driver), null if admin-logged
+  reason       DisputeReason
+  detail       String?
+  status       DisputeStatus @default(OPEN)
+  resolution   String? // admin resolution note
+  resolvedById String? // admin User who resolved
+  resolvedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([status])
+  @@index([jobId])
+}
+
+model Payout {
+  // A payout run bundling a driver's unpaid commission-ledger entries.
+  id           String        @id @default(cuid())
+  driverId     String
+  driver       Driver        @relation(fields: [driverId], references: [id])
+  amount       Int // sum of netToDriver across included transactions (THB)
+  status       PayoutStatus  @default(PENDING)
+  reference    String? // bank transfer ref / slip note
+  slipUrl      String? // uploaded bank-transfer slip image
+  createdById  String? // admin who created the run
+  paidAt       DateTime?
+  transactions Transaction[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([driverId])
+  @@index([status])
+}
+
+model ConsentRecord {
+  // PDPA: immutable record of a user accepting/declining a policy version.
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation("UserConsents", fields: [userId], references: [id], onDelete: Cascade)
+  type      ConsentType
+  version   String // policy version the user acted on
+  granted   Boolean     @default(true)
+  createdAt DateTime    @default(now())
+
+  @@index([userId, type])
+}
+
+model ServiceArea {
+  // Provinces the platform actively serves. Job creation is blocked outside these.
+  province  String   @id // canonical name_th
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VehiclePricing {
+  // Per-vehicle-type configuration: join criteria/specs + delivery rate.
+  // `isActive=false` blocks this vehicle type from joining / being chosen.
+  vehicleType  VehicleType @id
+  label        String? // ชื่อที่แสดง เช่น "กระบะตอนเดียว"
+  description  String? // คำอธิบายสั้น
+  imageUrl     String? // รูปตัวอย่างรถ (โชว์ให้ลูกค้าเห็นว่ารถที่จะได้หน้าตาประมาณนี้)
+  requirements String? // ลักษณะ/สเปกรถที่รับเข้าร่วม (free text)
+  maxWeightKg  Int? // น้ำหนักบรรทุกสูงสุด (กก.)
+  pricePerKm   Int? // null = ใช้เรตกลาง (price_per_km)
+  flatRate     Int? // เหมาลำ: ค่าเหมาเริ่มต้นต่อคัน (null = ใช้เรตกลาง flat_rate)
+  perItemRate  Int? // หลายสินค้า: ค่าต่อชิ้น (null = ใช้เรตกลาง per_item_rate)
+  isActive     Boolean     @default(true)
+  updatedAt    DateTime    @updatedAt
+}
+
+model Blacklist {
+  // Block re-registration by national ID or plate number.
+  id          String   @id @default(cuid())
+  nationalId  String? // เลขบัตรประชาชนที่แบน
+  plateNumber String? // ทะเบียนรถที่แบน
+  reason      String?
+  createdById String? // admin who added
+  createdAt   DateTime @default(now())
+
+  @@index([nationalId])
+  @@index([plateNumber])
+}
+
+model PromoCode {
+  code       String    @id // the code customers enter (uppercased)
+  type       PromoType
+  value      Int // percent (0..100) or THB off
+  minOrder   Int? // minimum job price to qualify (THB)
+  maxUses    Int? // null = unlimited
+  usedCount  Int       @default(0)
+  expiresAt  DateTime?
+  isActive   Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model CustomerNote {
+  // CRM contact-history note on a customer.
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  authorId   String? // admin User who wrote it
+  author     User?    @relation("NoteAuthor", fields: [authorId], references: [id])
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}

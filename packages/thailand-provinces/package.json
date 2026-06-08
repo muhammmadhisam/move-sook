@@ -1,0 +1,25 @@
+{
+  "name": "@movesook/thailand-provinces",
+  "version": "1.0.0",
+  "description": "Thai administrative geography (provinces/amphures/tambons/zip codes) for MoveSook",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./province": "./src/province.ts",
+    "./amphure": "./src/amphure.ts",
+    "./tambon": "./src/tambon.ts",
+    "./address-helper": "./src/address-helper.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@movesook/config": "workspace:*",
+    "typescript": "^5.7.2"
+  }
+}

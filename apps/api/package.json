@@ -1,0 +1,34 @@
+{
+  "name": "@movesook/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/app.ts",
+  "types": "./src/app.ts",
+  "exports": {
+    ".": "./src/app.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@hono/zod-validator": "^0.4.2",
+    "@movesook/auth": "workspace:*",
+    "@movesook/db": "workspace:*",
+    "@movesook/shared": "workspace:*",
+    "dotenv": "^16.4.7",
+    "hono": "^4.6.14",
+    "tsx": "^4.19.2",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@movesook/config": "workspace:*",
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

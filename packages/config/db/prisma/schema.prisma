@@ -1,0 +1,170 @@
+// MoveSook — Prisma schema
+// On-demand moving marketplace: customers post jobs, nearby available drivers claim them.
+// Run `pnpm --filter @movesook/db db:generate` after editing.
+// Do NOT migrate a real DB until explicitly instructed.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  DRIVER
+  ADMIN
+  SYSTEM
+}
+
+enum JobStatus {
+  DRAFT
+  POSTED
+  ACCEPTED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum VehicleType {
+  MOTORCYCLE
+  PICKUP
+  TRUCK_4W
+  TRUCK_6W
+}
+
+enum DriverVerifyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum TransactionStatus {
+  PENDING
+  PAID
+  REFUNDED
+}
+
+model User {
+  id              String   @id @default(cuid())
+  lineUserId      String?  @unique // sub from LINE id_token (admins may not have one)
+  displayName     String?
+  pictureUrl      String?
+  phone           String?
+  role            Role     @default(USER)
+  isBanned        Boolean  @default(false)
+  driver          Driver?
+  adminCredential AdminCredential?
+  jobs            Job[]    @relation("CustomerJobs")
+  reviewsAuthored Review[] @relation("CustomerReviews")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([role])
+}
+
+model Driver {
+  id           String             @id @default(cuid())
+  userId       String             @unique
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicleType  VehicleType
+  plateNumber  String?
+  licenseTw2   String? // ใบขับขี่ ท.2
+  verifyStatus    DriverVerifyStatus @default(PENDING)
+  serviceProvince String? // province the driver operates in (on-demand matching)
+  isAvailable     Boolean            @default(false) // online / accepting jobs right now
+  ratingAvg       Float              @default(0) // denormalised from Review for fast display
+  ratingCount     Int                @default(0)
+  acceptedJobs    Job[]              @relation("DriverJobs")
+  reviews         Review[]
+  transactions    Transaction[]
+  createdAt       DateTime           @default(now())
+
+  @@index([verifyStatus])
+  @@index([serviceProvince, isAvailable])
+}
+
+model Job {
+  id              String      @id @default(cuid())
+  customerId      String
+  customer        User        @relation("CustomerJobs", fields: [customerId], references: [id])
+  driverId        String?
+  driver          Driver?     @relation("DriverJobs", fields: [driverId], references: [id])
+  status          JobStatus   @default(DRAFT)
+  itemDescription String
+  vehicleType     VehicleType
+  originAddress   String
+  originProvince  String
+  originLat       Float?
+  originLng       Float?
+  destAddress     String
+  destProvince    String
+  destLat         Float?
+  destLng         Float?
+  scheduledAt     DateTime?
+  priceQuoted     Int? // THB
+  commissionPct   Float? // snapshot taken at accept time
+  review          Review?
+  transaction     Transaction?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([status])
+  @@index([originProvince, destProvince])
+  @@index([driverId])
+}
+
+model AdminCredential {
+  // admin email/password login
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  email        String   @unique
+  passwordHash String // bcrypt/argon2
+  createdAt    DateTime @default(now())
+}
+
+model AppSetting {
+  // central config store (e.g. commission_pct)
+  key       String   @id // e.g. "commission_pct"
+  value     String // string / JSON
+  updatedAt DateTime @updatedAt
+}
+
+model Review {
+  // One review per completed job; the customer rates the driver.
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id])
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id])
+  rating     Int // 1..5
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  @@index([driverId])
+}
+
+model Transaction {
+  // Commission ledger entry, created when a job reaches DELIVERED.
+  id               String            @id @default(cuid())
+  jobId            String            @unique
+  job              Job               @relation(fields: [jobId], references: [id])
+  driverId         String
+  driver           Driver            @relation(fields: [driverId], references: [id])
+  grossAmount      Int // job priceQuoted at delivery (THB)
+  commissionPct    Float // snapshot from the job
+  commissionAmount Int // platform cut (THB)
+  netToDriver      Int // grossAmount - commissionAmount
+  status           TransactionStatus @default(PENDING)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([status])
+  @@index([driverId])
+}

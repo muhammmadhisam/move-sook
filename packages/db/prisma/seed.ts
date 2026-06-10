@@ -56,11 +56,10 @@ async function main() {
     data: [
       { key: 'commission_pct', value: String(COMMISSION_PCT) },
       { key: 'price_per_km', value: '20' },
-      { key: 'base_fee', value: '150' },
-      { key: 'min_price', value: '300' },
+      { key: 'min_job_price', value: '300' },
       { key: 'surge_multiplier', value: '1.0' },
       { key: 'support_phone', value: '074-000-000' },
-      { key: 'support_line', value: '@movesook' },
+      { key: 'support_line_id', value: '@movesook' },
     ],
   });
 

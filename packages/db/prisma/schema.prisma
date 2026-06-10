@@ -1,7 +1,8 @@
 // MoveSook — Prisma schema
 // On-demand moving marketplace: customers post jobs, nearby available drivers claim them.
 // Run `pnpm --filter @movesook/db db:generate` after editing.
-// Do NOT migrate a real DB until explicitly instructed.
+// Migrations are tracked (baseline: 0_init). After editing this schema run
+// `db:migrate` (dev) to create a migration; production applies via `db:deploy`.
 
 generator client {
   provider      = "prisma-client-js"
@@ -34,6 +35,7 @@ enum JobStatus {
   IN_TRANSIT
   PENDING_CONFIRMATION // driver marked delivered; awaiting admin approval
   DELIVERED
+  FLAGGED_ILLEGAL // a driver flagged the cargo as prohibited/illegal; on hold for admin review
   CANCELLED
 }
 
@@ -217,6 +219,12 @@ model Job {
   itemDescription String // human-readable summary, derived from `items` at post time
   items           Json? // structured list: [{ name, quantity }]
   vehicleType     VehicleType
+  itemCategory    String? // customer-declared cargo category (see CARGO_CATEGORIES in @movesook/shared)
+  prohibitedAck   Boolean  @default(false) // customer acknowledged the prohibited-items policy at post time
+  // ── Illegal-cargo flag (a driver reports prohibited goods; admin reviews) ──
+  flaggedIllegalAt     DateTime? // when a driver flagged the cargo as prohibited/illegal
+  flaggedIllegalReason String? // driver's note describing the prohibited goods
+  flaggedByDriverId    String? // Driver.id that raised the flag
   originAddress   String
   originProvince  String
   originLat       Float?
@@ -242,6 +250,10 @@ model Job {
   paymentApprovedAt     DateTime? // when an admin approved the transfer (job then goes POSTED / public)
   paymentApprovedById   String? // admin User who approved the payment
   paymentRejectedReason String? // admin's reason when a slip was rejected (shown to customer to re-upload)
+  paymentRejectedCount  Int       @default(0) // how many times a slip was rejected (ops escalation signal)
+  // Snapshot of the cancellation fee owed at cancel time (collected manually by
+  // ops — there is no customer wallet). Null = cancelled inside the free window.
+  cancellationFeeApplied Int?
   priceQuoted     Int? // THB
   promoCode       String? // applied promo code (if any)
   discountAmount  Int? // discount applied from the promo (THB)

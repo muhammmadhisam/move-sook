@@ -33,5 +33,5 @@ echo "[cron] verify:  crontab -l | grep movesook"
 echo "[cron] logs:    tail -f $LOG"
 echo "[cron] remove:  pnpm cron:uninstall-nudge"
 echo
-echo "NOTE: the local job targets http://localhost:${PORT:-8778} and only fires when the"
+echo "NOTE: the local job targets http://localhost:${PORT:-8787} and only fires when the"
 echo "      API is running. For production, set MOVESOOK_API_URL to the deployed API URL."

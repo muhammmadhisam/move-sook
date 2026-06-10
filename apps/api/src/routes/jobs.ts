@@ -8,6 +8,7 @@ import {
   CreateReviewInput,
   CreateDisputeInput,
   EstimateJobInput,
+  FlagJobIllegalInput,
   ListJobsQuery,
   SetJobProofInput,
   UpdateJobStatusInput,
@@ -19,6 +20,10 @@ import {
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
   haversineKm,
+  isCustomerCancellable,
+  isCustomerConfirmable,
+  isInHand,
+  isTerminalStatus,
   type DisputeDto,
   type EstimateJobResponse,
   type JobDetailResponse,
@@ -43,7 +48,8 @@ import {
 } from '../lib/settings';
 import { evaluatePromo } from '../lib/promo';
 import { getSurge } from '../lib/surge';
-import { notify } from '../lib/notify';
+import { buildJobDocument } from '../lib/pdf';
+import { notify, notifyAdmins } from '../lib/notify';
 
 export const jobRoutes = new Hono<AppEnv>()
   // Public: price-per-km per vehicle type — used by the web summary screen (read-only display).
@@ -259,6 +265,8 @@ export const jobRoutes = new Hono<AppEnv>()
           itemDescription,
           items,
           vehicleType: input.vehicleType,
+          itemCategory: input.itemCategory ?? null,
+          prohibitedAck: true, // schema enforces acceptedProhibitedPolicy === true
           pricingMode: input.pricingMode ?? 'CHARTER',
           itemCount,
           needsHelpers: input.needsHelpers ?? false,
@@ -346,7 +354,10 @@ export const jobRoutes = new Hono<AppEnv>()
         const areaProvince = q.originProvince ?? driver?.serviceProvince ?? undefined;
 
         where = {
-          status: q.status ?? 'POSTED',
+          // The open feed is POSTED-only by design. Never honour a caller-supplied
+          // status here — otherwise a driver could pass ?status=PENDING_PAYMENT to
+          // see unpaid, admin-unapproved jobs the payment gate hides from them.
+          status: 'POSTED',
           driverId: null,
           ...(q.vehicleType ? { vehicleType: q.vehicleType } : {}),
           ...(areaProvince ? { originProvince: areaProvince } : {}),
@@ -415,6 +426,40 @@ export const jobRoutes = new Hono<AppEnv>()
     return c.json(body);
   })
 
+  // Customer downloads their own receipt PDF (only the job's owner; only once paid).
+  .get('/:id/receipt', authenticate('user'), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        customer: { include: { user: { select: { displayName: true, phone: true } } } },
+        driver: { include: { user: { select: { displayName: true, phone: true } } } },
+        transaction: true,
+      },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
+    if (!job.paymentApprovedAt) {
+      throw new HTTPException(422, { message: 'ใบเสร็จจะออกได้หลังยืนยันการชำระเงิน' });
+    }
+    const settings = await getSystemSettings();
+    const pdf = await buildJobDocument('receipt', {
+      job,
+      customer: job.customer,
+      driver: job.driver,
+      transaction: job.transaction,
+      settings,
+    });
+    return new Response(new Uint8Array(pdf), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="receipt-${id}.pdf"`,
+      },
+    });
+  })
+
   // SSE live-tracking stream: pushes the assigned driver's location + job status
   // every few seconds until the job reaches a terminal state. Visible to the
   // job's customer or its assigned driver (cookie auth via EventSource credentials).
@@ -453,7 +498,7 @@ export const jobRoutes = new Hono<AppEnv>()
         };
         await stream.writeSSE({ event: 'track', data: JSON.stringify(event) });
         // Stop once the job is finished — nothing left to track.
-        if (snap.status === 'DELIVERED' || snap.status === 'CANCELLED') break;
+        if (isTerminalStatus(snap.status)) break;
         await stream.sleep(5000);
       }
     });
@@ -470,6 +515,10 @@ export const jobRoutes = new Hono<AppEnv>()
     const job = await prisma.job.findUnique({ where: { id: jobId } });
     if (!job) throw new HTTPException(404, { message: 'Job not found' });
     if (job.driverId !== driver.id) throw new HTTPException(403, { message: 'Not your job' });
+    // Proof photos belong to an active delivery — closed/cancelled jobs are immutable.
+    if (!isInHand(job.status) && job.status !== 'PENDING_CONFIRMATION') {
+      throw new HTTPException(422, { message: 'แนบรูปหลักฐานได้เฉพาะงานที่กำลังดำเนินการ' });
+    }
 
     const updated = await prisma.job.update({
       where: { id: jobId },
@@ -488,15 +537,19 @@ export const jobRoutes = new Hono<AppEnv>()
     });
     if (!job) throw new HTTPException(404, { message: 'Job not found' });
     if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
-    if (!['DRAFT', 'PENDING_PAYMENT', 'POSTED', 'ACCEPTED'].includes(job.status)) {
+    if (!isCustomerCancellable(job.status)) {
       throw new HTTPException(422, { message: 'ยกเลิกงานนี้ไม่ได้ (เริ่มขนส่งแล้ว)' });
     }
-    const updated = await prisma.job.update({ where: { id }, data: { status: 'CANCELLED' } });
-
     // Cancellation fee applies only after the free-cancel window has passed.
+    // The fee is snapshotted onto the job so ops can collect it manually —
+    // there is no customer wallet to deduct from.
     const sys = await getSystemSettings();
     const elapsedMin = (Date.now() - job.createdAt.getTime()) / 60000;
     const feeApplies = sys.cancellationFee > 0 && elapsedMin > sys.freeCancelMinutes;
+    const updated = await prisma.job.update({
+      where: { id },
+      data: { status: 'CANCELLED', cancellationFeeApplied: feeApplies ? sys.cancellationFee : null },
+    });
     if (feeApplies) {
       await notify({
         userId: sub,
@@ -531,7 +584,7 @@ export const jobRoutes = new Hono<AppEnv>()
     if (!job) throw new HTTPException(404, { message: 'Job not found' });
     if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
     // Only meaningful once the goods are on the move / delivery has been claimed.
-    if (!['IN_TRANSIT', 'PENDING_CONFIRMATION'].includes(job.status)) {
+    if (!isCustomerConfirmable(job.status)) {
       throw new HTTPException(422, { message: 'ยังยืนยันรับของไม่ได้ในสถานะนี้' });
     }
 
@@ -561,6 +614,11 @@ export const jobRoutes = new Hono<AppEnv>()
     if (!driver) throw new HTTPException(403, { message: 'Not a driver' });
     if (driver.verifyStatus !== 'APPROVED') {
       throw new HTTPException(403, { message: 'Driver not yet approved' });
+    }
+    // An off-duty driver (พักงาน) is excluded from the feed/notifications, so they
+    // must not be able to claim jobs either — turn availability on first.
+    if (!driver.isAvailable) {
+      throw new HTTPException(422, { message: 'กรุณาเปิดรับงานก่อน (สถานะพักงานอยู่)' });
     }
 
     // Cap concurrent in-hand jobs per driver (0 = unlimited).
@@ -613,6 +671,61 @@ export const jobRoutes = new Hono<AppEnv>()
       });
     }
     return c.json(toJobDto(job));
+  })
+
+  // DRIVER flags the cargo as prohibited/illegal. Puts the job on hold
+  // (FLAGGED_ILLEGAL) for admin review — the driver is NOT penalised and no
+  // commission is owed. Allowed only by the assigned driver while in-hand.
+  .post('/:id/flag-illegal', authenticate('user'), requireRole('DRIVER'), zValidator('json', FlagJobIllegalInput), async (c) => {
+    const { sub } = c.get('claims');
+    const jobId = c.req.param('id');
+    const { reason } = c.req.valid('json');
+
+    const driver = await prisma.driver.findUnique({ where: { userId: sub } });
+    if (!driver) throw new HTTPException(403, { message: 'Not a driver' });
+
+    const job = await prisma.job.findUnique({ where: { id: jobId } });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.driverId !== driver.id) {
+      throw new HTTPException(403, { message: 'Not your job' });
+    }
+    // Reuse the state machine: only ACCEPTED/PICKED_UP/IN_TRANSIT may be flagged.
+    if (!canTransition(job.status, 'FLAGGED_ILLEGAL')) {
+      throw new HTTPException(422, { message: 'แจ้งของผิดกฎหมายในสถานะนี้ไม่ได้' });
+    }
+
+    const updated = await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        status: 'FLAGGED_ILLEGAL',
+        flaggedIllegalAt: new Date(),
+        flaggedIllegalReason: reason,
+        flaggedByDriverId: driver.id,
+      },
+    });
+
+    // Alert every admin to review and resolve the flagged job.
+    await notifyAdmins({
+      type: 'GENERIC',
+      title: '🚩 มีการแจ้งของผิดกฎหมาย',
+      body: `งาน ${job.originProvince} → ${job.destProvince} ถูกแจ้งว่าเป็นของผิดกฎหมาย/ต้องห้าม — กรุณาตรวจสอบ`,
+      jobId: job.id,
+    });
+    // Let the customer know their job is on hold.
+    const customer = await prisma.customer.findUnique({
+      where: { id: job.customerId },
+      select: { userId: true },
+    });
+    if (customer?.userId) {
+      await notify({
+        userId: customer.userId,
+        type: 'JOB_STATUS',
+        title: 'งานของคุณถูกระงับเพื่อตรวจสอบ',
+        body: 'งานนี้ถูกแจ้งว่าอาจมีสิ่งของต้องห้าม ทีมงานกำลังตรวจสอบ',
+        jobId: job.id,
+      });
+    }
+    return c.json(toJobDto(updated));
   })
 
   // DRIVER advances job status through the shared state machine.
@@ -740,6 +853,11 @@ export const jobRoutes = new Hono<AppEnv>()
       if (!job) throw new HTTPException(404, { message: 'Job not found' });
       const isParty = job.customer.userId === sub || job.driver?.userId === sub;
       if (!isParty) throw new HTTPException(403, { message: 'Not your job' });
+      // Disputes only make sense once a driver is involved — matches the UI's
+      // DISPUTABLE set (ACCEPTED → DELIVERED).
+      if (!job.driverId) {
+        throw new HTTPException(422, { message: 'งานนี้ยังไม่มีคนขับ จึงยังแจ้งปัญหาไม่ได้' });
+      }
 
       const dispute = await prisma.dispute.create({
         data: { jobId, raisedById: sub, reason, detail: detail ?? null },

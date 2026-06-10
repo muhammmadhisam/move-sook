@@ -16,9 +16,28 @@ export const JobStatusSchema = z.enum([
   'IN_TRANSIT',
   'PENDING_CONFIRMATION',
   'DELIVERED',
+  'FLAGGED_ILLEGAL',
   'CANCELLED',
 ]);
 export type JobStatus = z.infer<typeof JobStatusSchema>;
+
+// Customer-declared cargo category. Drives the prohibited-items policy gate:
+// RESTRICTED categories warn the customer they need supporting documents and
+// give the driver context to decide whether to flag the load.
+export const CargoCategorySchema = z.enum([
+  'GENERAL', // ของใช้ทั่วไป / เฟอร์นิเจอร์
+  'APPLIANCES', // เครื่องใช้ไฟฟ้า
+  'FRAGILE', // ของแตกหักง่าย
+  'DOCUMENTS', // เอกสาร
+  'FOOD', // อาหาร/ของสด
+  'PLANTS', // ต้นไม้
+  'VALUABLES', // ของมีค่าสูง (ทอง/เพชร) — restricted
+  'ALCOHOL_TOBACCO', // สุรา/บุหรี่ — restricted (ต้องมีใบอนุญาต/ใบกำกับภาษี)
+  'MEDICINE', // ยา/เวชภัณฑ์ — restricted
+  'CHEMICALS', // วัตถุอันตราย/เคมี — restricted
+  'OTHER',
+]);
+export type CargoCategory = z.infer<typeof CargoCategorySchema>;
 
 export const VehicleTypeSchema = z.enum(['MOTORCYCLE', 'PICKUP', 'TRUCK_4W', 'TRUCK_6W']);
 export type VehicleType = z.infer<typeof VehicleTypeSchema>;

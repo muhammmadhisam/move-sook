@@ -33,6 +33,7 @@ export const JOB_STATUS_LABEL: Record<JobStatus, string> = {
   IN_TRANSIT: 'กำลังขนส่ง',
   PENDING_CONFIRMATION: 'รอแอดมินยืนยัน',
   DELIVERED: 'ส่งสำเร็จ',
+  FLAGGED_ILLEGAL: 'แจ้งของผิดกฎหมาย',
   CANCELLED: 'ยกเลิก',
 };
 

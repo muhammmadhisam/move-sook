@@ -58,6 +58,7 @@ export const SystemSettingsResponse = z.object({
   maxDistanceKm: z.number().int().min(0),
   verifySlaHours: z.number().int().min(1),
   idleNudgeDays: z.number().int().min(1),
+  pendingPaymentExpireDays: z.number().int().min(0), // 0 = never auto-expire
   referralRewardThb: z.number().int().min(0),
   driverWeeklyGoal: z.number().int().min(1),
   supportPhone: z.string(),
@@ -67,8 +68,13 @@ export const SystemSettingsResponse = z.object({
   payAccountName: z.string(),
   payAccountNumber: z.string(),
   payQrUrl: z.string(),
+  companyName: z.string(),
+  companyAddress: z.string(),
+  companyTaxId: z.string(),
+  companyLogoUrl: z.string(),
   termsVersion: z.string(),
   privacyVersion: z.string(),
+  prohibitedItemsList: z.string(), // banned cargo, one item per line ('' = use default list)
 });
 export type SystemSettingsResponse = z.infer<typeof SystemSettingsResponse>;
 
@@ -85,6 +91,7 @@ export const UpdateSystemSettingsInput = z.object({
   maxDistanceKm: z.number().int().min(0).max(10_000).optional(),
   verifySlaHours: z.number().int().min(1).max(720).optional(),
   idleNudgeDays: z.number().int().min(1).max(365).optional(),
+  pendingPaymentExpireDays: z.number().int().min(0).max(365).optional(),
   referralRewardThb: z.number().int().min(0).max(100_000).optional(),
   driverWeeklyGoal: z.number().int().min(1).max(1000).optional(),
   supportPhone: z.string().max(40).optional(),
@@ -94,8 +101,13 @@ export const UpdateSystemSettingsInput = z.object({
   payAccountName: z.string().max(120).optional(),
   payAccountNumber: z.string().max(40).optional(),
   payQrUrl: z.string().max(500).optional(),
+  companyName: z.string().max(120).optional(),
+  companyAddress: z.string().max(300).optional(),
+  companyTaxId: z.string().max(40).optional(),
+  companyLogoUrl: z.string().max(500).optional(),
   termsVersion: z.string().min(1).max(40).optional(),
   privacyVersion: z.string().min(1).max(40).optional(),
+  prohibitedItemsList: z.string().max(5000).optional(),
 });
 export type UpdateSystemSettingsInput = z.infer<typeof UpdateSystemSettingsInput>;
 
@@ -110,5 +122,6 @@ export const PublicSystemConfig = z.object({
   payAccountName: z.string(),
   payAccountNumber: z.string(),
   payQrUrl: z.string(),
+  prohibitedItems: z.array(z.string()), // resolved banned-cargo list shown on the posting form
 });
 export type PublicSystemConfig = z.infer<typeof PublicSystemConfig>;

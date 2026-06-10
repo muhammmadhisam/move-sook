@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 #
-# MoveSook — idle-driver re-engagement nudge (cron job).
+# MoveSook — expire abandoned unpaid jobs (cron job).
 #
-# Calls the SYSTEM-only endpoint POST /webhooks/nudge-idle-drivers, which notifies
-# approved drivers who have gone offline and inactive beyond DRIVER_IDLE_NUDGE_DAYS.
+# Calls the SYSTEM-only endpoint POST /webhooks/expire-pending-payment, which
+# auto-cancels PENDING_PAYMENT jobs with no slip uploaded after the
+# pending_payment_expire_days window (admin-configurable, 0 = disabled).
 # Auth is the static x-system-key header (SYSTEM_API_KEY from the repo-root .env).
 #
 # Usage:
-#   bash scripts/cron/nudge-idle-drivers.sh            # hit local API (PORT from .env, default 8787)
+#   bash scripts/cron/expire-pending-payment.sh        # hit local API (PORT from .env, default 8787)
 #   MOVESOOK_API_URL=https://api.movesook.com \
-#     bash scripts/cron/nudge-idle-drivers.sh          # hit a deployed API (production cron)
-#
-# Install as a daily cron job (10:00):
-#   pnpm cron:install-nudge
+#     bash scripts/cron/expire-pending-payment.sh      # hit a deployed API (production cron)
 #
 set -euo pipefail
 
@@ -20,7 +18,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ENV_FILE="$ROOT/.env"
 
 if [ ! -f "$ENV_FILE" ]; then
-  echo "[nudge] missing env file: $ENV_FILE" >&2
+  echo "[expire] missing env file: $ENV_FILE" >&2
   exit 1
 fi
 
@@ -37,14 +35,12 @@ API_URL="${MOVESOOK_API_URL:-http://localhost:${PORT:-8787}}"
 TS="$(date '+%Y-%m-%d %H:%M:%S')"
 
 if [ -z "$SYSTEM_API_KEY" ]; then
-  echo "[$TS] nudge FAILED: SYSTEM_API_KEY not set in $ENV_FILE" >&2
+  echo "[$TS] expire FAILED: SYSTEM_API_KEY not set in $ENV_FILE" >&2
   exit 1
 fi
 
-if RESP="$(curl -fsS -X POST "$API_URL/webhooks/nudge-idle-drivers" \
-  -H "x-system-key: $SYSTEM_API_KEY" 2>&1)"; then
-  echo "[$TS] nudge ok ($API_URL): $RESP"
-else
-  echo "[$TS] nudge FAILED ($API_URL): $RESP" >&2
-  exit 1
-fi
+RESPONSE="$(curl -sS -X POST "$API_URL/webhooks/expire-pending-payment" \
+  -H "x-system-key: $SYSTEM_API_KEY" \
+  -H "Content-Type: application/json")"
+
+echo "[$TS] expire-pending-payment → $RESPONSE"

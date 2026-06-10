@@ -73,6 +73,15 @@ export async function notifyMany(inputs: NotifyInput[]): Promise<void> {
   }
 }
 
+/** Fan-out a notification to every admin (e.g. an illegal-cargo flag needing review). */
+export async function notifyAdmins(input: Omit<NotifyInput, 'userId'>): Promise<void> {
+  const admins = await prisma.user.findMany({
+    where: { role: 'ADMIN' },
+    select: { id: true },
+  });
+  await notifyMany(admins.map((a) => ({ ...input, userId: a.id })));
+}
+
 /** Fan-out a freshly-posted open job to approved, available drivers in its origin province. */
 export async function notifyNewJobToArea(job: {
   id: string;

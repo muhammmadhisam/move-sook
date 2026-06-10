@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { JobStatusSchema, PricingModeSchema, VehicleTypeSchema } from '../enums';
+import { CargoCategorySchema, JobStatusSchema, PricingModeSchema, VehicleTypeSchema } from '../enums';
 import { ProvinceNameSchema } from './province';
 
 const latitude = z.number().min(-90).max(90);
@@ -24,6 +24,7 @@ export type JobItem = z.infer<typeof JobItemSchema>;
 export const CreateJobInput = z.object({
   items: z.array(JobItemSchema).min(1).max(50), // structured list of things to move
   vehicleType: VehicleTypeSchema,
+  itemCategory: CargoCategorySchema.optional(), // declared cargo category (drives the prohibited-items reminder)
   needsHelpers: z.boolean().optional(), // customer wants movers to help carry
   contactPhone: z.string().trim().min(3).max(20).optional(), // on-site contact
   notes: z.string().trim().max(1000).optional(), // special instructions
@@ -41,14 +42,26 @@ export const CreateJobInput = z.object({
   destHasElevator: z.boolean().optional(),
   scheduledAt: z.coerce.date().optional(),
   pricingMode: PricingModeSchema.optional(), // เหมาลำ (default) vs คิดตามจำนวนสินค้า
-  priceQuoted: z.number().int().positive().optional(),
+  // NOTE: no priceQuoted here — the server always computes the price itself
+  // (computeJobQuote + clamp); a client-sent price would be ignored anyway.
   promoCode: z.string().trim().min(2).max(40).optional(), // optional discount code applied at posting
   // Customer must accept the posting agreement; must be literally true.
   acceptedTerms: z.literal(true, {
     errorMap: () => ({ message: 'กรุณายอมรับข้อตกลงก่อนโพสต์งาน' }),
   }),
+  // Customer must acknowledge the prohibited-items policy; must be literally true.
+  acceptedProhibitedPolicy: z.literal(true, {
+    errorMap: () => ({ message: 'กรุณายืนยันว่าสิ่งของไม่ใช่ของผิดกฎหมาย/ของต้องห้าม' }),
+  }),
 });
 export type CreateJobInput = z.infer<typeof CreateJobInput>;
+
+// POST /jobs/:id/flag-illegal — the assigned DRIVER reports prohibited/illegal
+// cargo. Puts the job on hold (FLAGGED_ILLEGAL) for admin review; no commission.
+export const FlagJobIllegalInput = z.object({
+  reason: z.string().trim().min(3).max(500), // what was found / why it's prohibited
+});
+export type FlagJobIllegalInput = z.infer<typeof FlagJobIllegalInput>;
 
 // POST /jobs/estimate — public, no auth. Returns an itemised price quote
 // (distance base + floor/helper surcharges) and, if a promo code is supplied,
@@ -138,6 +151,10 @@ export const JobDto = z.object({
   itemDescription: z.string(),
   items: z.array(JobItemSchema).nullable(),
   vehicleType: VehicleTypeSchema,
+  itemCategory: CargoCategorySchema.nullable(),
+  prohibitedAck: z.boolean(),
+  flaggedIllegalAt: z.string().datetime().nullable(),
+  flaggedIllegalReason: z.string().nullable(),
   itemCount: z.number().int().nullable(),
   needsHelpers: z.boolean(),
   contactPhone: z.string().nullable(),

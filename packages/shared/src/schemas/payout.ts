@@ -6,11 +6,14 @@ export const PayoutDto = z.object({
   id: z.string(),
   driverId: z.string(),
   driverName: z.string().nullable(),
-  amount: z.number().int(),
+  driverCompletedCount: z.number().int(), // driver's lifetime delivered (completed) jobs
+  amount: z.number().int(), // sum of netToDriver across bundled transactions
+  commissionTotal: z.number().int(), // sum of commission across bundled transactions
   status: PayoutStatusSchema,
   reference: z.string().nullable(),
   slipUrl: z.string().nullable().optional(), // uploaded bank-transfer slip
   transactionCount: z.number().int(),
+  jobIds: z.array(z.string()), // jobs included in this payout round
   paidAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
 });

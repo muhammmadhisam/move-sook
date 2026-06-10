@@ -108,8 +108,9 @@ import {
   isVehicleTypeActive,
 } from '../lib/settings';
 import { writeAudit } from '../lib/audit';
-import { notify, notifyNewJobToArea } from '../lib/notify';
-import { createDeliveryTransaction, attachToDriverPayout } from '../lib/transactions';
+import { notify, notifyAdmins, notifyNewJobToArea } from '../lib/notify';
+import { createDeliveryTransaction } from '../lib/transactions';
+import { buildJobDocument, type DocType } from '../lib/pdf';
 import { maybeIssueReferralReward } from '../lib/referral';
 
 const JOB_STATUSES: JobStatus[] = [
@@ -936,10 +937,9 @@ export const adminRoutes = new Hono<AppEnv>()
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.job.update({ where: { id }, data });
       if (confirmingDelivery) {
-        const txn = await createDeliveryTransaction(tx, u);
-        // Auto-open the driver's payout round so it appears on "ธุรกรรมกับคนขับ"
-        // ready to be marked paid (slip + reference) — no manual "สร้างรอบจ่าย" needed.
-        if (txn) await attachToDriverPayout(tx, txn, actorId);
+        // Per-job payment: the commission ledger row IS the payable unit shown on
+        // "ธุรกรรมกับคนขับ" (1 job = 1 row), marked paid individually.
+        await createDeliveryTransaction(tx, u);
         if (u.driverId) {
           await tx.driver.update({
             where: { id: u.driverId },
@@ -981,6 +981,48 @@ export const adminRoutes = new Hono<AppEnv>()
       },
     });
     return c.json(toJobDto(updated));
+  })
+
+  // Generate a printable PDF document for a job (receipt / payout / worksheet /
+  // delivery note) — opened in a new tab to print or save as evidence.
+  .get('/jobs/:id/doc/:type', async (c) => {
+    const id = c.req.param('id');
+    const type = c.req.param('type');
+    if (!['receipt', 'payout', 'worksheet', 'delivery'].includes(type)) {
+      throw new HTTPException(404, { message: 'Unknown document type' });
+    }
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        customer: { include: { user: { select: { displayName: true, phone: true } } } },
+        driver: { include: { user: { select: { displayName: true, phone: true } } } },
+        transaction: true,
+      },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+
+    const settings = await getSystemSettings();
+    const pdf = await buildJobDocument(type as DocType, {
+      job,
+      customer: job.customer,
+      driver: job.driver,
+      transaction: job.transaction,
+      settings,
+    });
+    await writeAudit({
+      actorId: c.get('claims').sub,
+      action: 'job.document',
+      targetType: 'job',
+      targetId: id,
+      metadata: { type },
+    });
+    return new Response(new Uint8Array(pdf), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${type}-${id}.pdf"`,
+      },
+    });
   })
 
   // Approve a customer's transfer slip: publishes a PENDING_PAYMENT job (-> POSTED)
@@ -1049,6 +1091,7 @@ export const adminRoutes = new Hono<AppEnv>()
         paymentSlipUrl: null,
         paymentSlipUploadedAt: null,
         paymentRejectedReason: reason ?? 'สลิปไม่ถูกต้อง กรุณาอัปโหลดใหม่',
+        paymentRejectedCount: { increment: 1 },
       },
     });
     await writeAudit({
@@ -1056,8 +1099,18 @@ export const adminRoutes = new Hono<AppEnv>()
       action: 'job.payment.reject',
       targetType: 'job',
       targetId: id,
-      metadata: { reason: updated.paymentRejectedReason },
+      metadata: { reason: updated.paymentRejectedReason, rejectedCount: updated.paymentRejectedCount },
     });
+    // Repeated rejections usually mean a stuck customer or a problem job —
+    // surface it to ops instead of looping silently.
+    if (updated.paymentRejectedCount >= 3) {
+      await notifyAdmins({
+        type: 'GENERIC',
+        title: 'สลิปถูกปฏิเสธซ้ำหลายครั้ง',
+        body: `งาน ${updated.originProvince} → ${updated.destProvince} ถูกปฏิเสธสลิปครั้งที่ ${updated.paymentRejectedCount} — ควรติดต่อลูกค้าโดยตรง`,
+        jobId: updated.id,
+      });
+    }
     if (job.customer.userId) {
       await notify({
         userId: job.customer.userId,
@@ -1077,6 +1130,10 @@ export const adminRoutes = new Hono<AppEnv>()
     const [rows, total] = await Promise.all([
       prisma.transaction.findMany({
         where,
+        include: {
+          job: { select: { paymentApprovedAt: true, paymentSlipUrl: true } },
+          driver: { select: { name: true, completedCount: true, user: { select: { displayName: true } } } },
+        },
         orderBy: orderByOf(
           q.sortBy,
           q.sortDir,
@@ -1091,12 +1148,16 @@ export const adminRoutes = new Hono<AppEnv>()
       id: t.id,
       jobId: t.jobId,
       driverId: t.driverId,
+      driverName: t.driver.user?.displayName ?? t.driver.name,
+      driverCompletedCount: t.driver.completedCount,
       grossAmount: t.grossAmount,
       commissionPct: t.commissionPct,
       commissionAmount: t.commissionAmount,
       netToDriver: t.netToDriver,
       status: t.status,
       slipUrl: t.slipUrl,
+      customerPaidAt: t.job.paymentApprovedAt ? t.job.paymentApprovedAt.toISOString() : null,
+      customerSlipUrl: t.job.paymentSlipUrl,
       createdAt: t.createdAt.toISOString(),
     }));
     return c.json({ items, total, page: q.page, pageSize: q.pageSize });
@@ -1107,7 +1168,10 @@ export const adminRoutes = new Hono<AppEnv>()
     const id = c.req.param('id');
     const { status, slipUrl } = c.req.valid('json');
     const actorId = c.get('claims').sub;
-    const txn = await prisma.transaction.findUnique({ where: { id } });
+    const txn = await prisma.transaction.findUnique({
+      where: { id },
+      include: { driver: { select: { userId: true } } },
+    });
     if (!txn) throw new HTTPException(404, { message: 'Transaction not found' });
     const updated = await prisma.transaction.update({
       where: { id },
@@ -1120,6 +1184,16 @@ export const adminRoutes = new Hono<AppEnv>()
       targetId: id,
       metadata: { from: txn.status, to: status },
     });
+    // Tell the driver when their job payment is marked paid.
+    if (status === 'PAID' && txn.status !== 'PAID' && txn.driver.userId) {
+      await notify({
+        userId: txn.driver.userId,
+        type: 'GENERIC',
+        title: 'โอนค่างานแล้ว',
+        body: `โอนค่างานจำนวน ${updated.netToDriver.toLocaleString()} บาท เรียบร้อยแล้ว`,
+        jobId: updated.jobId,
+      });
+    }
     return c.json({ id: updated.id, status: updated.status, slipUrl: updated.slipUrl });
   })
 
@@ -1843,7 +1917,7 @@ export const adminRoutes = new Hono<AppEnv>()
         ...pageArgs(q),
         include: {
           driver: { include: { user: { select: { displayName: true } } } },
-          _count: { select: { transactions: true } },
+          transactions: { select: { jobId: true, commissionAmount: true } },
         },
       }),
       prisma.payout.count({ where }),
@@ -1852,11 +1926,14 @@ export const adminRoutes = new Hono<AppEnv>()
       id: p.id,
       driverId: p.driverId,
       driverName: p.driver.user?.displayName ?? p.driver.name,
+      driverCompletedCount: p.driver.completedCount,
       amount: p.amount,
+      commissionTotal: p.transactions.reduce((n, t) => n + t.commissionAmount, 0),
       status: p.status,
       reference: p.reference,
       slipUrl: p.slipUrl,
-      transactionCount: p._count.transactions,
+      transactionCount: p.transactions.length,
+      jobIds: p.transactions.map((t) => t.jobId),
       paidAt: p.paidAt ? p.paidAt.toISOString() : null,
       createdAt: p.createdAt.toISOString(),
     }));

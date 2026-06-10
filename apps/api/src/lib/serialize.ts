@@ -13,6 +13,10 @@ export function toJobDto(job: Job): JobDto {
     // `items` is a Prisma Json column; it always holds JobItem[] | null as written at create time.
     items: (job.items as unknown as JobItem[] | null) ?? null,
     vehicleType: job.vehicleType,
+    itemCategory: (job.itemCategory as JobDto['itemCategory']) ?? null,
+    prohibitedAck: job.prohibitedAck,
+    flaggedIllegalAt: job.flaggedIllegalAt ? job.flaggedIllegalAt.toISOString() : null,
+    flaggedIllegalReason: job.flaggedIllegalReason,
     itemCount: job.itemCount,
     needsHelpers: job.needsHelpers,
     contactPhone: job.contactPhone,

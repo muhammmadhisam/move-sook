@@ -15,6 +15,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "cron:nudge": "bash scripts/cron/nudge-idle-drivers.sh",
+    "cron:expire-pending-payment": "bash scripts/cron/expire-pending-payment.sh",
     "cron:install-nudge": "bash scripts/cron/install-nudge-cron.sh install",
     "cron:uninstall-nudge": "bash scripts/cron/install-nudge-cron.sh uninstall",
     "clean": "turbo run clean && rm -rf node_modules"

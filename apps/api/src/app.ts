@@ -2,17 +2,16 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { HTTPException } from 'hono/http-exception';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { env } from './config';
 import type { AppEnv } from './lib/context';
 import { getSystemSettings } from './lib/settings';
-import type { PublicSystemConfig } from '@movesook/shared';
+import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
 import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';
 import { jobRoutes } from './routes/jobs';
 import { driverRoutes } from './routes/drivers';
 import { adminRoutes } from './routes/admin';
-import { uploadRoutes } from './routes/uploads';
+import { uploadRoutes, serveUploads } from './routes/uploads';
 import { webhookRoutes } from './routes/webhooks';
 
 // One chain so hc<AppType>() sees every mounted route's literal types.
@@ -46,11 +45,13 @@ const app = new Hono<AppEnv>()
       payAccountName: s.payAccountName,
       payAccountNumber: s.payAccountNumber,
       payQrUrl: s.payQrUrl,
+      prohibitedItems: resolveProhibitedItems(s.prohibitedItemsList),
     };
     return c.json(body);
   })
-  // Serve uploaded images (GET /uploads/<file>); POST /uploads is handled by the router below.
-  .use('/uploads/*', serveStatic({ root: './' }))
+  // Serve uploaded images (GET /uploads/<file>) from R2 or local disk;
+  // POST /uploads is handled by the router below.
+  .use('/uploads/*', serveUploads)
   .route('/auth', authRoutes)
   .route('/me', meRoutes)
   .route('/jobs', jobRoutes)

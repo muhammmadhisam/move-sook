@@ -161,9 +161,11 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
           K.MAINTENANCE_MODE, K.MAINTENANCE_MESSAGE, K.MIN_JOB_PRICE, K.MAX_JOB_PRICE,
           K.CANCELLATION_FEE, K.FREE_CANCEL_MINUTES, K.MAX_ACTIVE_JOBS_PER_DRIVER,
           K.MAX_SCHEDULE_DAYS, K.MIN_DISTANCE_KM, K.MAX_DISTANCE_KM, K.VERIFY_SLA_HOURS,
-          K.IDLE_NUDGE_DAYS, K.REFERRAL_REWARD, K.DRIVER_WEEKLY_GOAL, K.SUPPORT_PHONE,
+          K.IDLE_NUDGE_DAYS, K.PENDING_PAYMENT_EXPIRE_DAYS, K.REFERRAL_REWARD, K.DRIVER_WEEKLY_GOAL, K.SUPPORT_PHONE,
           K.SUPPORT_LINE_ID, K.SUPPORT_EMAIL, K.PAY_BANK_NAME, K.PAY_ACCOUNT_NAME,
-          K.PAY_ACCOUNT_NUMBER, K.PAY_QR_URL, K.TERMS_VERSION, K.PRIVACY_VERSION,
+          K.PAY_ACCOUNT_NUMBER, K.PAY_QR_URL, K.COMPANY_NAME, K.COMPANY_ADDRESS,
+          K.COMPANY_TAX_ID, K.COMPANY_LOGO_URL, K.TERMS_VERSION, K.PRIVACY_VERSION,
+          K.PROHIBITED_ITEMS_LIST,
         ],
       },
     },
@@ -188,6 +190,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     maxDistanceKm: num(K.MAX_DISTANCE_KM, D.maxDistanceKm),
     verifySlaHours: num(K.VERIFY_SLA_HOURS, D.verifySlaHours),
     idleNudgeDays: num(K.IDLE_NUDGE_DAYS, D.idleNudgeDays),
+    pendingPaymentExpireDays: num(K.PENDING_PAYMENT_EXPIRE_DAYS, D.pendingPaymentExpireDays),
     referralRewardThb: num(K.REFERRAL_REWARD, D.referralRewardThb),
     driverWeeklyGoal: num(K.DRIVER_WEEKLY_GOAL, D.driverWeeklyGoal),
     supportPhone: str(K.SUPPORT_PHONE, D.supportPhone),
@@ -197,8 +200,13 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     payAccountName: str(K.PAY_ACCOUNT_NAME, D.payAccountName),
     payAccountNumber: str(K.PAY_ACCOUNT_NUMBER, D.payAccountNumber),
     payQrUrl: str(K.PAY_QR_URL, D.payQrUrl),
+    companyName: str(K.COMPANY_NAME, D.companyName),
+    companyAddress: str(K.COMPANY_ADDRESS, D.companyAddress),
+    companyTaxId: str(K.COMPANY_TAX_ID, D.companyTaxId),
+    companyLogoUrl: str(K.COMPANY_LOGO_URL, D.companyLogoUrl),
     termsVersion: str(K.TERMS_VERSION, D.termsVersion),
     privacyVersion: str(K.PRIVACY_VERSION, D.privacyVersion),
+    prohibitedItemsList: str(K.PROHIBITED_ITEMS_LIST, D.prohibitedItemsList),
   };
 }
 
@@ -220,6 +228,7 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.MAX_DISTANCE_KM, patch.maxDistanceKm);
   put(K.VERIFY_SLA_HOURS, patch.verifySlaHours);
   put(K.IDLE_NUDGE_DAYS, patch.idleNudgeDays);
+  put(K.PENDING_PAYMENT_EXPIRE_DAYS, patch.pendingPaymentExpireDays);
   put(K.REFERRAL_REWARD, patch.referralRewardThb);
   put(K.DRIVER_WEEKLY_GOAL, patch.driverWeeklyGoal);
   put(K.SUPPORT_PHONE, patch.supportPhone);
@@ -229,8 +238,13 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.PAY_ACCOUNT_NAME, patch.payAccountName);
   put(K.PAY_ACCOUNT_NUMBER, patch.payAccountNumber);
   put(K.PAY_QR_URL, patch.payQrUrl);
+  put(K.COMPANY_NAME, patch.companyName);
+  put(K.COMPANY_ADDRESS, patch.companyAddress);
+  put(K.COMPANY_TAX_ID, patch.companyTaxId);
+  put(K.COMPANY_LOGO_URL, patch.companyLogoUrl);
   put(K.TERMS_VERSION, patch.termsVersion);
   put(K.PRIVACY_VERSION, patch.privacyVersion);
+  put(K.PROHIBITED_ITEMS_LIST, patch.prohibitedItemsList);
   await Promise.all(
     entries.map(([key, value]) =>
       prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } }),

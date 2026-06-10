@@ -10,12 +10,15 @@ export const JOB_TRANSITIONS: Record<JobStatus, readonly JobStatus[]> = {
   // or the customer cancels. Drivers never see a job in this state.
   PENDING_PAYMENT: ['POSTED', 'CANCELLED'],
   POSTED: ['ACCEPTED', 'CANCELLED'],
-  ACCEPTED: ['PICKED_UP', 'CANCELLED'],
-  PICKED_UP: ['IN_TRANSIT', 'CANCELLED'],
-  IN_TRANSIT: ['PENDING_CONFIRMATION', 'CANCELLED'],
+  // From any in-hand state a driver may raise an illegal-cargo flag (-> FLAGGED_ILLEGAL).
+  ACCEPTED: ['PICKED_UP', 'FLAGGED_ILLEGAL', 'CANCELLED'],
+  PICKED_UP: ['IN_TRANSIT', 'FLAGGED_ILLEGAL', 'CANCELLED'],
+  IN_TRANSIT: ['PENDING_CONFIRMATION', 'FLAGGED_ILLEGAL', 'CANCELLED'],
   // Driver claims delivery; admin confirms (-> DELIVERED) or sends back (-> IN_TRANSIT).
   PENDING_CONFIRMATION: ['DELIVERED', 'IN_TRANSIT', 'CANCELLED'],
   DELIVERED: [], // terminal
+  // An admin reviews a flagged job and cancels it (no commission). Not driver-advanceable.
+  FLAGGED_ILLEGAL: ['CANCELLED'],
   CANCELLED: [], // terminal
 };
 
@@ -37,6 +40,32 @@ export const DRIVER_ADVANCEABLE: readonly JobStatus[] = [
 
 export function isTerminalStatus(status: JobStatus): boolean {
   return JOB_TRANSITIONS[status].length === 0;
+}
+
+/**
+ * Statuses from which a CUSTOMER may cancel their own job. Narrower than "every
+ * status that can transition to CANCELLED" — a customer may only bail out before
+ * the goods are picked up; cancellations after that are admin-driven.
+ */
+export const CUSTOMER_CANCELLABLE: readonly JobStatus[] = [
+  'DRAFT',
+  'PENDING_PAYMENT',
+  'POSTED',
+  'ACCEPTED',
+];
+
+export function isCustomerCancellable(status: JobStatus): boolean {
+  return CUSTOMER_CANCELLABLE.includes(status);
+}
+
+/**
+ * Statuses where a CUSTOMER may confirm receipt of the goods. Only meaningful
+ * once delivery is underway / has been claimed by the driver.
+ */
+export const CUSTOMER_CONFIRMABLE: readonly JobStatus[] = ['IN_TRANSIT', 'PENDING_CONFIRMATION'];
+
+export function isCustomerConfirmable(status: JobStatus): boolean {
+  return CUSTOMER_CONFIRMABLE.includes(status);
 }
 
 /**

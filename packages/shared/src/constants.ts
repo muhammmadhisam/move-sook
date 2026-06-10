@@ -22,6 +22,7 @@ export const APP_SETTING_KEYS = {
   MAX_DISTANCE_KM: 'max_distance_km', // reject jobs longer than this (0 = no max)
   VERIFY_SLA_HOURS: 'verify_sla_hours', // driver-verification SLA window
   IDLE_NUDGE_DAYS: 'idle_nudge_days', // days of inactivity before an idle-driver nudge
+  PENDING_PAYMENT_EXPIRE_DAYS: 'pending_payment_expire_days', // auto-cancel unpaid jobs after N days (0 = never)
   REFERRAL_REWARD: 'referral_reward', // two-sided referral reward (THB)
   DRIVER_WEEKLY_GOAL: 'driver_weekly_goal', // weekly delivered-jobs target for the incentive bar
   SUPPORT_PHONE: 'support_phone',
@@ -31,6 +32,11 @@ export const APP_SETTING_KEYS = {
   PAY_ACCOUNT_NAME: 'pay_account_name', // account holder name
   PAY_ACCOUNT_NUMBER: 'pay_account_number', // account number
   PAY_QR_URL: 'pay_qr_url', // PromptPay/bank QR image URL
+  COMPANY_NAME: 'company_name', // document header — legal/brand name
+  COMPANY_ADDRESS: 'company_address',
+  COMPANY_TAX_ID: 'company_tax_id',
+  COMPANY_LOGO_URL: 'company_logo_url',
+  PROHIBITED_ITEMS_LIST: 'prohibited_items_list', // admin-editable list of banned cargo (one item per line)
 } as const;
 
 /** Defaults for the misc system settings. */
@@ -47,6 +53,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   maxDistanceKm: 0, // 0 = no maximum
   verifySlaHours: 24,
   idleNudgeDays: 7,
+  pendingPaymentExpireDays: 3, // 0 = never auto-expire
   referralRewardThb: 50,
   driverWeeklyGoal: 20,
   supportPhone: '',
@@ -56,9 +63,64 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   payAccountName: '',
   payAccountNumber: '',
   payQrUrl: '',
+  companyName: 'MoveSook',
+  companyAddress: '',
+  companyTaxId: '',
+  companyLogoUrl: '',
   termsVersion: '1.0',
   privacyVersion: '1.0',
+  prohibitedItemsList: '', // '' = fall back to DEFAULT_PROHIBITED_ITEMS
 } as const;
+
+/**
+ * Default list of items the platform refuses to move (Thai). Admin-editable via
+ * the `prohibited_items_list` AppSetting (one item per line). Shown to customers
+ * on the posting form and to drivers as flag context.
+ */
+export const DEFAULT_PROHIBITED_ITEMS = [
+  'ยาเสพติดทุกชนิด และสารตั้งต้น',
+  'อาวุธปืน กระสุน วัตถุระเบิด และดอกไม้เพลิงผิดกฎหมาย',
+  'สัตว์ป่าคุ้มครอง ซากสัตว์ งาช้าง',
+  'สินค้าหนีภาษี/ผิดศุลกากร และสินค้าละเมิดลิขสิทธิ์',
+  'สื่อลามกอนาจารที่ผิดกฎหมาย',
+  'สารกัมมันตรังสี วัตถุอันตรายร้ายแรง',
+  'ของผิดกฎหมายอื่น ๆ หรือสิ่งของที่ได้มาโดยมิชอบ',
+] as const;
+
+/** Resolve the effective prohibited-items list: admin override (newline list) or the default. */
+export function resolveProhibitedItems(raw: string | null | undefined): string[] {
+  const lines = (raw ?? '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return lines.length > 0 ? lines : [...DEFAULT_PROHIBITED_ITEMS];
+}
+
+/** Cargo categories the customer picks at post time (value -> Thai label). */
+export const CARGO_CATEGORY_LABELS: Record<string, string> = {
+  GENERAL: 'ของใช้ทั่วไป / เฟอร์นิเจอร์',
+  APPLIANCES: 'เครื่องใช้ไฟฟ้า',
+  FRAGILE: 'ของแตกหักง่าย',
+  DOCUMENTS: 'เอกสาร',
+  FOOD: 'อาหาร / ของสด',
+  PLANTS: 'ต้นไม้',
+  VALUABLES: 'ของมีค่าสูง (ทอง/เพชร)',
+  ALCOHOL_TOBACCO: 'สุรา / บุหรี่',
+  MEDICINE: 'ยา / เวชภัณฑ์',
+  CHEMICALS: 'วัตถุอันตราย / เคมีภัณฑ์',
+  OTHER: 'อื่น ๆ',
+};
+
+/**
+ * Categories that are legal to move but need supporting documents (license / tax
+ * invoice / permit). The posting form surfaces a reminder; not a hard block.
+ */
+export const RESTRICTED_CARGO_CATEGORIES: readonly string[] = [
+  'VALUABLES',
+  'ALCOHOL_TOBACCO',
+  'MEDICINE',
+  'CHEMICALS',
+];
 
 /** Clamp a computed price into the configured [min, max] window. max=0 means no cap. */
 export function clampJobPrice(total: number, minJobPrice: number, maxJobPrice: number): number {
@@ -73,6 +135,7 @@ export const JOB_POSTING_TERMS = [
   'ราคาที่เสนอเป็นเพียงราคาเริ่มต้น อาจมีค่าใช้จ่ายเพิ่มตามจริง (เช่น ชั้น ลิฟต์ คนช่วยยก)',
   'ยินยอมให้ผู้ขับที่รับงานติดต่อตามเบอร์ที่ให้ไว้ และเข้าถึงข้อมูลงานที่จำเป็น',
   'รับทราบนโยบายการยกเลิกงานและอาจมีค่าธรรมเนียมการยกเลิก',
+  'สิ่งของที่ส่งไม่ใช่ของผิดกฎหมายหรือของต้องห้าม และข้าพเจ้ารับผิดชอบแต่เพียงผู้เดียวหากฝ่าฝืน',
 ] as const;
 
 /** Fallback commission % if AppSetting row is missing. */

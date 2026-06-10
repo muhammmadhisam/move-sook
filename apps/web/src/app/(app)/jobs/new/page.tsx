@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -42,7 +42,13 @@ import {
   VehicleTypeSchema,
   VEHICLE_TYPE_LABEL,
   PRICING_MODE_LABEL,
+  CargoCategorySchema,
+  CARGO_CATEGORY_LABELS,
+  DEFAULT_PROHIBITED_ITEMS,
+  RESTRICTED_CARGO_CATEGORIES,
+  type CargoCategory,
   type EstimateJobResponse,
+  type JobDetailResponse,
   type JobItem,
   type JobPricingResponse,
   type JobServiceAreasResponse,
@@ -81,6 +87,9 @@ function SummaryStep({
   onPromoApply,
   acceptedTerms,
   onAcceptedTermsChange,
+  acceptedProhibitedPolicy,
+  onAcceptedProhibitedPolicyChange,
+  itemCategory,
   vehicleLabel,
 }: {
   form: {
@@ -108,6 +117,9 @@ function SummaryStep({
   onPromoApply: (code: string) => void;
   acceptedTerms: boolean;
   onAcceptedTermsChange: (v: boolean) => void;
+  acceptedProhibitedPolicy: boolean;
+  onAcceptedProhibitedPolicyChange: (v: boolean) => void;
+  itemCategory: CargoCategory;
   vehicleLabel: string;
 }) {
   const floorInt = (v: string): number | undefined => {
@@ -345,6 +357,32 @@ function SummaryStep({
           <span>ข้าพเจ้าได้อ่านและยอมรับข้อตกลงข้างต้น</span>
         </label>
       </div>
+
+      {/* นโยบายของต้องห้าม / ของผิดกฎหมาย */}
+      <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+        <p className="mb-1 text-sm font-medium">นโยบายของต้องห้าม</p>
+        <p className="mb-2 text-xs text-muted-foreground">
+          MoveSook ไม่รับขนส่งสิ่งของต้องห้ามตามกฎหมาย ผู้ขับมีสิทธิ์ปฏิเสธหรือแจ้งงานที่พบของผิดกฎหมาย
+        </p>
+        <ul className="mb-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+          {DEFAULT_PROHIBITED_ITEMS.map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+        </ul>
+        {RESTRICTED_CARGO_CATEGORIES.includes(itemCategory) && (
+          <p className="mb-2 rounded bg-amber-100 px-2 py-1 text-xs text-amber-800">
+            หมวด “{CARGO_CATEGORY_LABELS[itemCategory]}” อาจต้องมีใบอนุญาต/ใบกำกับภาษีประกอบการขนส่ง
+          </p>
+        )}
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox
+            className="mt-0.5"
+            checked={acceptedProhibitedPolicy}
+            onCheckedChange={onAcceptedProhibitedPolicyChange}
+          />
+          <span>ข้าพเจ้ายืนยันว่าสิ่งของที่ส่งไม่ใช่ของผิดกฎหมายหรือของต้องห้าม</span>
+        </label>
+      </div>
     </div>
   );
 }
@@ -373,6 +411,8 @@ export default function NewJobPage() {
   const [origin, setOrigin] = useState<LatLng | null>(null);
   const [dest, setDest] = useState<LatLng | null>(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedProhibitedPolicy, setAcceptedProhibitedPolicy] = useState(false);
+  const [itemCategory, setItemCategory] = useState<CargoCategory>('GENERAL');
   const [pricingMode, setPricingMode] = useState<PricingMode>('CHARTER');
   // Applied promo code (validated server-side via the estimate endpoint).
   const [promoCode, setPromoCode] = useState('');
@@ -384,6 +424,46 @@ export default function NewJobPage() {
     quantity: number;
     photoUrls: string[];
   } | null>(null);
+
+  // Re-book: ?from=<jobId> prefills the form from a previous job (สั่งซ้ำ).
+  const searchParams = useSearchParams();
+  const fromId = searchParams.get('from');
+  const prefilled = useRef(false);
+  const sourceJob = useQuery({
+    queryKey: ['job', 'rebook', fromId],
+    enabled: !!fromId,
+    queryFn: async (): Promise<JobDetailResponse> => {
+      const res = await api.jobs[':id'].$get({ param: { id: fromId! } });
+      if (!res.ok) throw new Error('โหลดงานเดิมไม่สำเร็จ');
+      return (await res.json()) as JobDetailResponse;
+    },
+  });
+  useEffect(() => {
+    const j = sourceJob.data;
+    if (!j || prefilled.current) return;
+    prefilled.current = true;
+    const boolToLift = (b: boolean | null): Lift => (b === true ? 'yes' : b === false ? 'no' : 'unknown');
+    setForm((f) => ({
+      ...f,
+      vehicleType: j.vehicleType,
+      contactPhone: j.contactPhone ?? '',
+      notes: j.notes ?? '',
+      originAddress: j.originAddress,
+      originProvince: j.originProvince,
+      originFloor: j.originFloor != null ? String(j.originFloor) : '',
+      destAddress: j.destAddress,
+      destProvince: j.destProvince,
+      destFloor: j.destFloor != null ? String(j.destFloor) : '',
+    }));
+    if (j.items) setItems(j.items);
+    setNeedsHelpers(j.needsHelpers);
+    setOriginLift(boolToLift(j.originHasElevator));
+    setDestLift(boolToLift(j.destHasElevator));
+    if (j.originLat != null && j.originLng != null) setOrigin({ lat: j.originLat, lng: j.originLng });
+    if (j.destLat != null && j.destLng != null) setDest({ lat: j.destLat, lng: j.destLng });
+    setPricingMode(j.pricingMode);
+    toast.info('นำข้อมูลจากงานเดิมมาให้แล้ว — ตรวจสอบแล้วโพสต์ได้เลย');
+  }, [sourceJob.data]);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -479,6 +559,7 @@ export default function NewJobPage() {
       const parsed = CreateJobInput.safeParse({
         items: filledItems,
         vehicleType: form.vehicleType,
+        itemCategory,
         needsHelpers,
         contactPhone: form.contactPhone.trim() || undefined,
         notes: form.notes.trim() || undefined,
@@ -498,6 +579,7 @@ export default function NewJobPage() {
         pricingMode,
         promoCode: promoCode.trim() || undefined,
         acceptedTerms,
+        acceptedProhibitedPolicy: acceptedProhibitedPolicy as true,
       });
       if (!parsed.success) {
         throw new Error(parsed.error.issues[0]?.message ?? 'ข้อมูลไม่ถูกต้อง');
@@ -547,6 +629,10 @@ export default function NewJobPage() {
   const submit = () => {
     if (!acceptedTerms) {
       setError('กรุณายอมรับข้อตกลงก่อนโพสต์งาน');
+      return;
+    }
+    if (!acceptedProhibitedPolicy) {
+      setError('กรุณายืนยันว่าสิ่งของไม่ใช่ของผิดกฎหมาย/ของต้องห้าม');
       return;
     }
     setError(null);
@@ -666,6 +752,30 @@ export default function NewJobPage() {
                 {totalQty > 0 && (
                   <p className="text-xs text-muted-foreground">
                     รวม {filledItems.length} รายการ · {totalQty} ชิ้น
+                  </p>
+                )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label>ประเภทสิ่งของ</Label>
+                <Select
+                  value={itemCategory}
+                  onValueChange={(v) => setItemCategory(v as CargoCategory)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CargoCategorySchema.options.map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {CARGO_CATEGORY_LABELS[v]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {RESTRICTED_CARGO_CATEGORIES.includes(itemCategory) && (
+                  <p className="text-xs text-amber-700">
+                    หมวดนี้อาจต้องมีใบอนุญาต/ใบกำกับภาษีประกอบการขนส่ง
                   </p>
                 )}
               </div>
@@ -883,6 +993,9 @@ export default function NewJobPage() {
               onPromoApply={setPromoCode}
               acceptedTerms={acceptedTerms}
               onAcceptedTermsChange={setAcceptedTerms}
+              acceptedProhibitedPolicy={acceptedProhibitedPolicy}
+              onAcceptedProhibitedPolicyChange={setAcceptedProhibitedPolicy}
+              itemCategory={itemCategory}
               vehicleLabel={vehicleLabel(form.vehicleType)}
             />
           )}
@@ -907,7 +1020,7 @@ export default function NewJobPage() {
             ) : (
               <Button
                 className="flex-1"
-                disabled={create.isPending || !acceptedTerms}
+                disabled={create.isPending || !acceptedTerms || !acceptedProhibitedPolicy}
                 onClick={submit}
               >
                 {create.isPending ? 'กำลังยืนยัน…' : 'ยืนยันการขนย้าย'}

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, FileText } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -16,11 +16,17 @@ import {
   PreviewableImage,
 } from '@movesook/ui';
 import type { JobDetailResponse } from '@movesook/shared';
-import { api } from '@/lib/api';
+import { api, API_BASE_URL } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
+import { DisputeDialog } from '@/components/dispute-dialog';
+import { ReviewDialog } from '@/components/review-dialog';
+import { useAuth } from '@/hooks/use-auth';
 import { useJobTrack } from '@/hooks/use-job-track';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT, jobDest, jobOrigin } from '@/lib/job-display';
+
+// Statuses where raising a dispute makes sense (a driver is involved through delivery).
+const DISPUTABLE = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'PENDING_CONFIRMATION', 'DELIVERED']);
 
 // Statuses where the driver is en route and worth live-tracking.
 const TRACKING_STATUSES = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT']);
@@ -38,6 +44,7 @@ export default function JobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const queryClient = useQueryClient();
+  const { me } = useAuth();
 
   const job = useQuery({
     queryKey: ['job', id],
@@ -271,6 +278,32 @@ export default function JobDetailPage() {
           ) : (
             <p className="text-sm text-muted-foreground">ยังไม่มีคนขับรับงาน</p>
           )}
+
+          {/* Receipt (once the customer's payment is approved) */}
+          {job.data.paymentApprovedAt && (
+            <Button asChild variant="outline" className="w-full">
+              <a
+                href={`${API_BASE_URL}/jobs/${id}/receipt`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <FileText className="mr-1.5 h-4 w-4" />
+                ดาวน์โหลดใบเสร็จ
+              </a>
+            </Button>
+          )}
+
+          {/* Review the driver once delivered — the API allows one review per job,
+              by the job's customer only (the driver viewing this page won't see it). */}
+          {job.data.status === 'DELIVERED' && me?.role === 'USER' && (
+            <ReviewDialog
+              jobId={id}
+              onDone={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
+            />
+          )}
+
+          {/* Report a problem — once a driver is involved through delivery */}
+          {DISPUTABLE.has(job.data.status) && <DisputeDialog jobId={id} />}
 
           <Button asChild variant="outline" className="w-full">
             <Link href="/app">หน้าหลัก</Link>

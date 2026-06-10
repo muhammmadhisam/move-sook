@@ -11,7 +11,9 @@ import {
   CardTitle,
   Input,
   Label,
+  Textarea,
 } from '@movesook/ui';
+import { DEFAULT_PROHIBITED_ITEMS } from '@movesook/shared';
 import { toast } from 'sonner';
 import type { SystemSettingsResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -104,6 +106,7 @@ export function SystemSettingsCard() {
           {numField('maxJobPrice', 'ราคาสูงสุด (บาท, 0=ไม่จำกัด)')}
           {numField('cancellationFee', 'ค่าธรรมเนียมยกเลิก (บาท)')}
           {numField('freeCancelMinutes', 'ยกเลิกฟรีภายใน (นาที)')}
+          {numField('pendingPaymentExpireDays', 'ยกเลิกงานไม่จ่ายเงินใน (วัน, 0=ไม่ยกเลิก)')}
         </div>
 
         <Section title="กฎการใช้งาน" />
@@ -155,10 +158,49 @@ export function SystemSettingsCard() {
           )}
         </div>
 
+        <Section title="ข้อมูลบริษัท (หัวเอกสาร/ใบเสร็จ PDF)" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {strField('companyName', 'ชื่อบริษัท')}
+          {strField('companyTaxId', 'เลขผู้เสียภาษี')}
+        </div>
+        {strField('companyAddress', 'ที่อยู่บริษัท')}
+        <div className="space-y-1">
+          <Label>โลโก้ (แสดงบนเอกสาร PDF)</Label>
+          <ImageUpload
+            value={form.companyLogoUrl || null}
+            label={form.companyLogoUrl ? 'เปลี่ยนโลโก้' : 'อัปโหลดโลโก้'}
+            onUploaded={(url) => setForm({ ...form, companyLogoUrl: url })}
+          />
+          {form.companyLogoUrl && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setForm({ ...form, companyLogoUrl: '' })}
+            >
+              ลบโลโก้
+            </Button>
+          )}
+        </div>
+
         <Section title="นโยบาย" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {strField('termsVersion', 'เวอร์ชันข้อตกลง')}
           {strField('privacyVersion', 'เวอร์ชันนโยบายความเป็นส่วนตัว')}
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="prohibitedItemsList">รายการของต้องห้าม (1 รายการต่อบรรทัด)</Label>
+          <Textarea
+            id="prohibitedItemsList"
+            rows={7}
+            placeholder={DEFAULT_PROHIBITED_ITEMS.join('\n')}
+            value={form.prohibitedItemsList}
+            onChange={(e) => setForm({ ...form, prohibitedItemsList: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            แสดงให้ลูกค้าเห็นตอนโพสต์งาน · เว้นว่างไว้เพื่อใช้รายการมาตรฐาน
+          </p>
         </div>
 
         <Button onClick={() => save.mutate(form)} disabled={save.isPending}>

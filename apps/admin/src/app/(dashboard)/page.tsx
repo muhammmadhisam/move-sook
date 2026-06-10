@@ -34,6 +34,7 @@ const STATUS_LABEL: Record<JobStatus, string> = {
   IN_TRANSIT: 'ขนส่ง',
   PENDING_CONFIRMATION: 'รอยืนยัน',
   DELIVERED: 'สำเร็จ',
+  FLAGGED_ILLEGAL: 'แจ้งผิดกฎหมาย',
   CANCELLED: 'ยกเลิก',
 };
 const STATUS_ORDER: JobStatus[] = [
@@ -44,6 +45,7 @@ const STATUS_ORDER: JobStatus[] = [
   'IN_TRANSIT',
   'PENDING_CONFIRMATION',
   'DELIVERED',
+  'FLAGGED_ILLEGAL',
   'CANCELLED',
 ];
 

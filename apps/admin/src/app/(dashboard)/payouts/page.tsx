@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Badge,
   Button,
@@ -11,7 +13,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  Input,
   Label,
   Select,
   SelectContent,
@@ -26,12 +27,11 @@ import {
   TableRow,
 } from '@movesook/ui';
 import {
-  PayoutStatusSchema,
-  PAYOUT_STATUS_LABEL,
-  type DriverDto,
+  TransactionStatusSchema,
+  TRANSACTION_STATUS_LABEL,
   type Paged,
-  type PayoutDto,
-  type PayoutStatus,
+  type TransactionDto,
+  type TransactionStatus,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
@@ -40,80 +40,57 @@ import { ImageUpload } from '@/components/image-upload';
 const ALL = 'ALL';
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 
-type PayoutsResponse = Paged<PayoutDto>;
+type TxnResponse = Paged<TransactionDto>;
 
+const STATUS_VARIANT: Record<TransactionStatus, 'secondary' | 'success' | 'destructive'> = {
+  PENDING: 'secondary',
+  PAID: 'success',
+  REFUNDED: 'destructive',
+};
+
+/**
+ * "ธุรกรรมกับคนขับ" — money OUT to drivers, ONE row per delivered job (a
+ * commission-ledger Transaction). Admin pays each job and attaches a slip.
+ */
 export default function PayoutsPage() {
   const queryClient = useQueryClient();
   const tbl = useTableState('createdAt');
-  const [status, setStatus] = useState<PayoutStatus | typeof ALL>(ALL);
-  const [creating, setCreating] = useState(false);
-  const [driverId, setDriverId] = useState('');
-  const [paying, setPaying] = useState<PayoutDto | null>(null);
-  const [reference, setReference] = useState('');
+  const [status, setStatus] = useState<TransactionStatus | typeof ALL>(ALL);
+  const [paying, setPaying] = useState<TransactionDto | null>(null);
   const [slipUrl, setSlipUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
-  const payouts = useQuery({
-    queryKey: ['admin', 'payouts', status, tbl.page, tbl.sortBy, tbl.sortDir],
-    queryFn: async (): Promise<PayoutsResponse> => {
-      const query = {
-        page: String(tbl.page),
-        sortBy: tbl.sortBy,
-        sortDir: tbl.sortDir,
-        ...(status === ALL ? {} : { status }),
-      };
-      const res = await api.admin.payouts.$get({ query });
+  const txns = useQuery({
+    queryKey: ['admin', 'payouts', 'txns', status, tbl.page, tbl.sortBy, tbl.sortDir],
+    queryFn: async (): Promise<TxnResponse> => {
+      const res = await api.admin.transactions.$get({
+        query: {
+          page: String(tbl.page),
+          sortBy: tbl.sortBy,
+          sortDir: tbl.sortDir,
+          ...(status === ALL ? {} : { status }),
+        },
+      });
       if (!res.ok) throw new Error('โหลดรายการจ่ายเงินไม่สำเร็จ');
-      return (await res.json()) as PayoutsResponse;
+      return (await res.json()) as TxnResponse;
     },
-  });
-
-  const drivers = useQuery({
-    queryKey: ['admin', 'drivers', 'APPROVED'],
-    enabled: creating,
-    queryFn: async (): Promise<{ items: DriverDto[] }> => {
-      const res = await api.admin.drivers.$get({ query: { status: 'APPROVED' } });
-      if (!res.ok) throw new Error('โหลดคนขับไม่สำเร็จ');
-      return (await res.json()) as { items: DriverDto[] };
-    },
-  });
-
-  const create = useMutation({
-    mutationFn: async () => {
-      const res = await api.admin.payouts.$post({ json: { driverId } });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(body?.error ?? 'สร้างรอบจ่ายไม่สำเร็จ');
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      setCreating(false);
-      setDriverId('');
-      queryClient.invalidateQueries({ queryKey: ['admin', 'payouts'] });
-    },
-    onError: (e: Error) => setError(e.message),
   });
 
   const markPaid = useMutation({
-    mutationFn: async () => {
-      if (!paying) return;
-      const res = await api.admin.payouts[':id'].$patch({
-        param: { id: paying.id },
-        json: {
-          ...(reference.trim() ? { reference: reference.trim() } : {}),
-          ...(slipUrl ? { slipUrl } : {}),
-        },
+    mutationFn: async (args: { id: string; slipUrl?: string | null }) => {
+      const res = await api.admin.transactions[':id'].$patch({
+        param: { id: args.id },
+        json: { status: 'PAID', ...(args.slipUrl ? { slipUrl: args.slipUrl } : {}) },
       });
       if (!res.ok) throw new Error('อัปเดตไม่สำเร็จ');
       return res.json();
     },
     onSuccess: () => {
+      toast.success('ทำเครื่องหมายจ่ายค่างานแล้ว');
       setPaying(null);
-      setReference('');
       setSlipUrl(null);
       queryClient.invalidateQueries({ queryKey: ['admin', 'payouts'] });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
@@ -122,179 +99,122 @@ export default function PayoutsPage() {
         <div>
           <h1 className="text-2xl font-bold">ธุรกรรมกับคนขับ</h1>
           <p className="text-sm text-muted-foreground">
-            รายการ<strong>ขึ้นอัตโนมัติเมื่อยืนยันส่งสำเร็จ</strong> (รวมยอดค้างจ่ายของคนขับแต่ละคนเป็นรอบเดียว) —
-            กด <strong>“ทำเครื่องหมายจ่ายแล้ว”</strong> เพื่ออัปสลิป + เลขอ้างอิง · ปุ่ม “สร้างรอบจ่าย”
-            ใช้กรณีอยากรวมยอดเพิ่มเอง
+            จ่ายค่างานให้คนขับ <strong>ราย งาน</strong> — 1 งานที่ส่งสำเร็จ = 1 รายการ · กด
+            “จ่ายแล้ว” แล้วแนบสลิปการโอน
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="w-full sm:w-40">
-            <Select
-              value={status}
-              onValueChange={(v) => {
-                setStatus(v as PayoutStatus | typeof ALL);
-                tbl.resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>ทุกสถานะ</SelectItem>
-                {PayoutStatusSchema.options.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {PAYOUT_STATUS_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button
-            onClick={() => {
-              setError(null);
-              setCreating(true);
+        <div className="w-full sm:w-44">
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              setStatus(v as TransactionStatus | typeof ALL);
+              tbl.resetPage();
             }}
           >
-            + สร้างรอบจ่าย
-          </Button>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>ทุกสถานะ</SelectItem>
+              {TransactionStatusSchema.options.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {TRANSACTION_STATUS_LABEL[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead>งาน (Job ID)</TableHead>
             <TableHead>คนขับ</TableHead>
-            <SortHead label="ยอด" col="amount" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
-            <TableHead className="text-right">จำนวนรายการ</TableHead>
+            <SortHead label="ยอดรวม" col="grossAmount" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
+            <TableHead className="text-right">ค่าคอม</TableHead>
+            <SortHead label="จ่ายคนขับ" col="netToDriver" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
             <SortHead label="สถานะ" col="status" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} />
-            <TableHead>อ้างอิง</TableHead>
-            <SortHead label="สร้างเมื่อ" col="createdAt" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} />
+            <TableHead>สลิป</TableHead>
+            <SortHead label="วันที่" col="createdAt" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} />
             <TableHead className="text-right">การดำเนินการ</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {payouts.data?.items.map((p) => (
-            <TableRow key={p.id}>
-              <TableCell>{p.driverName ?? '—'}</TableCell>
-              <TableCell className="text-right">{baht(p.amount)}</TableCell>
-              <TableCell className="text-right">{p.transactionCount}</TableCell>
-              <TableCell>
-                <Badge variant={p.status === 'PAID' ? 'success' : 'secondary'}>
-                  {PAYOUT_STATUS_LABEL[p.status]}
-                </Badge>
+          {txns.data?.items.map((t) => (
+            <TableRow key={t.id}>
+              <TableCell className="font-mono text-xs">
+                <Link href={`/jobs/${t.jobId}`} className="text-primary hover:underline">
+                  {t.jobId.slice(0, 8)}
+                </Link>
               </TableCell>
-              <TableCell className="text-muted-foreground">
-                {p.slipUrl ? (
-                  <a
-                    href={p.slipUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
+              <TableCell>{t.driverName ?? '—'}</TableCell>
+              <TableCell className="text-right">{baht(t.grossAmount)}</TableCell>
+              <TableCell className="text-right text-muted-foreground">{baht(t.commissionAmount)}</TableCell>
+              <TableCell className="text-right font-medium">{baht(t.netToDriver)}</TableCell>
+              <TableCell>
+                <Badge variant={STATUS_VARIANT[t.status]}>{TRANSACTION_STATUS_LABEL[t.status]}</Badge>
+              </TableCell>
+              <TableCell>
+                {t.slipUrl ? (
+                  <a href={t.slipUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
                     ดูสลิป
                   </a>
                 ) : (
-                  (p.reference ?? '—')
+                  <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell>{new Date(p.createdAt).toLocaleDateString('th-TH')}</TableCell>
+              <TableCell>{new Date(t.createdAt).toLocaleDateString('th-TH')}</TableCell>
               <TableCell className="text-right">
-                {p.status === 'PENDING' && (
+                {t.status === 'PENDING' && (
                   <Button
                     size="sm"
                     onClick={() => {
-                      setReference('');
-                      setSlipUrl(null);
-                      setPaying(p);
+                      setSlipUrl(t.slipUrl);
+                      setPaying(t);
                     }}
                   >
-                    ทำเครื่องหมายจ่ายแล้ว
+                    จ่ายแล้ว
                   </Button>
                 )}
               </TableCell>
             </TableRow>
           ))}
-          {payouts.data?.items.length === 0 && (
+          {txns.data?.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={7} className="text-center text-muted-foreground">
-                {payouts.isLoading ? 'กำลังโหลด…' : 'ยังไม่มีรอบจ่าย'}
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
+                {txns.isLoading ? 'กำลังโหลด…' : 'ยังไม่มีรายการ'}
               </TableCell>
             </TableRow>
           )}
         </TableBody>
       </Table>
 
-      {payouts.data && (
-        <Pager
-          page={payouts.data.page}
-          pageSize={payouts.data.pageSize}
-          total={payouts.data.total}
-          onPage={tbl.setPage}
-        />
+      {txns.data && (
+        <Pager page={txns.data.page} pageSize={txns.data.pageSize} total={txns.data.total} onPage={tbl.setPage} />
       )}
 
-      {/* Create payout run */}
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>สร้างรอบจ่ายเงิน</DialogTitle>
-            <DialogDescription>
-              รวมค่าคอมที่ยังค้างจ่าย (PENDING) ของคนขับที่เลือกเป็นหนึ่งรอบ
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-1">
-            <Label>คนขับ</Label>
-            <Select value={driverId} onValueChange={setDriverId}>
-              <SelectTrigger>
-                <SelectValue placeholder="เลือกคนขับ" />
-              </SelectTrigger>
-              <SelectContent>
-                {drivers.data?.items.map((d) => (
-                  <SelectItem key={d.id} value={d.id}>
-                    {d.displayName ?? d.id}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreating(false)} disabled={create.isPending}>
-              ยกเลิก
-            </Button>
-            <Button onClick={() => create.mutate()} disabled={create.isPending || !driverId}>
-              {create.isPending ? 'กำลังสร้าง…' : 'สร้าง'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Mark paid */}
       <Dialog open={paying !== null} onOpenChange={(o) => !o && setPaying(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>ยืนยันการจ่ายเงิน</DialogTitle>
+            <DialogTitle>ยืนยันการจ่ายค่างาน</DialogTitle>
             <DialogDescription>
-              จ่าย {paying ? baht(paying.amount) : ''} ให้ {paying?.driverName ?? 'คนขับ'} — รายการคอมจะถูกตั้งเป็น PAID
+              จ่าย {paying ? baht(paying.netToDriver) : ''} ให้ {paying?.driverName ?? 'คนขับ'} (งาน{' '}
+              {paying?.jobId.slice(0, 8)})
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-1">
-            <Label htmlFor="ref">เลขอ้างอิงการโอน (ถ้ามี)</Label>
-            <Input id="ref" value={reference} onChange={(e) => setReference(e.target.value)} />
-          </div>
-          <div className="space-y-1">
-            <Label>สลิปการโอนเงิน (ถ้ามี)</Label>
-            <ImageUpload
-              value={slipUrl}
-              label={slipUrl ? 'เปลี่ยนสลิป' : 'อัปโหลดสลิป'}
-              onUploaded={setSlipUrl}
-            />
+          <div className="space-y-2">
+            <Label>สลิปการโอน (ถ้ามี)</Label>
+            <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaying(null)} disabled={markPaid.isPending}>
               ยกเลิก
             </Button>
-            <Button onClick={() => markPaid.mutate()} disabled={markPaid.isPending}>
+            <Button
+              disabled={markPaid.isPending}
+              onClick={() => paying && markPaid.mutate({ id: paying.id, slipUrl })}
+            >
               {markPaid.isPending ? 'กำลังบันทึก…' : 'ยืนยันจ่ายแล้ว'}
             </Button>
           </DialogFooter>

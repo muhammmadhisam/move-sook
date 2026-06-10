@@ -1,16 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Printer, ChevronDown } from 'lucide-react';
 import {
   Badge,
+  Button,
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
   PreviewableImage,
+  cn,
 } from '@movesook/ui';
 import {
   JOB_STATUS_LABEL,
@@ -21,6 +25,47 @@ import { api } from '@/lib/api';
 import { PaymentReview } from '@/components/payment-review';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787';
+
+const JOB_DOCS = [
+  { type: 'receipt', label: 'ใบเสร็จรับเงิน (ลูกค้า)' },
+  { type: 'payout', label: 'ใบสำคัญจ่าย (คนขับ)' },
+  { type: 'worksheet', label: 'ใบสรุปงาน (Work Order)' },
+  { type: 'delivery', label: 'ใบส่งมอบสินค้า' },
+] as const;
+
+/** Dropdown that opens each backend-generated PDF in a new tab to print/save. */
+function PrintDocsMenu({ jobId }: { jobId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <Button variant="outline" size="sm" onClick={() => setOpen((o) => !o)}>
+        <Printer className="h-4 w-4" />
+        พิมพ์เอกสาร
+        <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
+      </Button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute right-0 z-20 mt-1 w-56 overflow-hidden rounded-md border bg-popover shadow-md">
+            {JOB_DOCS.map((d) => (
+              <a
+                key={d.type}
+                href={`${API_BASE}/admin/jobs/${jobId}/doc/${d.type}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+                className="block px-3 py-2 text-sm hover:bg-accent"
+              >
+                {d.label}
+              </a>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 function Photos({ title, urls }: { title: string; urls: string[] }) {
   if (urls.length === 0) return null;
@@ -71,9 +116,12 @@ export default function AdminJobDetailPage() {
           <h1 className="mt-1 text-2xl font-bold">{j.itemDescription}</h1>
           <p className="font-mono text-xs text-muted-foreground">{j.id}</p>
         </div>
-        <Badge variant={j.status === 'CANCELLED' ? 'destructive' : 'secondary'}>
-          {JOB_STATUS_LABEL[j.status]}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <PrintDocsMenu jobId={j.id} />
+          <Badge variant={j.status === 'CANCELLED' ? 'destructive' : 'secondary'}>
+            {JOB_STATUS_LABEL[j.status]}
+          </Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

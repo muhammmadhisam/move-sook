@@ -12,7 +12,7 @@ import {
   PreviewableImage,
   cn,
 } from '@movesook/ui';
-import type { JobDto, JobListResponse, JobStatus } from '@movesook/shared';
+import { isInHand, type JobDto, type JobListResponse, type JobStatus } from '@movesook/shared';
 
 type TabKey = 'active' | 'done';
 const TAB_GROUPS: Record<TabKey, Set<JobStatus>> = {
@@ -54,6 +54,22 @@ export default function ActiveJobsPage() {
     },
     onSuccess: () => {
       toast.success('อัปเดตสถานะแล้ว');
+      queryClient.invalidateQueries({ queryKey: ['active-jobs'] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const flagIllegal = useMutation({
+    mutationFn: async (args: { id: string; reason: string }) => {
+      const res = await api.jobs[':id']['flag-illegal'].$post({
+        param: { id: args.id },
+        json: { reason: args.reason },
+      });
+      if (!res.ok) throw new Error('แจ้งของผิดกฎหมายไม่สำเร็จ');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('แจ้งของผิดกฎหมายแล้ว · ทีมงานจะตรวจสอบ');
       queryClient.invalidateQueries({ queryKey: ['active-jobs'] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -206,6 +222,25 @@ export default function ActiveJobsPage() {
                     {next === 'PENDING_CONFIRMATION'
                       ? 'แจ้งส่งสำเร็จ'
                       : `อัปเดตเป็น “${JOB_STATUS_LABEL[next]}”`}
+                  </Button>
+                )}
+
+                {/* Trust & safety: report prohibited/illegal cargo (no penalty to the driver). */}
+                {isInHand(job.status) && (
+                  <Button
+                    variant="ghost"
+                    className="w-full text-destructive hover:text-destructive"
+                    disabled={flagIllegal.isPending}
+                    onClick={() => {
+                      const reason = window.prompt(
+                        'พบสิ่งของผิดกฎหมาย/ต้องห้าม? โปรดอธิบายสั้น ๆ (งานจะถูกระงับเพื่อให้แอดมินตรวจสอบ)',
+                      );
+                      if (reason && reason.trim().length >= 3) {
+                        flagIllegal.mutate({ id: job.id, reason: reason.trim() });
+                      }
+                    }}
+                  >
+                    🚩 แจ้งของผิดกฎหมาย
                   </Button>
                 )}
               </CardContent>

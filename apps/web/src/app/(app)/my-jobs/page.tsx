@@ -12,14 +12,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Input,
-  Label,
   cn,
 } from '@movesook/ui';
 import type { JobDto, JobListResponse, JobStatus } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
+import { ReviewDialog } from '@/components/review-dialog';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT, jobDest, jobOrigin } from '@/lib/job-display';
 
 const CANCELLABLE = new Set(['DRAFT', 'PENDING_PAYMENT', 'POSTED', 'ACCEPTED']);
@@ -50,71 +49,6 @@ async function fetchMyJobs(): Promise<JobListResponse> {
   const res = await api.jobs.$get({ query: {} });
   if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
   return (await res.json()) as JobListResponse;
-}
-
-// ── Review dialog ─────────────────────────────────────────────────────────────
-function ReviewDialog({ jobId, onDone }: { jobId: string; onDone: () => void }) {
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState('');
-  const [open, setOpen] = useState(false);
-
-  const submit = useMutation({
-    mutationFn: async () => {
-      const res = await api.jobs[':id'].review.$post({
-        param: { id: jobId },
-        json: { rating, comment: comment || undefined },
-      });
-      if (!res.ok) throw new Error('ให้คะแนนไม่สำเร็จ (อาจรีวิวไปแล้ว)');
-      return res.json();
-    },
-    onSuccess: () => {
-      toast.success('ขอบคุณสำหรับคะแนน');
-      setOpen(false);
-      onDone();
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="flex-1">ให้คะแนนคนขับ</Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>ให้คะแนนการขนย้ายครั้งนี้</DialogTitle>
-        </DialogHeader>
-        <div className="flex justify-center gap-2 py-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => setRating(n)}
-              aria-label={`${n} ดาว`}
-              className={cn(
-                'text-4xl transition-transform active:scale-110',
-                n <= rating ? 'text-warning' : 'text-muted-foreground/30',
-              )}
-            >
-              ★
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-2">
-          <Label htmlFor="comment">ความเห็น (ไม่บังคับ)</Label>
-          <Input
-            id="comment"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="เช่น ขับดี ตรงเวลา ระวังของ"
-          />
-        </div>
-        <Button disabled={submit.isPending} onClick={() => submit.mutate()}>
-          {submit.isPending ? 'กำลังส่ง…' : 'ส่งคะแนน'}
-        </Button>
-      </DialogContent>
-    </Dialog>
-  );
 }
 
 // ── Job card ──────────────────────────────────────────────────────────────────
@@ -264,13 +198,26 @@ function JobCard({
           <ReviewDialog jobId={job.id} onDone={onReviewDone} />
         )}
 
+        {(job.status === 'DELIVERED' || job.status === 'CANCELLED') && (
+          <Button asChild size="sm" variant="outline" className="flex-1">
+            <Link href={`/jobs/new?from=${job.id}`}>สั่งซ้ำ</Link>
+          </Button>
+        )}
+
         {CANCELLABLE.has(job.status) && (
           <Button
             size="sm"
             variant="ghost"
             className="px-3 text-destructive hover:text-destructive"
             disabled={cancelPending}
-            onClick={() => onCancel(job.id)}
+            onClick={() => {
+              // After a driver has accepted, cancelling affects them too — confirm first.
+              const msg =
+                job.status === 'ACCEPTED'
+                  ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
+                  : 'ยืนยันยกเลิกงานนี้?';
+              if (window.confirm(msg)) onCancel(job.id);
+            }}
           >
             ยกเลิก
           </Button>

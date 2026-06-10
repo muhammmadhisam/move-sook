@@ -39,37 +39,62 @@ type NavItem = {
   roles?: AdminRole[]; // omitted = visible to every admin tier
 };
 
-const NAV: NavItem[] = [
-  { href: '/', label: 'แดชบอร์ด', icon: LayoutDashboard },
-  { href: '/analytics', label: 'วิเคราะห์', icon: LineChart },
-  { href: '/reports', label: 'รายงาน', icon: FileText },
-  { href: '/supply-demand', label: 'Supply/Demand', icon: Scale },
-  { href: '/retention', label: 'Retention', icon: Repeat },
-  { href: '/drivers/queue', label: 'คิวตรวจคนขับ', icon: UserCheck, roles: ['SUPER', 'OPS'] },
-  { href: '/drivers', label: 'จัดการคนขับ', icon: BadgeCheck, roles: ['SUPER', 'OPS'] },
-  { href: '/jobs', label: 'ติดตามงาน', icon: Truck, roles: ['SUPER', 'OPS'] },
-  { href: '/payments', label: 'อนุมัติการโอน', icon: ReceiptText, roles: ['SUPER', 'OPS', 'FINANCE'] },
-  { href: '/customers', label: 'ลูกค้า', icon: Contact, roles: ['SUPER', 'OPS'] },
-  { href: '/users', label: 'ผู้ใช้ (User)', icon: Users, roles: ['SUPER', 'OPS'] },
-  { href: '/disputes', label: 'ข้อร้องเรียน', icon: AlertTriangle, roles: ['SUPER', 'OPS'] },
-  { href: '/blacklist', label: 'บัญชีดำ', icon: Ban, roles: ['SUPER', 'OPS'] },
-  { href: '/transactions', label: 'ธุรกรรมกับลูกค้า', icon: Receipt, roles: ['SUPER', 'FINANCE'] },
-  { href: '/payouts', label: 'ธุรกรรมกับคนขับ', icon: Banknote, roles: ['SUPER', 'FINANCE'] },
-  { href: '/promos', label: 'โค้ดส่วนลด', icon: Ticket, roles: ['SUPER', 'FINANCE'] },
-  { href: '/audit', label: 'บันทึกการใช้งาน', icon: History },
-  { href: '/admins', label: 'ผู้ดูแลระบบ', icon: ShieldCheck, roles: ['SUPER'] },
-  { href: '/settings', label: 'ตั้งค่า', icon: Settings, roles: ['SUPER', 'FINANCE'] },
+type NavGroup = {
+  title: string; // section header shown above the group's links
+  items: NavItem[];
+};
+
+const NAV: NavGroup[] = [
+  {
+    title: 'ภาพรวม',
+    items: [
+      { href: '/', label: 'แดชบอร์ด', icon: LayoutDashboard },
+      { href: '/analytics', label: 'วิเคราะห์', icon: LineChart },
+      { href: '/reports', label: 'รายงาน', icon: FileText },
+      { href: '/supply-demand', label: 'Supply/Demand', icon: Scale },
+      { href: '/retention', label: 'Retention', icon: Repeat },
+    ],
+  },
+  {
+    title: 'ปฏิบัติการ',
+    items: [
+      { href: '/jobs', label: 'ติดตามงาน', icon: Truck, roles: ['SUPER', 'OPS'] },
+      { href: '/drivers/queue', label: 'คิวตรวจคนขับ', icon: UserCheck, roles: ['SUPER', 'OPS'] },
+      { href: '/drivers', label: 'จัดการคนขับ', icon: BadgeCheck, roles: ['SUPER', 'OPS'] },
+      { href: '/customers', label: 'ลูกค้า', icon: Contact, roles: ['SUPER', 'OPS'] },
+      { href: '/users', label: 'ผู้ใช้ (User)', icon: Users, roles: ['SUPER', 'OPS'] },
+      { href: '/disputes', label: 'ข้อร้องเรียน', icon: AlertTriangle, roles: ['SUPER', 'OPS'] },
+      { href: '/blacklist', label: 'บัญชีดำ', icon: Ban, roles: ['SUPER', 'OPS'] },
+    ],
+  },
+  {
+    title: 'การเงิน',
+    items: [
+      { href: '/payments', label: 'อนุมัติการโอน', icon: ReceiptText, roles: ['SUPER', 'OPS', 'FINANCE'] },
+      { href: '/transactions', label: 'ธุรกรรมกับลูกค้า', icon: Receipt, roles: ['SUPER', 'FINANCE'] },
+      { href: '/payouts', label: 'ธุรกรรมกับคนขับ', icon: Banknote, roles: ['SUPER', 'FINANCE'] },
+      { href: '/promos', label: 'โค้ดส่วนลด', icon: Ticket, roles: ['SUPER', 'FINANCE'] },
+    ],
+  },
+  {
+    title: 'ระบบ',
+    items: [
+      { href: '/audit', label: 'บันทึกการใช้งาน', icon: History },
+      { href: '/admins', label: 'ผู้ดูแลระบบ', icon: ShieldCheck, roles: ['SUPER'] },
+      { href: '/settings', label: 'ตั้งค่า', icon: Settings, roles: ['SUPER', 'FINANCE'] },
+    ],
+  },
 ];
 
 /** Logo + nav links + logout — shared by the desktop sidebar and the mobile drawer. */
 function SidebarBody({
-  items,
+  groups,
   pathname,
   roleLabel,
   onNavigate,
   onLogout,
 }: {
-  items: NavItem[];
+  groups: NavGroup[];
   pathname: string;
   roleLabel?: string;
   onNavigate?: () => void;
@@ -88,26 +113,33 @@ function SidebarBody({
           {roleLabel && <span className="text-xs text-navy-300">{roleLabel}</span>}
         </div>
       </div>
-      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto">
-        {items.map(({ href, label, icon: Icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              onClick={onNavigate}
-              className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                active
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-navy-200 hover:bg-navy-800 hover:text-white',
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="flex flex-1 flex-col gap-4 overflow-y-auto">
+        {groups.map((group) => (
+          <div key={group.title} className="flex flex-col gap-1">
+            <span className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
+              {group.title}
+            </span>
+            {group.items.map(({ href, label, icon: Icon }) => {
+              const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={onNavigate}
+                  className={cn(
+                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-navy-200 hover:bg-navy-800 hover:text-white',
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       <Button
         variant="ghost"
@@ -137,15 +169,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     router.replace('/login');
   };
 
-  // While whoami is loading, show only the unrestricted items to avoid fl/flicker of gated links.
-  const items = NAV.filter((n) => !n.roles || (me ? n.roles.includes(me.adminRole) : false));
+  // While whoami is loading, show only the unrestricted items to avoid flicker of gated
+  // links. Filter each group's items by role, then drop any group left empty.
+  const groups = NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((n) => !n.roles || (me ? n.roles.includes(me.adminRole) : false)),
+  })).filter((g) => g.items.length > 0);
   const roleLabel = me ? ADMIN_ROLE_LABEL[me.adminRole] : undefined;
 
   return (
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-navy-800 bg-navy-900 p-4 text-white lg:flex">
-        <SidebarBody items={items} pathname={pathname} roleLabel={roleLabel} onLogout={logout} />
+        <SidebarBody groups={groups} pathname={pathname} roleLabel={roleLabel} onLogout={logout} />
       </aside>
 
       {/* Mobile drawer */}
@@ -166,7 +202,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               <X className="h-5 w-5" />
             </button>
             <SidebarBody
-              items={items}
+              groups={groups}
               pathname={pathname}
               roleLabel={roleLabel}
               onNavigate={() => setMobileOpen(false)}

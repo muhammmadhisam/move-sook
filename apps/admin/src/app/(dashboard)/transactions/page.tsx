@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Badge,
   Button,
@@ -13,11 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   Label,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   Table,
   TableBody,
   TableCell,
@@ -25,116 +21,73 @@ import {
   TableHeader,
   TableRow,
 } from '@movesook/ui';
-import {
-  TransactionStatusSchema,
-  TRANSACTION_STATUS_LABEL,
-  type Paged,
-  type TransactionDto,
-  type TransactionStatus,
-} from '@movesook/shared';
+import type { Paged, TransactionDto } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
 import { ImageUpload } from '@/components/image-upload';
 
-const ALL = 'ALL';
-
 type TxnResponse = Paged<TransactionDto>;
-
-const STATUS_VARIANT: Record<TransactionStatus, 'default' | 'secondary' | 'destructive'> = {
-  PENDING: 'secondary',
-  PAID: 'default',
-  REFUNDED: 'destructive',
-};
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 
+/**
+ * "ธุรกรรมกับลูกค้า" — money IN from customers, one row per delivered job:
+ * what the customer paid (gross), the platform commission, and whether the
+ * customer's transfer was approved. Paying the driver lives on /payouts.
+ */
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
   const tbl = useTableState('createdAt');
-  const [status, setStatus] = useState<TransactionStatus | typeof ALL>(ALL);
-  const [action, setAction] = useState<{ txn: TransactionDto; to: 'PAID' | 'REFUNDED' } | null>(
-    null,
-  );
+  const [refunding, setRefunding] = useState<TransactionDto | null>(null);
   const [slipUrl, setSlipUrl] = useState<string | null>(null);
 
   const txns = useQuery({
-    queryKey: ['admin', 'transactions', status, tbl.page, tbl.sortBy, tbl.sortDir],
+    queryKey: ['admin', 'transactions', tbl.page, tbl.sortBy, tbl.sortDir],
     queryFn: async (): Promise<TxnResponse> => {
-      const query = {
-        page: String(tbl.page),
-        sortBy: tbl.sortBy,
-        sortDir: tbl.sortDir,
-        ...(status === ALL ? {} : { status }),
-      };
-      const res = await api.admin.transactions.$get({ query });
+      const res = await api.admin.transactions.$get({
+        query: { page: String(tbl.page), sortBy: tbl.sortBy, sortDir: tbl.sortDir },
+      });
       if (!res.ok) throw new Error('โหลดรายการธุรกรรมไม่สำเร็จ');
       return (await res.json()) as TxnResponse;
     },
   });
 
-  const update = useMutation({
-    mutationFn: async (args: {
-      id: string;
-      status: 'PENDING' | 'PAID' | 'REFUNDED';
-      slipUrl?: string | null;
-    }) => {
+  const refund = useMutation({
+    mutationFn: async (args: { id: string; slipUrl?: string | null }) => {
       const res = await api.admin.transactions[':id'].$patch({
         param: { id: args.id },
-        json: { status: args.status, ...(args.slipUrl ? { slipUrl: args.slipUrl } : {}) },
+        json: { status: 'REFUNDED', ...(args.slipUrl ? { slipUrl: args.slipUrl } : {}) },
       });
       if (!res.ok) throw new Error('อัปเดตธุรกรรมไม่สำเร็จ');
       return res.json();
     },
     onSuccess: () => {
-      setAction(null);
+      toast.success('ทำเครื่องหมายคืนเงินลูกค้าแล้ว');
+      setRefunding(null);
       setSlipUrl(null);
       queryClient.invalidateQueries({ queryKey: ['admin', 'transactions'] });
     },
+    onError: (e: Error) => toast.error(e.message),
   });
 
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">ธุรกรรมกับลูกค้า</h1>
-          <p className="text-sm text-muted-foreground">
-            บันทึก<strong>อัตโนมัติเมื่อยืนยันส่งสำเร็จ</strong> — ค่างาน (ลูกค้าจ่าย), ส่วนแบ่งคอมมิชชั่น
-            และ<strong>ยอดสุทธิที่คนขับจะได้รับ (net)</strong> สถานะ PENDING = ยังไม่ได้จ่ายคนขับ
-            (ไปจ่ายจริงที่หน้า “ธุรกรรมกับคนขับ”)
-          </p>
-        </div>
-        <div className="w-full sm:w-48">
-          <Select
-            value={status}
-            onValueChange={(v) => {
-              setStatus(v as TransactionStatus | typeof ALL);
-              tbl.resetPage();
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>ทุกสถานะ</SelectItem>
-              {TransactionStatusSchema.options.map((s) => (
-                <SelectItem key={s} value={s}>
-                  {TRANSACTION_STATUS_LABEL[s]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">ธุรกรรมกับลูกค้า</h1>
+        <p className="text-sm text-muted-foreground">
+          เงินที่ลูกค้าจ่ายให้องค์กร (ค่างาน + ส่วนแบ่งคอมมิชชั่น) ต่อหนึ่งงานที่จบ ·
+          การจ่ายเงินให้คนขับดูที่หน้า “ธุรกรรมกับคนขับ”
+        </p>
       </div>
 
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>Job ID</TableHead>
-            <SortHead label="ยอดรวม" col="grossAmount" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
+            <SortHead label="ยอดลูกค้าจ่าย" col="grossAmount" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
             <TableHead className="text-right">คอม %</TableHead>
-            <TableHead className="text-right">ยอดคอม</TableHead>
-            <SortHead label="จ่ายคนขับ" col="netToDriver" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} className="text-right" />
-            <SortHead label="สถานะ" col="status" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} />
+            <TableHead className="text-right">ค่าคอมบริษัท</TableHead>
+            <TableHead>ลูกค้าชำระ</TableHead>
             <TableHead>สลิป</TableHead>
             <SortHead label="วันที่" col="createdAt" sortBy={tbl.sortBy} sortDir={tbl.sortDir} onSort={tbl.toggleSort} />
             <TableHead className="text-right">การดำเนินการ</TableHead>
@@ -148,17 +101,27 @@ export default function TransactionsPage() {
                   {t.jobId.slice(0, 8)}
                 </Link>
               </TableCell>
-              <TableCell className="text-right">{baht(t.grossAmount)}</TableCell>
+              <TableCell className="text-right font-medium">{baht(t.grossAmount)}</TableCell>
               <TableCell className="text-right">{t.commissionPct}%</TableCell>
               <TableCell className="text-right">{baht(t.commissionAmount)}</TableCell>
-              <TableCell className="text-right">{baht(t.netToDriver)}</TableCell>
               <TableCell>
-                <Badge variant={STATUS_VARIANT[t.status]}>{TRANSACTION_STATUS_LABEL[t.status]}</Badge>
+                {t.status === 'REFUNDED' ? (
+                  <Badge variant="destructive">คืนเงินแล้ว</Badge>
+                ) : t.customerPaidAt ? (
+                  <span className="text-xs font-medium text-successScale-600">
+                    ✓ ชำระแล้ว
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      {new Date(t.customerPaidAt).toLocaleDateString('th-TH')}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell>
-                {t.slipUrl ? (
+                {t.customerSlipUrl ? (
                   <a
-                    href={t.slipUrl}
+                    href={t.customerSlipUrl}
                     target="_blank"
                     rel="noreferrer"
                     className="text-primary hover:underline"
@@ -170,28 +133,17 @@ export default function TransactionsPage() {
                 )}
               </TableCell>
               <TableCell>{new Date(t.createdAt).toLocaleDateString('th-TH')}</TableCell>
-              <TableCell className="space-x-2 text-right">
-                {t.status !== 'PAID' && (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setSlipUrl(t.slipUrl);
-                      setAction({ txn: t, to: 'PAID' });
-                    }}
-                  >
-                    จ่ายแล้ว
-                  </Button>
-                )}
+              <TableCell className="text-right">
                 {t.status !== 'REFUNDED' && (
                   <Button
                     size="sm"
-                    variant="destructive"
+                    variant="outline"
                     onClick={() => {
-                      setSlipUrl(t.slipUrl);
-                      setAction({ txn: t, to: 'REFUNDED' });
+                      setSlipUrl(null);
+                      setRefunding(t);
                     }}
                   >
-                    คืนเงิน
+                    คืนเงินลูกค้า
                   </Button>
                 )}
               </TableCell>
@@ -199,7 +151,7 @@ export default function TransactionsPage() {
           ))}
           {txns.data?.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={9} className="text-center text-muted-foreground">
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
                 {txns.isLoading ? 'กำลังโหลด…' : 'ไม่พบธุรกรรม'}
               </TableCell>
             </TableRow>
@@ -216,34 +168,28 @@ export default function TransactionsPage() {
         />
       )}
 
-      <Dialog open={action !== null} onOpenChange={(open) => !open && setAction(null)}>
+      <Dialog open={refunding !== null} onOpenChange={(open) => !open && setRefunding(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              {action?.to === 'PAID' ? 'ยืนยันการจ่ายเงิน' : 'ยืนยันการคืนเงิน'}
-            </DialogTitle>
+            <DialogTitle>ยืนยันการคืนเงินลูกค้า</DialogTitle>
             <DialogDescription>
-              {action?.to === 'PAID'
-                ? `ทำเครื่องหมายว่าจ่ายคนขับแล้ว ${action ? baht(action.txn.netToDriver) : ''}?`
-                : 'ทำเครื่องหมายว่าธุรกรรมนี้ถูกคืนเงิน?'}
+              คืนเงินงานนี้ให้ลูกค้า {refunding ? baht(refunding.grossAmount) : ''}? (คนขับจะไม่ได้รับเงินจากงานนี้)
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label>สลิปการโอน (ถ้ามี)</Label>
+            <Label>สลิปการคืนเงิน (ถ้ามี)</Label>
             <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAction(null)} disabled={update.isPending}>
+            <Button variant="outline" onClick={() => setRefunding(null)} disabled={refund.isPending}>
               ยกเลิก
             </Button>
             <Button
-              variant={action?.to === 'REFUNDED' ? 'destructive' : 'default'}
-              disabled={update.isPending}
-              onClick={() =>
-                action && update.mutate({ id: action.txn.id, status: action.to, slipUrl })
-              }
+              variant="destructive"
+              disabled={refund.isPending}
+              onClick={() => refunding && refund.mutate({ id: refunding.id, slipUrl })}
             >
-              {update.isPending ? 'กำลังบันทึก…' : 'ยืนยัน'}
+              {refund.isPending ? 'กำลังบันทึก…' : 'ยืนยันคืนเงิน'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -20,6 +20,7 @@ import { VEHICLE_TYPE_LABEL, type JobDto, type JobListResponse } from '@movesook
 import { Navigation, MapPin, Truck, Clock, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { JobRouteMap, type LatLng } from '@/components/job-route-map';
+import { useAuth } from '@/hooks/use-auth';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { distanceKm, formatDistance, directionsUrl } from '@/lib/geo';
 
@@ -47,6 +48,13 @@ export default function JobsPage() {
   const queryClient = useQueryClient();
   const jobs = useQuery({ queryKey: ['jobs', 'available'], queryFn: fetchJobs });
   const geo = useGeolocation();
+  const { me } = useAuth();
+
+  // The API enforces both gates at accept time (403 / 422) — mirroring them here
+  // keeps unready drivers from hitting a confusing rejection after the tap.
+  const notApproved = me?.verifyStatus != null && me.verifyStatus !== 'APPROVED';
+  const offDuty = me?.verifyStatus === 'APPROVED' && me.isAvailable === false;
+  const canAccept = !notApproved && !offDuty;
 
   // Closest pickup first; jobs without coords (or before location is granted) sink to the bottom.
   const sortedJobs = useMemo(() => {
@@ -96,6 +104,16 @@ export default function JobsPage() {
   return (
     <main className="mx-auto max-w-md p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับได้</h1>
+      {notApproved && (
+        <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
+          บัญชีคนขับของคุณยังไม่พร้อมรับงาน (รอการอนุมัติจากทีมงาน) — ดูสถานะได้ที่หน้าโปรไฟล์
+        </p>
+      )}
+      {offDuty && (
+        <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
+          คุณปิดรับงานอยู่ — เปิดสถานะออนไลน์ที่หน้าโปรไฟล์ก่อนจึงจะรับงานได้
+        </p>
+      )}
       {(geo.status === 'denied' || geo.status === 'unsupported') && (
         <p className="mb-4 rounded-lg border border-dashed bg-muted p-3 text-sm text-muted-foreground">
           เปิดสิทธิ์การเข้าถึงตำแหน่งเพื่อดูระยะทางไปยังจุดรับของ
@@ -248,7 +266,7 @@ export default function JobsPage() {
 
                     <Button
                       className="w-full"
-                      disabled={accept.isPending}
+                      disabled={accept.isPending || !canAccept}
                       onClick={() => accept.mutate(job.id)}
                     >
                       รับงานนี้
@@ -258,7 +276,7 @@ export default function JobsPage() {
 
                 <Button
                   className="flex-1"
-                  disabled={accept.isPending}
+                  disabled={accept.isPending || !canAccept}
                   onClick={() => accept.mutate(job.id)}
                 >
                   รับงานนี้

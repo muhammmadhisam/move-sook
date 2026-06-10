@@ -16,6 +16,7 @@ export const JOB_STATUS_VARIANT: Record<JobStatus, BadgeVariant> = {
   IN_TRANSIT: 'default',
   PENDING_CONFIRMATION: 'warning',
   DELIVERED: 'success',
+  FLAGGED_ILLEGAL: 'destructive',
   CANCELLED: 'destructive',
 };
 

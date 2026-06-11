@@ -284,6 +284,14 @@ export const AdminInviteInput = z.object({
 });
 export type AdminInviteInput = z.infer<typeof AdminInviteInput>;
 
+// POST /auth/setup — create first SUPER admin when no admins exist.
+export const SetupInput = z.object({
+  email: z.string().email(),
+  displayName: z.string().min(1).max(120),
+  password: z.string().min(8).max(100),
+});
+export type SetupInput = z.infer<typeof SetupInput>;
+
 // POST /admin/drivers — admin pre-registers a driver (no app account yet).
 export const AdminCreateDriverInput = z.object({
   name: z.string().min(1).max(120),

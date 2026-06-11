@@ -1,5 +1,5 @@
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -7,14 +7,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const nextConfig = {
   reactStrictMode: true,
   // Emit a self-contained server (only the traced deps) for a slim Docker image.
-  output: 'standalone',
+  output: "standalone",
   // Trace from the monorepo root so pnpm workspace packages are bundled into standalone.
-  outputFileTracingRoot: join(__dirname, '../../'),
+  outputFileTracingRoot: join(__dirname, "../../"),
   transpilePackages: [
-    '@movesook/ui',
-    '@movesook/shared',
-    '@movesook/api',
-    '@movesook/thailand-provinces',
+    "@movesook/ui",
+    "@movesook/shared",
+    "@movesook/api",
+    "@movesook/thailand-provinces",
   ],
 };
 

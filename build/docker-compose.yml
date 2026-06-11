@@ -1,0 +1,27 @@
+# MoveSook — production-style stack: postgres + api + admin.
+#
+#   cd build
+#   cp .env.example .env        # then fill in the secrets
+#   docker compose up -d --build
+#
+# api → http://localhost:8787 · admin → http://localhost:3001
+# Postgres is published on host port 5433 so it never collides with the dev
+# database from the repo-root docker-compose.yml (5432).
+name: movesook-build
+
+services:
+  api:
+    image: devpala/move-sook-api:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+
+  admin:
+    image: devpala/move-sook-admin:${IMAGE_TAG:-latest}
+    platform: linux/amd64
+    build:
+      context: ..
+      dockerfile: apps/admin/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://api:8787}

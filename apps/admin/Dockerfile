@@ -31,5 +31,5 @@ COPY --from=build --chown=app:app /repo/apps/admin/.next/standalone ./
 COPY --from=build --chown=app:app /repo/apps/admin/.next/static ./apps/admin/.next/static
 
 USER app
-EXPOSE 3001
+EXPOSE 3000
 CMD ["node", "apps/admin/server.js"]

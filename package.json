@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "dev": "ulimit -n 10240; turbo run dev",
+    "predev": "(lsof -ti :8787 -ti :9000 -ti :9001 | xargs kill -9) 2>/dev/null; exit 0",
+    "dev": "ulimit -n 524288 2>/dev/null; turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",

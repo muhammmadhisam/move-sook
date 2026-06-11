@@ -2,11 +2,12 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { HTTPException } from 'hono/http-exception';
 import { prisma } from '@movesook/db';
-import { signJwt, verifyLineIdToken, verifyPassword } from '@movesook/auth';
+import { signJwt, verifyLineIdToken, verifyPassword, hashPassword } from '@movesook/auth';
 import {
   AdminLoginInput,
   DevLoginInput,
   LineLoginInput,
+  SetupInput,
   USER_JWT_TTL_SEC,
   ADMIN_JWT_TTL_SEC,
 } from '@movesook/shared';
@@ -128,4 +129,25 @@ export const authRoutes = new Hono<AppEnv>()
     clearSessionCookie(c, env.USER_COOKIE_NAME);
     clearSessionCookie(c, env.ADMIN_COOKIE_NAME);
     return c.json({ ok: true });
+  })
+
+  // Check whether first-time setup is needed (no admin accounts exist).
+  .get('/setup', async (c) => {
+    const count = await prisma.adminCredential.count();
+    return c.json({ needsSetup: count === 0 });
+  })
+
+  // Create the first SUPER admin — only works when no admins exist yet.
+  .post('/setup', zValidator('json', SetupInput), async (c) => {
+    const count = await prisma.adminCredential.count();
+    if (count > 0) throw new HTTPException(409, { message: 'Admin already exists' });
+    const { email, displayName, password } = c.req.valid('json');
+    const passwordHash = await hashPassword(password);
+    await prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({ data: { displayName, role: 'ADMIN' } });
+      await tx.adminCredential.create({
+        data: { userId: user.id, email: email.toLowerCase(), passwordHash, adminRole: 'SUPER' },
+      });
+    });
+    return c.json({ ok: true }, 201);
   });

@@ -17,10 +17,11 @@ export async function getLineIdToken(): Promise<string> {
   const client = await ensureLiff();
   if (!client.isLoggedIn()) {
     // LINE requires the login redirect_uri to live UNDER the registered LIFF
-    // endpoint (which is `<domain>/app`). Send the user back to /app on the
-    // CURRENT origin — otherwise the code→token exchange fails (400). This works
-    // on whatever domain serves the app, as long as its /app is the endpoint.
-    client.login({ redirectUri: `${window.location.origin}/app` });
+    // endpoint. /login is the universal entry (login button + the AppShell auth
+    // bounce both land here), so register `<domain>/login` as the endpoint and
+    // return there. Landing elsewhere makes the code→token exchange fail (400).
+    // Once the session resolves, useAuth/login redirect onward to /app.
+    client.login({ redirectUri: `${window.location.origin}/login` });
     // login() redirects; throw to halt the current flow.
     throw new Error('redirecting to LINE login');
   }

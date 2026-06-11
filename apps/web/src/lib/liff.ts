@@ -1,15 +1,18 @@
 import liff from '@line/liff';
 
-let initialized = false;
+// Memoize the init PROMISE (not a boolean) so concurrent callers share a single
+// liff.init() call. With a boolean flag set after `await`, two effects mounting
+// at once both pass the guard and call liff.init() twice — each tries to redeem
+// the same single-use authorization code, and the second exchange 400s.
+let liffReady: Promise<typeof liff> | null = null;
 
-export async function ensureLiff(): Promise<typeof liff> {
+export function ensureLiff(): Promise<typeof liff> {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
-  if (!liffId) throw new Error('NEXT_PUBLIC_LIFF_ID is not configured');
-  if (!initialized) {
-    await liff.init({ liffId });
-    initialized = true;
+  if (!liffId) return Promise.reject(new Error('NEXT_PUBLIC_LIFF_ID is not configured'));
+  if (!liffReady) {
+    liffReady = liff.init({ liffId }).then(() => liff);
   }
-  return liff;
+  return liffReady;
 }
 
 /** Run LIFF login (redirect) if needed, then return a fresh id_token. */

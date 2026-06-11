@@ -75,8 +75,8 @@ export function useAuth() {
       cancelled = true;
     };
     // Re-run once the session query resolves so we exchange the moment we know
-    // there's a LINE session but no app session.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // there's a LINE session but no app session. (login is intentionally not a
+    // dep — lineExchangeStarted guards against re-firing.)
   }, [meQuery.data, meQuery.isLoading]);
 
   const logout = useMutation({

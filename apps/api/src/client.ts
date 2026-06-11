@@ -34,7 +34,11 @@ export function createApiClient(baseUrl: string, opts?: ApiClientOptions) {
   let expiredFired = false; // guard so the handler runs at most once per page load
 
   const wrappedFetch: typeof fetch = async (input, init) => {
-    const res = await fetch(input, init);
+    // Force credentials on the actual request: hono does NOT merge the client
+    // `init` (below) into calls when a custom `fetch` is supplied, so relying on
+    // it alone sends `credentials: omit` and the cross-site session cookie is
+    // never stored or sent. Set it here so every call carries the cookie.
+    const res = await fetch(input, { ...init, credentials: 'include' });
     if (!AUTH_ENDPOINT.test(urlOf(input))) {
       if (res.ok) {
         authedOnce = true;

@@ -389,6 +389,56 @@ function SummaryStep({
   );
 }
 
+// ── นัดเวลา (schedule) helpers ───────────────────────────────────────────────
+const TH_WEEKDAYS = ['อา.', 'จ.', 'อ.', 'พ.', 'พฤ.', 'ศ.', 'ส.'] as const;
+const TH_MONTHS = [
+  'ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.',
+  'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.',
+] as const;
+const SCHEDULE_MAX_DAYS = 14; // mirrors AppSetting max_schedule_days default
+const SCHEDULE_DEFAULT_TIME = '09:00';
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const dateKey = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/** The next N days as pickable options for the horizontal day chips. */
+function buildDayOptions(days: number) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Array.from({ length: days }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const label = i === 0 ? 'วันนี้' : i === 1 ? 'พรุ่งนี้' : (TH_WEEKDAYS[d.getDay()] ?? '');
+    return { key: dateKey(d), label, sub: `${d.getDate()} ${TH_MONTHS[d.getMonth()] ?? ''}` };
+  });
+}
+
+/** 30-minute time slots within typical moving hours. */
+function buildTimeSlots(startHour = 6, endHour = 20) {
+  const slots: string[] = [];
+  for (let h = startHour; h <= endHour; h++) {
+    slots.push(`${pad2(h)}:00`);
+    if (h !== endHour) slots.push(`${pad2(h)}:30`);
+  }
+  return slots;
+}
+
+/**
+ * Turn a picked "YYYY-MM-DDTHH:mm" wall-clock into a UTC instant anchored to
+ * Asia/Bangkok (fixed UTC+7, no DST) — so "09:00" always means 09:00 in Thailand
+ * regardless of the customer's device timezone.
+ */
+function bangkokInstant(local: string): Date {
+  return new Date(`${local}:00+07:00`);
+}
+
+/** Format a "YYYY-MM-DDTHH:mm" value into a friendly Thai summary line. */
+function formatScheduleTH(value: string): string {
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${TH_WEEKDAYS[d.getDay()] ?? ''} ${d.getDate()} ${TH_MONTHS[d.getMonth()] ?? ''} · ${pad2(d.getHours())}:${pad2(d.getMinutes())} น.`;
+}
+
 export default function NewJobPage() {
   const router = useRouter();
   const { me } = useAuth();
@@ -415,6 +465,11 @@ export default function NewJobPage() {
   const [destLift, setDestLift] = useState<Lift>('unknown');
   const [origin, setOrigin] = useState<LatLng | null>(null);
   const [dest, setDest] = useState<LatLng | null>(null);
+
+  // นัดเวลา: day chips + time slots (computed once). `scheduledAt` stays a
+  // "YYYY-MM-DDTHH:mm" string so existing submit/validation logic is unchanged.
+  const dayOptions = useMemo(() => buildDayOptions(SCHEDULE_MAX_DAYS), []);
+  const timeSlots = useMemo(() => buildTimeSlots(), []);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedProhibitedPolicy, setAcceptedProhibitedPolicy] = useState(false);
   const [itemCategory, setItemCategory] = useState<CargoCategory>('GENERAL');
@@ -589,7 +644,7 @@ export default function NewJobPage() {
         destLng: dest?.lng,
         destFloor: toInt(form.destFloor),
         destHasElevator: liftToBool(destLift),
-        scheduledAt: scheduled && form.scheduledAt ? new Date(form.scheduledAt) : undefined,
+        scheduledAt: scheduled && form.scheduledAt ? bangkokInstant(form.scheduledAt) : undefined,
         pricingMode,
         promoCode: promoCode.trim() || undefined,
         acceptedTerms,
@@ -864,14 +919,77 @@ export default function NewJobPage() {
                     </button>
                   ))}
                 </div>
-                {scheduled && (
-                  <Input
-                    id="scheduledAt"
-                    type="datetime-local"
-                    value={form.scheduledAt}
-                    onChange={(e) => set('scheduledAt')(e.target.value)}
-                  />
-                )}
+                {scheduled && (() => {
+                  const schedDate = form.scheduledAt.slice(0, 10);
+                  const schedTime = form.scheduledAt.length >= 16 ? form.scheduledAt.slice(11, 16) : '';
+                  const now = new Date();
+                  const todayKey = dateKey(now);
+                  const nowHm = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+                  return (
+                    <div className="grid gap-3 rounded-xl border bg-muted/20 p-3">
+                      {/* วัน — chips เลื่อนแนวนอน */}
+                      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+                        {dayOptions.map((day) => {
+                          const active = schedDate === day.key;
+                          // For today, default to the next slot that hasn't passed.
+                          const defaultTime =
+                            day.key === todayKey
+                              ? (timeSlots.find((t) => t > nowHm) ?? SCHEDULE_DEFAULT_TIME)
+                              : SCHEDULE_DEFAULT_TIME;
+                          return (
+                            <button
+                              key={day.key}
+                              type="button"
+                              onClick={() => set('scheduledAt')(`${day.key}T${schedTime || defaultTime}`)}
+                              className={cn(
+                                'flex min-w-[68px] shrink-0 flex-col items-center rounded-xl border-2 px-3 py-2 transition-colors',
+                                active
+                                  ? 'border-primary bg-primary/10'
+                                  : 'border-transparent bg-background hover:border-border',
+                              )}
+                            >
+                              <span className={cn('text-sm font-semibold', active && 'text-primary')}>
+                                {day.label}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">{day.sub}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* เวลา — select 30 นาที */}
+                      <div className="grid gap-1.5">
+                        <Label className="text-xs text-muted-foreground">เวลาที่สะดวก</Label>
+                        <Select
+                          value={schedTime}
+                          disabled={!schedDate}
+                          onValueChange={(t) => set('scheduledAt')(`${schedDate || todayKey}T${t}`)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder={schedDate ? 'เลือกเวลา' : 'เลือกวันก่อน'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {timeSlots.map((t) => (
+                              <SelectItem
+                                key={t}
+                                value={t}
+                                disabled={schedDate === todayKey && t <= nowHm}
+                              >
+                                {t} น.
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {form.scheduledAt && (
+                        <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm font-medium text-primary">
+                          📅 นัดหมาย: {formatScheduleTH(form.scheduledAt)}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid gap-2">
@@ -962,6 +1080,7 @@ export default function NewJobPage() {
                 value={origin}
                 onChange={setOrigin}
                 icon={PIN_GREEN}
+                expandLabel="ปักหมุดจุดรับของ (ต้นทาง)"
                 className="h-44 w-full overflow-hidden rounded-lg border"
               />
             </div>
@@ -1022,6 +1141,7 @@ export default function NewJobPage() {
                 value={dest}
                 onChange={setDest}
                 icon={PIN_RED}
+                expandLabel="ปักหมุดปลายทาง"
                 className="h-44 w-full overflow-hidden rounded-lg border"
               />
             </div>

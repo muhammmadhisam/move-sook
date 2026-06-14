@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   APIProvider,
   Map,
@@ -9,6 +9,13 @@ import {
   useMapsLibrary,
   type MapMouseEvent,
 } from '@vis.gl/react-google-maps';
+import { Maximize2 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@movesook/ui';
 import { matchProvinceName } from '@movesook/thailand-provinces/province';
 import type { LatLng } from './job-route-map';
 
@@ -31,6 +38,8 @@ interface LocationPickerProps {
   icon?: string;
   /** Fallback center when nothing is picked yet. */
   defaultCenter?: LatLng;
+  /** Title for the enlarged (fullscreen) map dialog, e.g. "ปักหมุดจุดรับของ". */
+  expandLabel?: string;
   className?: string;
 }
 
@@ -38,8 +47,8 @@ interface LocationPickerProps {
 const DEFAULT_CENTER: LatLng = { lat: 7.0086, lng: 100.4747 };
 
 /** Pans/zooms the map to follow an externally-set value (e.g. an autocomplete pick). */
-function RecenterMap({ target }: { target: LatLng | null }) {
-  const map = useMap();
+function RecenterMap({ mapId, target }: { mapId: string; target: LatLng | null }) {
+  const map = useMap(mapId);
   useEffect(() => {
     if (!map || !target) return;
     map.panTo(target);
@@ -54,12 +63,15 @@ function RecenterMap({ target }: { target: LatLng | null }) {
  * the point into a formatted address + canonical Thai province.
  */
 function PickerMap({
+  id,
   value,
   onChange,
   onResolve,
   icon,
   center,
 }: {
+  /** Stable map id so useMap() targets this instance (two maps share one provider). */
+  id: string;
   value: LatLng | null;
   onChange: (value: LatLng) => void;
   onResolve?: (place: ResolvedPlace) => void;
@@ -108,6 +120,7 @@ function PickerMap({
 
   return (
     <Map
+      id={id}
       defaultCenter={center}
       defaultZoom={value ? 15 : 11}
       gestureHandling="greedy"
@@ -118,7 +131,7 @@ function PickerMap({
       style={{ width: '100%', height: '100%' }}
     >
       {value && <Marker position={value} icon={icon} />}
-      <RecenterMap target={value} />
+      <RecenterMap mapId={id} target={value} />
     </Map>
   );
 }
@@ -134,9 +147,12 @@ export function LocationPicker({
   onResolve,
   icon,
   defaultCenter,
+  expandLabel = 'ปักหมุดบนแผนที่',
   className,
 }: LocationPickerProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+  const [expanded, setExpanded] = useState(false);
+  const baseId = useId();
 
   if (!apiKey) {
     return (
@@ -148,17 +164,54 @@ export function LocationPicker({
 
   const center = value ?? defaultCenter ?? DEFAULT_CENTER;
 
+  // One APIProvider wraps both the inline map and the dialog map; the dialog is
+  // rendered through a portal but React context still flows to it, so both share
+  // the loaded Maps SDK and the same value/onChange/onResolve pin state.
   return (
-    <div className={className}>
-      <APIProvider apiKey={apiKey}>
+    <APIProvider apiKey={apiKey}>
+      <div className={className} style={{ position: 'relative' }}>
         <PickerMap
+          id={`${baseId}-inline`}
           value={value}
           onChange={onChange}
           onResolve={onResolve}
           icon={icon}
           center={center}
         />
-      </APIProvider>
-    </div>
+        {/* Expand to a large, easier-to-pin fullscreen map. */}
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          aria-label="ขยายแผนที่"
+          className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-background/90 px-2 py-1 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-background"
+        >
+          <Maximize2 className="h-3.5 w-3.5" />
+          ขยายแผนที่
+        </button>
+      </div>
+
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="flex h-[85vh] max-w-3xl flex-col gap-3 p-4 sm:p-6">
+          <DialogHeader>
+            <DialogTitle>{expandLabel}</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            แตะบนแผนที่เพื่อปักหมุด · เลื่อน/ซูมเพื่อหาตำแหน่งให้แม่นยำ
+          </p>
+          <div className="flex-1 overflow-hidden rounded-lg border">
+            {expanded && (
+              <PickerMap
+                id={`${baseId}-expanded`}
+                value={value}
+                onChange={onChange}
+                onResolve={onResolve}
+                icon={icon}
+                center={center}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </APIProvider>
   );
 }

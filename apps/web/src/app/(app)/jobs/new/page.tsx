@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ImageIcon } from 'lucide-react';
+import { ImageIcon, Zap, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Button,
@@ -234,7 +234,10 @@ function SummaryStep({
               )}
               {estimate.surgeActive && (
                 <div className="flex justify-between gap-3 text-orange-600">
-                  <span>⚡ ช่วงความต้องการสูง (×{estimate.surgeMultiplier})</span>
+                  <span className="flex items-center gap-1">
+                    <Zap className="h-3.5 w-3.5 shrink-0" />
+                    ช่วงความต้องการสูง (×{estimate.surgeMultiplier})
+                  </span>
                   <span>รวมในค่าขนส่ง</span>
                 </div>
               )}
@@ -983,8 +986,9 @@ export default function NewJobPage() {
                       </div>
 
                       {form.scheduledAt && (
-                        <p className="rounded-lg bg-primary/5 px-3 py-2 text-sm font-medium text-primary">
-                          📅 นัดหมาย: {formatScheduleTH(form.scheduledAt)}
+                        <p className="flex items-center gap-1.5 rounded-lg bg-primary/5 px-3 py-2 text-sm font-medium text-primary">
+                          <CalendarDays className="h-4 w-4 shrink-0" />
+                          นัดหมาย: {formatScheduleTH(form.scheduledAt)}
                         </p>
                       )}
                     </div>

@@ -17,7 +17,7 @@ import {
   PreviewableImage,
 } from '@movesook/ui';
 import { VEHICLE_TYPE_LABEL, type JobDto, type JobListResponse } from '@movesook/shared';
-import { Navigation, MapPin, Truck, Clock, Package } from 'lucide-react';
+import { Navigation, MapPin, Truck, Clock, Package, ArrowRight } from 'lucide-react';
 import { api } from '@/lib/api';
 import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { useAuth } from '@/hooks/use-auth';
@@ -41,6 +41,7 @@ function formatSchedule(iso: string | null): string | null {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Bangkok',
   });
 }
 
@@ -210,8 +211,10 @@ export default function JobsPage() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>{job.itemDescription}</DialogTitle>
-                      <DialogDescription>
-                        {job.originProvince} → {job.destProvince}
+                      <DialogDescription className="flex flex-wrap items-center gap-1">
+                        {job.originProvince}
+                        <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                        {job.destProvince}
                         {job.priceQuoted ? ` · ฿${job.priceQuoted.toLocaleString()}` : ''}
                       </DialogDescription>
                     </DialogHeader>

@@ -9,6 +9,7 @@ import {
   Truck,
   PackageCheck,
   Smartphone,
+  ArrowRight,
 } from 'lucide-react';
 import { Section, CtaBand } from '@/components/marketing/sections';
 import { JsonLd } from '@/components/marketing/json-ld';
@@ -161,9 +162,10 @@ export default function HomePage() {
           <div className="mt-10 text-center">
             <Link
               href="/how-it-works"
-              className="text-sm font-semibold text-primary underline-offset-4 hover:underline"
+              className="inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
             >
-              อ่านรายละเอียดเพิ่มเติม →
+              อ่านรายละเอียดเพิ่มเติม
+              <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </Section>

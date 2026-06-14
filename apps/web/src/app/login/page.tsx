@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { Button } from "@movesook/ui";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -75,9 +76,10 @@ export default function LoginPage() {
 
       <Link
         href="/"
-        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground underline-offset-4 hover:underline"
       >
-        ← กลับหน้าแรก
+        <ArrowLeft className="h-4 w-4" />
+        กลับหน้าแรก
       </Link>
     </main>
   );

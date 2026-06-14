@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, ArrowRight } from 'lucide-react';
 import { PageHeader, Section } from '@/components/marketing/sections';
 import { BLOG_POSTS } from '@/lib/blog';
 
@@ -48,9 +48,10 @@ export default function BlogIndexPage() {
               </p>
               <Link
                 href={`/blog/${post.slug}`}
-                className="mt-4 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 hover:underline"
               >
-                อ่านต่อ →
+                อ่านต่อ
+                <ArrowRight className="h-4 w-4" />
               </Link>
             </article>
           ))}

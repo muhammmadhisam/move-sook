@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ArrowRight } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -94,7 +95,7 @@ function JobCard({
           <p className="text-xs text-muted-foreground mb-0.5">ต้นทาง</p>
           <p className="text-sm font-medium truncate">{job.originProvince}</p>
         </div>
-        <div className="text-muted-foreground text-base shrink-0">→</div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
         <div className="flex-1 min-w-0 text-right">
           <p className="text-xs text-muted-foreground mb-0.5">ปลายทาง</p>
           <p className="text-sm font-medium truncate">{job.destProvince}</p>
@@ -117,6 +118,7 @@ function JobCard({
               month: 'short',
               hour: '2-digit',
               minute: '2-digit',
+              timeZone: 'Asia/Bangkok',
             })}
           </p>
         )}

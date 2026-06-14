@@ -60,8 +60,12 @@ function DriverHome({ isAvailable }: { isAvailable: boolean }) {
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold">งานใกล้คุณ</h3>
-          <Link href="/jobs" className="text-xs text-primary hover:underline">
-            ดูแบบรายการ →
+          <Link
+            href="/jobs"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            ดูแบบรายการ
+            <ArrowRight className="h-3 w-3" />
           </Link>
         </div>
         <DriverJobsMap />

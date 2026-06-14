@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Mail, MessageCircle, Phone, Clock } from 'lucide-react';
+import { Mail, MessageCircle, Phone, Clock, ArrowRight } from 'lucide-react';
 import { PageHeader, Section } from '@/components/marketing/sections';
 import { JsonLd } from '@/components/marketing/json-ld';
 import { SITE } from '@/lib/site';
@@ -65,8 +65,9 @@ export default function ContactPage() {
               </div>
               <h2 className="mt-4 font-semibold">{title}</h2>
               <p className="mt-1 text-sm text-muted-foreground">{value}</p>
-              <span className="mt-3 inline-block text-sm font-semibold text-primary underline-offset-4 group-hover:underline">
-                {cta} →
+              <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-primary underline-offset-4 group-hover:underline">
+                {cta}
+                <ArrowRight className="h-4 w-4" />
               </span>
             </a>
           ))}

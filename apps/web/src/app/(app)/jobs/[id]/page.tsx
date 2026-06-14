@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, FileText } from 'lucide-react';
+import { CheckCircle2, FileText, ArrowRight, Star } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -118,8 +118,10 @@ export default function JobDetailPage() {
                   {JOB_STATUS_LABEL[job.data.status]}
                 </Badge>
               </div>
-              <CardDescription>
-                {job.data.originProvince} → {job.data.destProvince}
+              <CardDescription className="flex flex-wrap items-center gap-1">
+                {job.data.originProvince}
+                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
+                {job.data.destProvince}
                 {job.data.priceQuoted ? ` · ฿${job.data.priceQuoted.toLocaleString()}` : ''}
               </CardDescription>
             </CardHeader>
@@ -281,8 +283,9 @@ export default function JobDetailPage() {
                   {job.data.driver.plateNumber ? ` · ${job.data.driver.plateNumber}` : ''}
                 </p>
                 {job.data.driver.ratingCount > 0 && (
-                  <p className="text-muted-foreground">
-                    ★ {job.data.driver.ratingAvg.toFixed(1)} ({job.data.driver.ratingCount})
+                  <p className="flex items-center gap-1 text-muted-foreground">
+                    <Star className="h-3.5 w-3.5 shrink-0 fill-warning text-warning" />
+                    {job.data.driver.ratingAvg.toFixed(1)} ({job.data.driver.ratingCount})
                   </p>
                 )}
                 {job.data.driver.phone && (

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Check } from 'lucide-react';
 import { Button, PreviewableImage } from '@movesook/ui';
 import type { JobDto, PublicSystemConfig } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -80,8 +81,9 @@ export function PaymentSlipCard({
               className="max-h-48 w-full rounded-lg border object-contain"
             />
           )}
-          <p className="text-xs text-muted-foreground">
-            ✓ ส่งสลิปแล้ว — รอแอดมินตรวจสอบและอนุมัติก่อนเผยแพร่ให้คนขับ
+          <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Check className="h-3.5 w-3.5 shrink-0" />
+            ส่งสลิปแล้ว — รอแอดมินตรวจสอบและอนุมัติก่อนเผยแพร่ให้คนขับ
           </p>
         </div>
       ) : (

@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Navigation } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Navigation } from 'lucide-react';
 import { Button } from '@movesook/ui';
 import type { JobDetailResponse, JobStatus } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -61,8 +61,10 @@ export default function DriverRoutePage() {
             {job.data?.itemDescription ?? 'นำทาง'}
           </h1>
           {job.data && (
-            <p className="truncate text-xs text-muted-foreground">
-              {job.data.originProvince} → {job.data.destProvince}
+            <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+              {job.data.originProvince}
+              <ArrowRight className="h-3 w-3 shrink-0" />
+              {job.data.destProvince}
             </p>
           )}
         </div>

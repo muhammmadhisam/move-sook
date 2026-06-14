@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { Star } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -55,12 +56,16 @@ export function ReviewDialog({ jobId, onDone }: { jobId: string; onDone: () => v
               type="button"
               onClick={() => setRating(n)}
               aria-label={`${n} ดาว`}
-              className={cn(
-                'text-4xl transition-transform active:scale-110',
-                n <= rating ? 'text-warning' : 'text-muted-foreground/30',
-              )}
+              className="transition-transform active:scale-110"
             >
-              ★
+              <Star
+                className={cn(
+                  'h-9 w-9',
+                  n <= rating
+                    ? 'fill-warning text-warning'
+                    : 'fill-muted text-muted-foreground/30',
+                )}
+              />
             </button>
           ))}
         </div>

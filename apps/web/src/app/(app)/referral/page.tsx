@@ -120,8 +120,10 @@ export default function ReferralPage() {
       )}
 
       {data?.referredByApplied && (
-        <p className="text-center text-sm text-muted-foreground">
-          คุณได้ใช้โค้ดแนะนำแล้ว ✓ รับส่วนลดเมื่อจบงานแรก
+        <p className="flex items-center justify-center gap-1 text-center text-sm text-muted-foreground">
+          คุณได้ใช้โค้ดแนะนำแล้ว
+          <Check className="h-3.5 w-3.5 shrink-0" />
+          รับส่วนลดเมื่อจบงานแรก
         </p>
       )}
     </div>

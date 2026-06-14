@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps';
 import { toast } from 'sonner';
-import { Navigation, Truck, X } from 'lucide-react';
+import { ArrowRight, MapPin, Navigation, Truck, X } from 'lucide-react';
 import { Button, Badge, cn } from '@movesook/ui';
 import { VEHICLE_TYPE_LABEL, type JobListResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -143,8 +143,10 @@ export function DriverJobsMap() {
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{selected.itemDescription}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {selected.originProvince} → {selected.destProvince}
+              <p className="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                {selected.originProvince}
+                <ArrowRight className="h-3 w-3 shrink-0" />
+                {selected.destProvince}
               </p>
             </div>
             <button
@@ -176,7 +178,10 @@ export function DriverJobsMap() {
               </Badge>
             )}
           </div>
-          <p className="mt-1 truncate text-xs text-muted-foreground">📍 {selected.originAddress}</p>
+          <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
+            <MapPin className="h-3 w-3 shrink-0" />
+            {selected.originAddress}
+          </p>
 
           <div className="mt-2.5 flex gap-2">
             <Button

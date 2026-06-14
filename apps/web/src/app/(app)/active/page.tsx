@@ -23,7 +23,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'active', label: 'กำลังทำ' },
   { key: 'done', label: 'ประวัติ' },
 ];
-import { MapPin, Package } from 'lucide-react';
+import { Flag, MapPin, Package } from 'lucide-react';
 import { api } from '@/lib/api';
 import { ImageUploadGallery } from '@/components/image-upload-gallery';
 import {
@@ -229,7 +229,7 @@ export default function ActiveJobsPage() {
                 {isInHand(job.status) && (
                   <Button
                     variant="ghost"
-                    className="w-full text-destructive hover:text-destructive"
+                    className="w-full gap-1.5 text-destructive hover:text-destructive"
                     disabled={flagIllegal.isPending}
                     onClick={() => {
                       const reason = window.prompt(
@@ -240,7 +240,8 @@ export default function ActiveJobsPage() {
                       }
                     }}
                   >
-                    🚩 แจ้งของผิดกฎหมาย
+                    <Flag className="h-4 w-4" />
+                    แจ้งของผิดกฎหมาย
                   </Button>
                 )}
               </CardContent>

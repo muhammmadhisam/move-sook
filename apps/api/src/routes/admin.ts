@@ -111,7 +111,7 @@ import { writeAudit } from '../lib/audit';
 import { notify, notifyAdmins, notifyNewJobToArea } from '../lib/notify';
 import { createDeliveryTransaction } from '../lib/transactions';
 import { buildJobDocument, type DocType } from '../lib/pdf';
-import { maybeIssueReferralReward } from '../lib/referral';
+import { maybeIssueReferralReward } from '../queues/side-effects';
 
 const JOB_STATUSES: JobStatus[] = [
   'DRAFT',

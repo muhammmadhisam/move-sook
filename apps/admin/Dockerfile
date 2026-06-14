@@ -20,10 +20,12 @@ RUN pnpm --filter @movesook/admin build
 
 # ─────────────── runtime: standalone server only ───────────────
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache tzdata
 WORKDIR /app
 ENV NODE_ENV=production \
     PORT=3001 \
-    HOSTNAME=0.0.0.0
+    HOSTNAME=0.0.0.0 \
+    TZ=Asia/Bangkok
 RUN addgroup -S app && adduser -S app -G app
 
 # Standalone is traced from the monorepo root, so it mirrors the repo layout.

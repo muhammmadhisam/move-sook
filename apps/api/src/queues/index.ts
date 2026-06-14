@@ -3,8 +3,10 @@ import { env } from '../config';
 import { closeRedis } from '../lib/redis';
 import { startNotificationsWorker } from './notifications';
 import { startMaintenanceWorker, registerMaintenanceSchedules } from './maintenance';
+import { startSideEffectsWorker } from './side-effects';
 
 export { enqueuePush, enqueueMulticast } from './notifications';
+export { enqueueAudit, maybeIssueReferralReward } from './side-effects';
 
 let workers: Worker[] = [];
 
@@ -16,9 +18,9 @@ export async function startWorkers(): Promise<void> {
     console.info('[workers] disabled (WORKERS_ENABLED=false) — no queue processing in this process');
     return;
   }
-  workers = [startNotificationsWorker(), startMaintenanceWorker()];
+  workers = [startNotificationsWorker(), startMaintenanceWorker(), startSideEffectsWorker()];
   await registerMaintenanceSchedules();
-  console.info('[workers] notifications + maintenance workers started');
+  console.info('[workers] notifications + maintenance + side-effects workers started');
 }
 
 // Drain in-flight jobs and release Redis connections.

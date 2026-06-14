@@ -31,7 +31,13 @@ export type JobDocData = {
 
 const money = (n: number | null | undefined) => `฿${(n ?? 0).toLocaleString('th-TH')}`;
 const fmtDate = (d: Date | string | null | undefined) =>
-  d ? new Date(d).toLocaleString('th-TH', { dateStyle: 'long', timeStyle: 'short' }) : '—';
+  d
+    ? new Date(d).toLocaleString('th-TH', {
+        dateStyle: 'long',
+        timeStyle: 'short',
+        timeZone: 'Asia/Bangkok',
+      })
+    : '—';
 
 async function fetchImage(url: string | null | undefined): Promise<Buffer | null> {
   if (!url) return null;

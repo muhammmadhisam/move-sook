@@ -33,10 +33,11 @@ RUN set -eux; \
 
 # ─────────────── runtime: minimal Alpine, non-root, run TS via tsx ───────────────
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache libc6-compat openssl
+RUN apk add --no-cache libc6-compat openssl tzdata
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=8787
+    PORT=8787 \
+    TZ=Asia/Bangkok
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app ./
 USER app

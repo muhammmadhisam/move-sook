@@ -32,66 +32,64 @@ export async function ensureReferralCode(customer: Pick<Customer, 'id' | 'referr
   throw new Error('could not allocate referral code');
 }
 
-/** Create a one-time FIXED promo code worth the referral reward and return it. */
-async function createRewardPromo(rewardThb: number): Promise<string> {
-  for (let attempt = 0; attempt < 6; attempt++) {
-    const code = `REF${randomCode(6)}`;
-    try {
-      await prisma.promoCode.create({
-        data: { code, type: 'FIXED', value: rewardThb, maxUses: 1, minOrder: 0 },
-      });
-      return code;
-    } catch {
-      // code collision — retry
-    }
-  }
-  throw new Error('could not allocate reward promo');
-}
-
 /**
- * Best-effort two-sided referral reward, issued the first time a referred
- * customer has a job confirmed DELIVERED. Idempotent via `referralRewardedAt`
- * (a conditional update wins the race). Runs AFTER the delivery transaction
- * commits so a failure here never blocks delivery confirmation.
+ * Idempotently grant the two-sided referral reward, the first time a referred
+ * customer has a job confirmed DELIVERED. Runs in the side-effects worker (so it
+ * gets retry/backoff). Enqueued via `maybeIssueReferralReward` after the delivery
+ * transaction commits, so it never blocks delivery confirmation.
+ *
+ * The claim of `referralRewardedAt` and the creation of BOTH reward promos happen
+ * in one transaction: a failure rolls the claim back so a retry re-grants cleanly.
+ * (The previous version claimed the slot first, then created the codes outside any
+ * transaction — a mid-way crash consumed the claim and lost the codes forever,
+ * because the idempotency guard then blocked every retry.)
  */
-export async function maybeIssueReferralReward(customerId: string): Promise<void> {
-  try {
-    const customer = await prisma.customer.findUnique({ where: { id: customerId } });
-    if (!customer || !customer.referredById || customer.referralRewardedAt) return;
+export async function runReferralRewardGrant(customerId: string): Promise<void> {
+  const customer = await prisma.customer.findUnique({ where: { id: customerId } });
+  if (!customer || !customer.referredById || customer.referralRewardedAt) return;
 
-    // Claim the reward slot atomically; if 0 rows updated, another path already did it.
-    const claim = await prisma.customer.updateMany({
+  const referrer = await prisma.customer.findUnique({ where: { id: customer.referredById } });
+  const rewardThb = (await getSystemSettings()).referralRewardThb;
+
+  // Codes are generated outside the tx; a (very rare) collision aborts the tx and
+  // the job retries with fresh codes — no in-tx catch-and-continue needed.
+  const refereeCode = `REF${randomCode(6)}`;
+  const referrerCode = `REF${randomCode(6)}`;
+
+  const granted = await prisma.$transaction(async (tx) => {
+    // Claim the reward slot atomically; if 0 rows updated, another run already did it.
+    const claim = await tx.customer.updateMany({
       where: { id: customerId, referralRewardedAt: null, referredById: { not: null } },
       data: { referralRewardedAt: new Date() },
     });
-    if (claim.count === 0) return;
+    if (claim.count === 0) return false;
+    await tx.promoCode.create({
+      data: { code: refereeCode, type: 'FIXED', value: rewardThb, maxUses: 1, minOrder: 0 },
+    });
+    await tx.promoCode.create({
+      data: { code: referrerCode, type: 'FIXED', value: rewardThb, maxUses: 1, minOrder: 0 },
+    });
+    return true;
+  });
+  if (!granted) return;
 
-    const referrer = await prisma.customer.findUnique({ where: { id: customer.referredById } });
-
-    const rewardThb = (await getSystemSettings()).referralRewardThb;
-    const [refereeCode, referrerCode] = await Promise.all([
-      createRewardPromo(rewardThb),
-      createRewardPromo(rewardThb),
-    ]);
-
-    // Notify both sides with their personal one-time code (only linked app users).
-    if (customer.userId) {
-      await notify({
-        userId: customer.userId,
-        type: 'GENERIC',
-        title: 'รับส่วนลดจากการแนะนำเพื่อน 🎉',
-        body: `ขอบคุณที่ใช้บริการ! ใช้โค้ด ${refereeCode} รับส่วนลด ฿${rewardThb} งานถัดไป`,
-      });
-    }
-    if (referrer?.userId) {
-      await notify({
-        userId: referrer.userId,
-        type: 'GENERIC',
-        title: 'เพื่อนที่คุณแนะนำใช้งานสำเร็จแล้ว 🎉',
-        body: `ใช้โค้ด ${referrerCode} รับส่วนลด ฿${rewardThb} เป็นรางวัลการแนะนำ`,
-      });
-    }
-  } catch (err) {
-    console.error('[referral] reward issuance failed', customerId, err);
+  // Notify both sides with their personal one-time code (only linked app users).
+  // notify() never throws, so a notification hiccup won't retry an already-granted
+  // reward; the codes are durably in PromoCode regardless.
+  if (customer.userId) {
+    await notify({
+      userId: customer.userId,
+      type: 'GENERIC',
+      title: 'รับส่วนลดจากการแนะนำเพื่อน 🎉',
+      body: `ขอบคุณที่ใช้บริการ! ใช้โค้ด ${refereeCode} รับส่วนลด ฿${rewardThb} งานถัดไป`,
+    });
+  }
+  if (referrer?.userId) {
+    await notify({
+      userId: referrer.userId,
+      type: 'GENERIC',
+      title: 'เพื่อนที่คุณแนะนำใช้งานสำเร็จแล้ว 🎉',
+      body: `ใช้โค้ด ${referrerCode} รับส่วนลด ฿${rewardThb} เป็นรางวัลการแนะนำ`,
+    });
   }
 }

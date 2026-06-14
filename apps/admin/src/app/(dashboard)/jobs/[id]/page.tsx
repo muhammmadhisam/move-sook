@@ -137,8 +137,8 @@ export default function AdminJobDetailPage() {
             <p>
               ปลายทาง: {j.destAddress} ({j.destProvince})
             </p>
-            <p>นัดหมาย: {j.scheduledAt ? new Date(j.scheduledAt).toLocaleString('th-TH') : '—'}</p>
-            <p>สร้างเมื่อ: {new Date(j.createdAt).toLocaleString('th-TH')}</p>
+            <p>นัดหมาย: {j.scheduledAt ? new Date(j.scheduledAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }) : '—'}</p>
+            <p>สร้างเมื่อ: {new Date(j.createdAt).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}</p>
           </CardContent>
         </Card>
 

@@ -1,4 +1,5 @@
-import { prisma, type Prisma } from '@movesook/db';
+import type { Prisma } from '@movesook/db';
+import { enqueueAudit } from '../queues/side-effects';
 
 export type AuditTargetType = 'user' | 'driver' | 'job' | 'transaction' | 'setting';
 
@@ -11,21 +12,15 @@ type AuditInput = {
 };
 
 /**
- * Append an immutable audit-trail row. Best-effort: a logging failure must never
- * roll back or 500 the admin action that already succeeded.
+ * Append an immutable audit-trail row via the durable side-effects queue (the
+ * worker does the DB write with retry, so a transient blip no longer drops the
+ * entry). Best-effort to enqueue: if Redis itself is unreachable we log and move
+ * on — a logging failure must never roll back or 500 the action that succeeded.
  */
 export async function writeAudit(input: AuditInput): Promise<void> {
   try {
-    await prisma.auditLog.create({
-      data: {
-        actorId: input.actorId,
-        action: input.action,
-        targetType: input.targetType,
-        targetId: input.targetId,
-        ...(input.metadata !== undefined ? { metadata: input.metadata } : {}),
-      },
-    });
+    await enqueueAudit(input);
   } catch (err) {
-    console.error('[audit] failed to write log', input.action, err);
+    console.error('[audit] failed to enqueue log', input.action, err);
   }
 }

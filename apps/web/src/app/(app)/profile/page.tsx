@@ -14,6 +14,7 @@ import {
   Package,
   Phone,
   Shield,
+  Truck,
 } from 'lucide-react';
 import {
   Badge,
@@ -48,7 +49,10 @@ const STATUS_BANNER: Record<
 
 export default function ProfilePage() {
   const { me, isLoading, logout } = useAuth();
-  const isDriver = me?.role === 'DRIVER';
+  // Treat anyone with a driver profile as a driver, not just role==='DRIVER':
+  // a session whose JWT role lags behind (e.g. claimed via invite in a prior
+  // session) still has me.isDriver set, so the driver menu/sections show.
+  const isDriver = me?.role === 'DRIVER' || me?.isDriver === true;
 
   const earnings = useQuery({
     queryKey: ['earnings'],
@@ -196,6 +200,16 @@ export default function ProfilePage() {
         <CardContent className="p-0">
           {!isDriver && (
             <MenuRow href="/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
+          )}
+          {isDriver && (
+            <>
+              <MenuRow
+                href="/active"
+                icon={<FileText className="h-4 w-4" />}
+                label="งานที่รับไว้ · พิมพ์ใบงาน"
+              />
+              <MenuRow href="/jobs" icon={<Truck className="h-4 w-4" />} label="หางานใหม่" />
+            </>
           )}
           <MenuRow href="/notifications" icon={<Bell className="h-4 w-4" />} label="การแจ้งเตือน" />
           {!isDriver && (

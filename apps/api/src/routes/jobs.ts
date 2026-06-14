@@ -485,6 +485,41 @@ export const jobRoutes = new Hono<AppEnv>()
     });
   })
 
+  // Assigned driver prints the job worksheet (ใบสรุปงาน) for a job they accepted.
+  // Available from the moment they win the claim (ACCEPTED) onward — it carries the
+  // customer contact, route, items and notes the driver needs on the road.
+  .get('/:id/worksheet', authenticate('user'), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        customer: { include: { user: { select: { displayName: true, phone: true } } } },
+        driver: { include: { user: { select: { displayName: true, phone: true } } } },
+        transaction: true,
+      },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (!job.driver || job.driver.userId !== sub) {
+      throw new HTTPException(403, { message: 'Not your job' });
+    }
+    const settings = await getSystemSettings();
+    const pdf = await buildJobDocument('worksheet', {
+      job,
+      customer: job.customer,
+      driver: job.driver,
+      transaction: job.transaction,
+      settings,
+    });
+    return new Response(new Uint8Array(pdf), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="worksheet-${id}.pdf"`,
+      },
+    });
+  })
+
   // SSE live-tracking stream: pushes the assigned driver's location + job status
   // every few seconds until the job reaches a terminal state. Visible to the
   // job's customer or its assigned driver (cookie auth via EventSource credentials).

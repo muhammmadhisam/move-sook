@@ -23,8 +23,8 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'active', label: 'กำลังทำ' },
   { key: 'done', label: 'ประวัติ' },
 ];
-import { Flag, MapPin, Package } from 'lucide-react';
-import { api } from '@/lib/api';
+import { FileText, Flag, MapPin, Package } from 'lucide-react';
+import { api, API_BASE_URL } from '@/lib/api';
 import { ImageUploadGallery } from '@/components/image-upload-gallery';
 import {
   JOB_STATUS_LABEL,
@@ -184,12 +184,25 @@ export default function ActiveJobsPage() {
               </div>
 
               <CardContent className="flex flex-col gap-3 p-4 pt-0">
-                <Button asChild variant="outline" className="w-full">
-                  <Link href={`/active/${job.id}/route`}>
-                    <MapPin className="mr-1.5 h-4 w-4" />
-                    ดูเส้นทาง
-                  </Link>
-                </Button>
+                <div className="flex gap-2">
+                  <Button asChild variant="outline" className="flex-1">
+                    <Link href={`/active/${job.id}/route`}>
+                      <MapPin className="mr-1.5 h-4 w-4" />
+                      ดูเส้นทาง
+                    </Link>
+                  </Button>
+                  {/* Printable job worksheet (ใบสรุปงาน) for the accepted job. */}
+                  <Button asChild variant="outline" className="flex-1">
+                    <a
+                      href={`${API_BASE_URL}/jobs/${job.id}/worksheet`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <FileText className="mr-1.5 h-4 w-4" />
+                      พิมพ์ใบงาน
+                    </a>
+                  </Button>
+                </div>
 
                 {/* Proof photos — multiple allowed */}
                 <ImageUploadGallery

@@ -3,6 +3,19 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Bell,
+  ChevronRight,
+  CheckCircle2,
+  FileText,
+  Gift,
+  HelpCircle,
+  Mail,
+  MessageCircle,
+  Package,
+  Phone,
+  Shield,
+} from 'lucide-react';
+import {
   Badge,
   Button,
   Card,
@@ -11,7 +24,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@movesook/ui';
-import type { DriverEarningsResponse, DriverVerifyStatus } from '@movesook/shared';
+import type {
+  DriverEarningsResponse,
+  DriverVerifyStatus,
+  JobListResponse,
+  PublicSystemConfig,
+} from '@movesook/shared';
 import { useAuth } from '@/hooks/use-auth';
 import { AvailabilityToggle } from '@/components/availability-toggle';
 import { api } from '@/lib/api';
@@ -42,11 +60,37 @@ export default function ProfilePage() {
     },
   });
 
+  // Customer job summary — surfaced on the otherwise-bare customer profile.
+  const jobs = useQuery({
+    queryKey: ['my-jobs'],
+    enabled: me != null && !isDriver,
+    queryFn: async (): Promise<JobListResponse> => {
+      const res = await api.jobs.$get({ query: {} });
+      if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
+      return (await res.json()) as JobListResponse;
+    },
+  });
+
+  // Support contact (phone / LINE / email) — public, cached app-wide.
+  const config = useQuery({
+    queryKey: ['system', 'public'],
+    queryFn: async (): Promise<PublicSystemConfig> => {
+      const res = await api.system.public.$get();
+      if (!res.ok) throw new Error();
+      return (await res.json()) as PublicSystemConfig;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   if (isLoading || !me) {
     return <div className="mx-auto max-w-md p-4 text-sm text-muted-foreground">กำลังโหลด…</div>;
   }
 
   const banner = me.verifyStatus ? STATUS_BANNER[me.verifyStatus] : null;
+
+  const allJobs = jobs.data?.items ?? [];
+  const totalJobs = allJobs.length;
+  const doneJobs = allJobs.filter((j) => j.status === 'DELIVERED').length;
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
@@ -67,6 +111,26 @@ export default function ProfilePage() {
           </div>
         </CardHeader>
       </Card>
+
+      {/* Customer job summary */}
+      {!isDriver && (
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border bg-card p-3.5">
+            <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+              <Package className="h-4 w-4" />
+              <span className="text-xs">งานทั้งหมด</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{totalJobs}</p>
+          </div>
+          <div className="rounded-2xl border bg-card p-3.5">
+            <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="text-xs">เสร็จสิ้น</span>
+            </div>
+            <p className="text-2xl font-bold tabular-nums">{doneJobs}</p>
+          </div>
+        </div>
+      )}
 
       {/* Driver verification status */}
       {isDriver && banner && (
@@ -127,6 +191,72 @@ export default function ProfilePage() {
         </Card>
       )}
 
+      {/* Quick navigation menu */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          {!isDriver && (
+            <MenuRow href="/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
+          )}
+          <MenuRow href="/notifications" icon={<Bell className="h-4 w-4" />} label="การแจ้งเตือน" />
+          {!isDriver && (
+            <MenuRow
+              href="/referral"
+              icon={<Gift className="h-4 w-4" />}
+              label="แนะนำเพื่อน รับส่วนลด"
+            />
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Support contact */}
+      {config.data &&
+        (config.data.supportPhone || config.data.supportLineId || config.data.supportEmail) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">ติดต่อทีมงาน</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 pt-0">
+              {config.data.supportPhone && (
+                <a
+                  href={`tel:${config.data.supportPhone}`}
+                  className="flex items-center gap-3 text-sm"
+                >
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{config.data.supportPhone}</span>
+                </a>
+              )}
+              {config.data.supportLineId && (
+                <div className="flex items-center gap-3 text-sm">
+                  <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{config.data.supportLineId}</span>
+                </div>
+              )}
+              {config.data.supportEmail && (
+                <a
+                  href={`mailto:${config.data.supportEmail}`}
+                  className="flex items-center gap-3 text-sm"
+                >
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">{config.data.supportEmail}</span>
+                </a>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+      {/* Info & legal */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <MenuRow href="/faq" icon={<HelpCircle className="h-4 w-4" />} label="คำถามที่พบบ่อย" />
+          <MenuRow href="/terms" icon={<FileText className="h-4 w-4" />} label="ข้อกำหนดการใช้งาน" />
+          <MenuRow
+            href="/privacy"
+            icon={<Shield className="h-4 w-4" />}
+            label="นโยบายความเป็นส่วนตัว"
+          />
+        </CardContent>
+      </Card>
+
       {/* Driver: complete / edit the application admin created */}
       {isDriver && (
         <Button asChild variant="outline" className="w-full">
@@ -153,5 +283,27 @@ export default function ProfilePage() {
         ออกจากระบบ
       </Button>
     </div>
+  );
+}
+
+// A tappable settings-style row; stacks with a divider between siblings.
+function MenuRow({
+  href,
+  icon,
+  label,
+}: {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 border-b px-4 py-3.5 last:border-b-0 hover:bg-muted/40"
+    >
+      <span className="text-muted-foreground">{icon}</span>
+      <span className="flex-1 text-sm font-medium">{label}</span>
+      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+    </Link>
   );
 }

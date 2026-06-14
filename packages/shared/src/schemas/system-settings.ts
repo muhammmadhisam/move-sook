@@ -75,6 +75,7 @@ export const SystemSettingsResponse = z.object({
   termsVersion: z.string(),
   privacyVersion: z.string(),
   prohibitedItemsList: z.string(), // banned cargo, one item per line ('' = use default list)
+  adminLineGroupId: z.string(), // LINE group/room/user ID for ops push alerts ('' = disabled)
 });
 export type SystemSettingsResponse = z.infer<typeof SystemSettingsResponse>;
 
@@ -108,6 +109,7 @@ export const UpdateSystemSettingsInput = z.object({
   termsVersion: z.string().min(1).max(40).optional(),
   privacyVersion: z.string().min(1).max(40).optional(),
   prohibitedItemsList: z.string().max(5000).optional(),
+  adminLineGroupId: z.string().max(120).optional(),
 });
 export type UpdateSystemSettingsInput = z.infer<typeof UpdateSystemSettingsInput>;
 

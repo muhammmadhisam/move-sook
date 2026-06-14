@@ -132,6 +132,15 @@ export function SystemSettingsCard() {
           {strField('supportEmail', 'อีเมล')}
         </div>
 
+        <Section title="แจ้งเตือนทีมงานผ่าน LINE" />
+        <div className="space-y-1">
+          {strField('adminLineGroupId', 'LINE Group ID สำหรับแจ้งเตือนแอดมิน')}
+          <p className="text-xs text-muted-foreground">
+            เพิ่ม LINE OA bot เข้ากลุ่มทีมงาน แล้ววาง Group ID ที่นี่ —
+            ระบบจะส่งข้อความเข้ากลุ่มทันทีเมื่อลูกค้าอัปโหลดสลิปโอนเงิน · เว้นว่าง = ปิด
+          </p>
+        </div>
+
         <Section title="บัญชีรับเงิน (แสดงหน้าจ่ายเงินลูกค้า)" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {strField('payBankName', 'ธนาคาร')}

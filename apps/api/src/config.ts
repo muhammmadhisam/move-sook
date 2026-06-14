@@ -36,6 +36,21 @@ const EnvSchema = z.object({
   // Optional public base URL (custom domain or r2.dev) — when set, upload URLs
   // point straight at R2 instead of being proxied through GET /uploads/*.
   R2_PUBLIC_URL: z.string().url().optional(),
+  // Redis — backs BullMQ (LINE-push queue + repeatable maintenance jobs) and the
+  // admin-login rate limiter. Required: the queue/worker layer and rate limiter
+  // all depend on it.
+  REDIS_URL: z.string().min(1, "REDIS_URL is required").default("redis://localhost:6379"),
+  // Run BullMQ workers (push + maintenance) in this process. Keep on for the
+  // all-in-one deploy; set false on web-only replicas when workers run as a
+  // separate process. Repeatable-job scheduling is coordinated through Redis, so
+  // running workers on several instances is safe (each job runs once).
+  WORKERS_ENABLED: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((v) => v === "true"),
+  // Cron patterns (5-field) for the repeatable maintenance jobs, server tz.
+  CRON_NUDGE_SCHEDULE: z.string().default("0 10 * * *"), // 10:00 daily
+  CRON_EXPIRE_SCHEDULE: z.string().default("*/30 * * * *"), // every 30 min
 });
 
 const parsed = EnvSchema.safeParse(process.env);

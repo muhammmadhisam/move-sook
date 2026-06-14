@@ -37,6 +37,7 @@ export const APP_SETTING_KEYS = {
   COMPANY_TAX_ID: 'company_tax_id',
   COMPANY_LOGO_URL: 'company_logo_url',
   PROHIBITED_ITEMS_LIST: 'prohibited_items_list', // admin-editable list of banned cargo (one item per line)
+  ADMIN_LINE_GROUP_ID: 'admin_line_group_id', // LINE group/room/user ID the OA pushes ops alerts to (e.g. new payment slips)
 } as const;
 
 /** Defaults for the misc system settings. */
@@ -70,6 +71,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   termsVersion: '1.0',
   privacyVersion: '1.0',
   prohibitedItemsList: '', // '' = fall back to DEFAULT_PROHIBITED_ITEMS
+  adminLineGroupId: '', // '' = no ops LINE alerts (in-app notifications still fire)
 } as const;
 
 /**
@@ -282,7 +284,7 @@ export const ADMIN_LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
 /** JWT lifetime (seconds). */
 export const USER_JWT_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (LIFF sessions)
-export const ADMIN_JWT_TTL_SEC = 60 * 60 * 8; // 8 hours
+export const ADMIN_JWT_TTL_SEC = 60 * 60 * 24; // 24 hours
 
 /** Header carrying the SYSTEM static API key. */
 export const SYSTEM_KEY_HEADER = 'x-system-key';

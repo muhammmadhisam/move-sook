@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@movesook/ui';
-import { useAuth } from '@/hooks/use-auth';
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Button } from "@movesook/ui";
+import { useAuth } from "@/hooks/use-auth";
 
-const IS_DEV = process.env.NODE_ENV !== 'production';
+const IS_DEV = process.env.NODE_ENV !== "production";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -14,7 +14,7 @@ export default function LoginPage() {
 
   // Already signed in → straight to the app.
   useEffect(() => {
-    if (me) router.replace('/app');
+    if (me) router.replace("/app");
   }, [me, router]);
 
   return (
@@ -24,7 +24,9 @@ export default function LoginPage() {
           MS
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">MoveSook</h1>
-        <p className="mt-1 text-sm text-muted-foreground">เรียกคนขับขนย้ายใกล้คุณ</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          เรียกคนขับขนย้ายใกล้คุณ
+        </p>
       </Link>
 
       {isLoading ? (
@@ -36,11 +38,13 @@ export default function LoginPage() {
           disabled={login.isPending}
           onClick={() => login.mutate()}
         >
-          {login.isPending ? 'กำลังเข้าสู่ระบบ…' : 'เข้าสู่ระบบด้วย LINE'}
+          {login.isPending ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบด้วย LINE"}
         </Button>
       )}
       {login.isError && (
-        <p className="text-sm text-destructive">เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง</p>
+        <p className="text-sm text-destructive">
+          เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง
+        </p>
       )}
 
       {IS_DEV && (
@@ -53,7 +57,7 @@ export default function LoginPage() {
               variant="outline"
               className="flex-1"
               disabled={devLogin.isPending}
-              onClick={() => devLogin.mutate('USER')}
+              onClick={() => devLogin.mutate("USER")}
             >
               เข้าเป็นลูกค้า
             </Button>
@@ -61,7 +65,7 @@ export default function LoginPage() {
               variant="outline"
               className="flex-1"
               disabled={devLogin.isPending}
-              onClick={() => devLogin.mutate('DRIVER')}
+              onClick={() => devLogin.mutate("DRIVER")}
             >
               เข้าเป็นคนขับ
             </Button>
@@ -69,7 +73,10 @@ export default function LoginPage() {
         </div>
       )}
 
-      <Link href="/" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
+      <Link
+        href="/"
+        className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+      >
         ← กลับหน้าแรก
       </Link>
     </main>

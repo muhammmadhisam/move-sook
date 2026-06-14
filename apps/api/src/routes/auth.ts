@@ -49,7 +49,7 @@ export const authRoutes = new Hono<AppEnv>()
     const { email, password } = c.req.valid('json');
     const rlKey = `${c.req.header('x-forwarded-for') ?? 'local'}:${email.toLowerCase()}`;
 
-    const gate = checkAdminLogin(rlKey);
+    const gate = await checkAdminLogin(rlKey);
     if (!gate.allowed) {
       c.header('Retry-After', String(gate.retryAfterSec));
       throw new HTTPException(429, { message: 'Too many attempts, try again later' });
@@ -65,11 +65,11 @@ export const authRoutes = new Hono<AppEnv>()
     const passwordOk = await verifyPassword(password, hash);
 
     if (!cred || !passwordOk || cred.user.role !== 'ADMIN' || cred.user.isBanned) {
-      recordFailure(rlKey);
+      await recordFailure(rlKey);
       throw new HTTPException(401, { message: 'Invalid credentials' });
     }
 
-    recordSuccess(rlKey);
+    await recordSuccess(rlKey);
     const token = await signJwt({
       sub: cred.user.id,
       role: 'ADMIN',

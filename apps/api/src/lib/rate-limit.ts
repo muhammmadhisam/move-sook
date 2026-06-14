@@ -1,40 +1,51 @@
 import { ADMIN_LOGIN_LOCKOUT_MS, ADMIN_LOGIN_MAX_ATTEMPTS } from '@movesook/shared';
+import { redis } from './redis';
 
-// Minimal in-memory fixed-window limiter for admin login brute-force defence.
-// Adequate for a single API instance; swap for Redis when horizontally scaled.
-type Bucket = { count: number; firstAt: number; lockedUntil: number };
-const buckets = new Map<string, Bucket>();
+// Redis-backed fixed-window limiter for admin login brute-force defence. Shared
+// across instances (unlike the old in-memory Map). Two keys per principal:
+//   cnt:<key>  — failed-attempt counter, expires after the window
+//   lock:<key> — present (with TTL) once the threshold is tripped
+//
+// Fails OPEN on a Redis error: a Redis blip must not lock every admin out. The
+// bcrypt compare still gates each attempt, so the brute-force window is bounded.
+
+const cntKey = (key: string) => `rl:adminlogin:cnt:${key}`;
+const lockKey = (key: string) => `rl:adminlogin:lock:${key}`;
 
 export interface RateResult {
   allowed: boolean;
   retryAfterSec: number;
 }
 
-export function checkAdminLogin(key: string): RateResult {
-  const now = Date.now();
-  const b = buckets.get(key);
-
-  if (b && b.lockedUntil > now) {
-    return { allowed: false, retryAfterSec: Math.ceil((b.lockedUntil - now) / 1000) };
+export async function checkAdminLogin(key: string): Promise<RateResult> {
+  try {
+    const pttl = await redis.pttl(lockKey(key));
+    if (pttl > 0) return { allowed: false, retryAfterSec: Math.ceil(pttl / 1000) };
+    return { allowed: true, retryAfterSec: 0 };
+  } catch (err) {
+    console.error('[rate-limit] checkAdminLogin failed (allowing)', err);
+    return { allowed: true, retryAfterSec: 0 };
   }
-  if (!b || now - b.firstAt > ADMIN_LOGIN_LOCKOUT_MS) {
-    buckets.set(key, { count: 0, firstAt: now, lockedUntil: 0 });
-  }
-  return { allowed: true, retryAfterSec: 0 };
 }
 
 /** Record a failed attempt; locks the key once the threshold is exceeded. */
-export function recordFailure(key: string): void {
-  const now = Date.now();
-  const b = buckets.get(key) ?? { count: 0, firstAt: now, lockedUntil: 0 };
-  b.count += 1;
-  if (b.count >= ADMIN_LOGIN_MAX_ATTEMPTS) {
-    b.lockedUntil = now + ADMIN_LOGIN_LOCKOUT_MS;
+export async function recordFailure(key: string): Promise<void> {
+  try {
+    const count = await redis.incr(cntKey(key));
+    if (count === 1) await redis.pexpire(cntKey(key), ADMIN_LOGIN_LOCKOUT_MS);
+    if (count >= ADMIN_LOGIN_MAX_ATTEMPTS) {
+      await redis.set(lockKey(key), '1', 'PX', ADMIN_LOGIN_LOCKOUT_MS);
+    }
+  } catch (err) {
+    console.error('[rate-limit] recordFailure failed', err);
   }
-  buckets.set(key, b);
 }
 
-/** Clear the bucket on successful login. */
-export function recordSuccess(key: string): void {
-  buckets.delete(key);
+/** Clear the counter + lock on successful login. */
+export async function recordSuccess(key: string): Promise<void> {
+  try {
+    await redis.del(cntKey(key), lockKey(key));
+  } catch (err) {
+    console.error('[rate-limit] recordSuccess failed', err);
+  }
 }

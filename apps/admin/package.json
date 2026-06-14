@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --turbopack -p 9001",
+    "dev": "WATCHPACK_POLLING=${WATCHPACK_POLLING:-1500} next dev --turbopack -p 9001",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "eslint .",

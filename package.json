@@ -10,15 +10,11 @@
   "scripts": {
     "build": "turbo run build",
     "predev": "(lsof -ti :8787 -ti :9000 -ti :9001 | xargs kill -9) 2>/dev/null; exit 0",
-    "dev": "ulimit -n 524288 2>/dev/null; turbo run dev",
+    "dev": "ulimit -n 262144 2>/dev/null || ulimit -n 65536 2>/dev/null || true; turbo run dev",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
-    "cron:nudge": "bash scripts/cron/nudge-idle-drivers.sh",
-    "cron:expire-pending-payment": "bash scripts/cron/expire-pending-payment.sh",
-    "cron:install-nudge": "bash scripts/cron/install-nudge-cron.sh install",
-    "cron:uninstall-nudge": "bash scripts/cron/install-nudge-cron.sh uninstall",
     "clean": "turbo run clean && rm -rf node_modules"
   },
   "devDependencies": {
@@ -26,5 +22,10 @@
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
     "typescript": "^5.7.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "ioredis": "5.10.1"
+    }
   }
 }

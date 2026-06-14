@@ -165,7 +165,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
           K.SUPPORT_LINE_ID, K.SUPPORT_EMAIL, K.PAY_BANK_NAME, K.PAY_ACCOUNT_NAME,
           K.PAY_ACCOUNT_NUMBER, K.PAY_QR_URL, K.COMPANY_NAME, K.COMPANY_ADDRESS,
           K.COMPANY_TAX_ID, K.COMPANY_LOGO_URL, K.TERMS_VERSION, K.PRIVACY_VERSION,
-          K.PROHIBITED_ITEMS_LIST,
+          K.PROHIBITED_ITEMS_LIST, K.ADMIN_LINE_GROUP_ID,
         ],
       },
     },
@@ -207,7 +207,16 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     termsVersion: str(K.TERMS_VERSION, D.termsVersion),
     privacyVersion: str(K.PRIVACY_VERSION, D.privacyVersion),
     prohibitedItemsList: str(K.PROHIBITED_ITEMS_LIST, D.prohibitedItemsList),
+    adminLineGroupId: str(K.ADMIN_LINE_GROUP_ID, D.adminLineGroupId),
   };
+}
+
+/** LINE group/room/user ID the OA pushes ops alerts to. '' when not configured. */
+export async function getAdminLineGroupId(): Promise<string> {
+  const row = await prisma.appSetting.findUnique({
+    where: { key: APP_SETTING_KEYS.ADMIN_LINE_GROUP_ID },
+  });
+  return row?.value ?? '';
 }
 
 export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Promise<void> {
@@ -245,6 +254,7 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.TERMS_VERSION, patch.termsVersion);
   put(K.PRIVACY_VERSION, patch.privacyVersion);
   put(K.PROHIBITED_ITEMS_LIST, patch.prohibitedItemsList);
+  put(K.ADMIN_LINE_GROUP_ID, patch.adminLineGroupId);
   await Promise.all(
     entries.map(([key, value]) =>
       prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } }),

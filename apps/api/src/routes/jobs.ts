@@ -49,7 +49,7 @@ import {
 import { evaluatePromo } from '../lib/promo';
 import { getSurge } from '../lib/surge';
 import { buildJobDocument } from '../lib/pdf';
-import { notify, notifyAdmins } from '../lib/notify';
+import { notify, notifyAdmins, pushAdminLineGroup } from '../lib/notify';
 
 export const jobRoutes = new Hono<AppEnv>()
   // Public: price-per-km per vehicle type — used by the web summary screen (read-only display).
@@ -238,9 +238,18 @@ export const jobRoutes = new Hono<AppEnv>()
     });
     const customer = await prisma.customer.upsert({
       where: { userId: sub },
-      create: { userId: sub, name: me?.displayName ?? null, phone: me?.phone ?? null },
+      create: { userId: sub, name: me?.displayName ?? null, phone: input.contactPhone },
       update: {},
     });
+    // The on-site contact phone doubles as the customer's saved default: backfill
+    // it onto the User (and Customer) the first time they provide one, so the
+    // next job's form can prefill it. Never overwrite an existing number.
+    if (!me?.phone) {
+      await prisma.user.update({ where: { id: sub }, data: { phone: input.contactPhone } });
+    }
+    if (!customer.phone) {
+      await prisma.customer.update({ where: { id: customer.id }, data: { phone: input.contactPhone } });
+    }
     // Normalise the structured list, then derive the summary / count / flat photo list.
     const items = input.items.map((it) => ({
       name: it.name,
@@ -270,7 +279,7 @@ export const jobRoutes = new Hono<AppEnv>()
           pricingMode: input.pricingMode ?? 'CHARTER',
           itemCount,
           needsHelpers: input.needsHelpers ?? false,
-          contactPhone: input.contactPhone ?? null,
+          contactPhone: input.contactPhone,
           notes: input.notes ?? null,
           originAddress: input.originAddress,
           originProvince: input.originProvince,
@@ -330,6 +339,22 @@ export const jobRoutes = new Hono<AppEnv>()
         paymentRejectedReason: null, // clear any previous rejection on re-upload
       },
     });
+
+    // Alert ops that a slip is waiting for review: in-app to every admin + a push
+    // to the admin LINE group. Best-effort — must never break the slip upload.
+    const priceText = updated.priceQuoted != null ? `฿${updated.priceQuoted.toLocaleString('th-TH')}` : 'ไม่ระบุราคา';
+    const title = '💰 มีสลิปโอนเงินใหม่รอตรวจสอบ';
+    const lines = [
+      `${updated.originProvince} → ${updated.destProvince}`,
+      `รายการ: ${updated.itemDescription}`,
+      `ราคา: ${priceText}`,
+      updated.contactPhone ? `ติดต่อ: ${updated.contactPhone}` : null,
+      `งาน #${updated.id}`,
+    ].filter((l): l is string => Boolean(l));
+    const body = lines.join('\n');
+    await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
+    await pushAdminLineGroup(`${title}\n${body}`);
+
     return c.json(toJobDto(updated));
   })
 

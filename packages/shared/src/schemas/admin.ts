@@ -21,6 +21,7 @@ export const AdminStatsResponse = z.object({
   fillRate: z.number(), // accepted+ / posted, 0..1
   openJobs: z.number().int(), // POSTED, unassigned
   pendingDrivers: z.number().int(),
+  pendingPaymentReview: z.number().int(), // PENDING_PAYMENT jobs with a slip uploaded, awaiting admin approval
 });
 export type AdminStatsResponse = z.infer<typeof AdminStatsResponse>;
 

@@ -24,6 +24,12 @@ export function useAdminSession() {
       if (!res.ok) throw new Error('โหลดข้อมูลไม่สำเร็จ');
       return (await res.json()) as AdminStatsResponse;
     },
+    // Keep-alive: re-probe periodically while the tab is focused so the API
+    // sliding-refresh rolls the admin cookie forward even when the rest of the
+    // UI is serving cached reads. Pauses when backgrounded (refetchInterval does
+    // not run unfocused unless refetchIntervalInBackground), so idle sessions
+    // still lapse at the full TTL by design.
+    refetchInterval: 10 * 60 * 1000, // 10 minutes
   });
 
   useEffect(() => {

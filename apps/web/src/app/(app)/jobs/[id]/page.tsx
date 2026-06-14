@@ -16,6 +16,7 @@ import {
   PreviewableImage,
 } from '@movesook/ui';
 import type { JobDetailResponse } from '@movesook/shared';
+import { isCustomerCancellable } from '@movesook/shared';
 import { api, API_BASE_URL } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
@@ -69,6 +70,22 @@ export default function JobDetailPage() {
     },
     onSuccess: () => {
       toast.success('ยืนยันรับของแล้ว ขอบคุณค่ะ');
+      queryClient.invalidateQueries({ queryKey: ['job', id] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const cancel = useMutation({
+    mutationFn: async () => {
+      const res = await api.jobs[':id'].cancel.$post({ param: { id } });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'ยกเลิกงานไม่สำเร็จ');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('ยกเลิกงานแล้ว');
       queryClient.invalidateQueries({ queryKey: ['job', id] });
     },
     onError: (e: Error) => toast.error(e.message),
@@ -304,6 +321,25 @@ export default function JobDetailPage() {
 
           {/* Report a problem — once a driver is involved through delivery */}
           {DISPUTABLE.has(job.data.status) && <DisputeDialog jobId={id} />}
+
+          {/* Customer cancellation — allowed until the goods are picked up (incl. after
+              admin approves payment -> POSTED, and after a driver accepts). */}
+          {me?.role === 'USER' && isCustomerCancellable(job.data.status) && (
+            <Button
+              variant="ghost"
+              className="w-full text-destructive hover:text-destructive"
+              disabled={cancel.isPending}
+              onClick={() => {
+                const msg =
+                  job.data.status === 'ACCEPTED'
+                    ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
+                    : 'ยืนยันยกเลิกงานนี้?';
+                if (window.confirm(msg)) cancel.mutate();
+              }}
+            >
+              ยกเลิกงาน
+            </Button>
+          )}
 
           <Button asChild variant="outline" className="w-full">
             <Link href="/app">หน้าหลัก</Link>

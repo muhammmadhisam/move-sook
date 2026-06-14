@@ -20,10 +20,13 @@ type CookieKind = 'user' | 'admin';
  * Verify the JWT from the appropriate cookie and attach claims.
  * `user` and `admin` sessions live in separate cookies so they never collide.
  *
- * Sliding refresh: once a valid token is past its half-life, mint a fresh one
- * and re-set the cookie. Active sessions never expire mid-use; idle ones still
- * lapse after the full TTL since the last request. No separate refresh token —
- * the self-signed JWT in the httpOnly cookie rolls forward on its own.
+ * Sliding refresh: once a valid token has aged past a quarter of its lifetime,
+ * mint a fresh one and re-set the cookie. Refreshing eagerly (rather than only
+ * past half-life) means even a client that mostly serves cached reads keeps the
+ * cookie rolling on the few requests it does make. Active sessions never expire
+ * mid-use; idle ones still lapse after the full TTL since the last request. No
+ * separate refresh token — the self-signed JWT in the httpOnly cookie rolls
+ * forward on its own.
  */
 export function authenticate(kind: CookieKind) {
   const cookieName = kind === 'admin' ? env.ADMIN_COOKIE_NAME : env.USER_COOKIE_NAME;
@@ -40,9 +43,9 @@ export function authenticate(kind: CookieKind) {
     }
     const { claims } = result;
 
-    // Roll the session forward once it is past half its lifetime.
+    // Roll the session forward once it has aged past a quarter of its lifetime.
     const now = Math.floor(Date.now() / 1000);
-    if (claims.exp !== undefined && claims.exp - now < ttlSec / 2) {
+    if (claims.exp !== undefined && claims.exp - now < (ttlSec * 3) / 4) {
       const fresh = await signJwt({
         sub: claims.sub,
         role: claims.role,

@@ -37,6 +37,7 @@ import {
 } from '@movesook/ui';
 import {
   CreateJobInput,
+  ThaiPhoneSchema,
   JOB_POSTING_TERMS,
   MAX_ITEM_PHOTOS,
   VehicleTypeSchema,
@@ -56,6 +57,7 @@ import {
   type VehicleType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useAuth } from '@/hooks/use-auth';
 import { LocationPicker } from '@/components/location-picker';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
 import { ImageUpload } from '@/components/image-upload';
@@ -389,7 +391,10 @@ function SummaryStep({
 
 export default function NewJobPage() {
   const router = useRouter();
+  const { me } = useAuth();
   const [step, setStep] = useState(1); // 1..4
+  // วัน–เวลา: default "ไปตอนนี้" (on-demand). Switching to "นัดเวลา" reveals the picker.
+  const [scheduled, setScheduled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     vehicleType: 'PICKUP' as VehicleType,
@@ -464,6 +469,15 @@ export default function NewJobPage() {
     setPricingMode(j.pricingMode);
     toast.info('นำข้อมูลจากงานเดิมมาให้แล้ว — ตรวจสอบแล้วโพสต์ได้เลย');
   }, [sourceJob.data]);
+
+  // Prefill the on-site contact phone from the user's saved profile number, once,
+  // and only if they haven't already typed one (or had it filled from a re-book).
+  const phoneSeeded = useRef(false);
+  useEffect(() => {
+    if (phoneSeeded.current || !me?.phone) return;
+    phoneSeeded.current = true;
+    setForm((f) => (f.contactPhone ? f : { ...f, contactPhone: me.phone as string }));
+  }, [me?.phone]);
 
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
@@ -561,7 +575,7 @@ export default function NewJobPage() {
         vehicleType: form.vehicleType,
         itemCategory,
         needsHelpers,
-        contactPhone: form.contactPhone.trim() || undefined,
+        contactPhone: form.contactPhone,
         notes: form.notes.trim() || undefined,
         originAddress: form.originAddress,
         originProvince: form.originProvince,
@@ -575,7 +589,7 @@ export default function NewJobPage() {
         destLng: dest?.lng,
         destFloor: toInt(form.destFloor),
         destHasElevator: liftToBool(destLift),
-        scheduledAt: form.scheduledAt ? new Date(form.scheduledAt) : undefined,
+        scheduledAt: scheduled && form.scheduledAt ? new Date(form.scheduledAt) : undefined,
         pricingMode,
         promoCode: promoCode.trim() || undefined,
         acceptedTerms,
@@ -602,6 +616,12 @@ export default function NewJobPage() {
   const validateStep = (s: number): string | null => {
     if (s === 1 && filledItems.length === 0) {
       return 'เพิ่มรายการของที่ต้องการขนอย่างน้อย 1 รายการ';
+    }
+    if (s === 1 && !ThaiPhoneSchema.safeParse(form.contactPhone).success) {
+      return 'กรุณากรอกเบอร์ติดต่อหน้างานให้ถูกต้อง (เช่น 081-234-5678)';
+    }
+    if (s === 1 && scheduled && !form.scheduledAt) {
+      return 'เลือกวัน–เวลาที่ต้องการขนย้าย หรือเปลี่ยนเป็น “ไปตอนนี้”';
     }
     if (s === 2 && (form.originAddress.trim().length < 3 || !form.originProvince)) {
       return 'กรอกที่อยู่ต้นทางและเลือกจังหวัด';
@@ -817,17 +837,45 @@ export default function NewJobPage() {
               </label>
 
               <div className="grid gap-2">
-                <Label htmlFor="scheduledAt">วัน–เวลาที่ต้องการขนย้าย (ไม่บังคับ)</Label>
-                <Input
-                  id="scheduledAt"
-                  type="datetime-local"
-                  value={form.scheduledAt}
-                  onChange={(e) => set('scheduledAt')(e.target.value)}
-                />
+                <Label>วัน–เวลาที่ต้องการขนย้าย</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(
+                    [
+                      { mode: false, label: 'ไปตอนนี้', desc: 'ให้คนขับที่ว่างมารับงานทันที' },
+                      { mode: true, label: 'นัดเวลา', desc: 'ระบุวัน–เวลาที่สะดวก' },
+                    ] as const
+                  ).map(({ mode, label, desc }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      onClick={() => {
+                        setScheduled(mode);
+                        if (!mode) set('scheduledAt')('');
+                      }}
+                      className={cn(
+                        'rounded-lg border-2 p-2 text-left transition-colors',
+                        scheduled === mode
+                          ? 'border-primary bg-primary/5'
+                          : 'border-transparent bg-muted/40 hover:border-border',
+                      )}
+                    >
+                      <p className="text-sm font-semibold">{label}</p>
+                      <p className="text-[11px] leading-tight text-muted-foreground">{desc}</p>
+                    </button>
+                  ))}
+                </div>
+                {scheduled && (
+                  <Input
+                    id="scheduledAt"
+                    type="datetime-local"
+                    value={form.scheduledAt}
+                    onChange={(e) => set('scheduledAt')(e.target.value)}
+                  />
+                )}
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="contactPhone">เบอร์ติดต่อหน้างาน (ไม่บังคับ)</Label>
+                <Label htmlFor="contactPhone">เบอร์ติดต่อหน้างาน</Label>
                 <Input
                   id="contactPhone"
                   type="tel"
@@ -836,6 +884,9 @@ export default function NewJobPage() {
                   onChange={(e) => set('contactPhone')(e.target.value)}
                   placeholder="เช่น 081-234-5678"
                 />
+                <p className="text-xs text-muted-foreground">
+                  คนขับใช้เบอร์นี้โทรประสานหน้างาน · บันทึกเป็นค่าเริ่มต้นในโปรไฟล์ให้อัตโนมัติ
+                </p>
               </div>
 
               <div className="grid gap-2">

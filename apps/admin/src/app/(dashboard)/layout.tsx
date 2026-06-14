@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
   LineChart,
@@ -28,7 +29,7 @@ import {
   X,
 } from 'lucide-react';
 import { Button, cn } from '@movesook/ui';
-import { ADMIN_ROLE_LABEL, type AdminRole } from '@movesook/shared';
+import { ADMIN_ROLE_LABEL, type AdminRole, type AdminStatsResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useAdminWhoami } from '@/hooks/use-admin-whoami';
 
@@ -37,7 +38,13 @@ type NavItem = {
   label: string;
   icon: typeof LayoutDashboard;
   roles?: AdminRole[]; // omitted = visible to every admin tier
+  badgeKey?: NumericStatKey; // numeric stat to show as a notification badge
 };
+
+// Scalar (number-valued) keys of the stats response — eligible for a nav badge.
+type NumericStatKey = {
+  [K in keyof AdminStatsResponse]: AdminStatsResponse[K] extends number ? K : never;
+}[keyof AdminStatsResponse];
 
 type NavGroup = {
   title: string; // section header shown above the group's links
@@ -70,7 +77,13 @@ const NAV: NavGroup[] = [
   {
     title: 'การเงิน',
     items: [
-      { href: '/payments', label: 'อนุมัติการโอน', icon: ReceiptText, roles: ['SUPER', 'OPS', 'FINANCE'] },
+      {
+        href: '/payments',
+        label: 'อนุมัติการโอน',
+        icon: ReceiptText,
+        roles: ['SUPER', 'OPS', 'FINANCE'],
+        badgeKey: 'pendingPaymentReview',
+      },
       { href: '/transactions', label: 'ธุรกรรมกับลูกค้า', icon: Receipt, roles: ['SUPER', 'FINANCE'] },
       { href: '/payouts', label: 'ธุรกรรมกับคนขับ', icon: Banknote, roles: ['SUPER', 'FINANCE'] },
       { href: '/promos', label: 'โค้ดส่วนลด', icon: Ticket, roles: ['SUPER', 'FINANCE'] },
@@ -91,12 +104,14 @@ function SidebarBody({
   groups,
   pathname,
   roleLabel,
+  stats,
   onNavigate,
   onLogout,
 }: {
   groups: NavGroup[];
   pathname: string;
   roleLabel?: string;
+  stats?: AdminStatsResponse;
   onNavigate?: () => void;
   onLogout: () => void;
 }) {
@@ -119,8 +134,9 @@ function SidebarBody({
             <span className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-navy-400">
               {group.title}
             </span>
-            {group.items.map(({ href, label, icon: Icon }) => {
+            {group.items.map(({ href, label, icon: Icon, badgeKey }) => {
               const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+              const count = badgeKey ? (stats?.[badgeKey] ?? 0) : 0;
               return (
                 <Link
                   key={href}
@@ -134,7 +150,19 @@ function SidebarBody({
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  {label}
+                  <span className="flex-1">{label}</span>
+                  {count > 0 && (
+                    <span
+                      className={cn(
+                        'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums',
+                        active
+                          ? 'bg-primary-foreground text-primary'
+                          : 'bg-red-500 text-white',
+                      )}
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
                 </Link>
               );
             })}
@@ -159,6 +187,19 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { data: me } = useAdminWhoami();
   const [mobileOpen, setMobileOpen] = useState(false);
 
+  // Lightweight poll for notification badges (e.g. slips awaiting approval). Shares
+  // the ['admin', 'stats'] cache with the dashboard/session probe.
+  const { data: stats } = useQuery({
+    queryKey: ['admin', 'stats'],
+    queryFn: async (): Promise<AdminStatsResponse> => {
+      const res = await api.admin.stats.$get();
+      if (!res.ok) throw new Error('โหลดข้อมูลไม่สำเร็จ');
+      return (await res.json()) as AdminStatsResponse;
+    },
+    refetchInterval: 30_000,
+    retry: false,
+  });
+
   // Close the mobile drawer whenever the route changes.
   useEffect(() => {
     setMobileOpen(false);
@@ -181,7 +222,13 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     <div className="flex min-h-screen">
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-navy-800 bg-navy-900 p-4 text-white lg:flex">
-        <SidebarBody groups={groups} pathname={pathname} roleLabel={roleLabel} onLogout={logout} />
+        <SidebarBody
+          groups={groups}
+          pathname={pathname}
+          roleLabel={roleLabel}
+          stats={stats}
+          onLogout={logout}
+        />
       </aside>
 
       {/* Mobile drawer */}
@@ -205,6 +252,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               groups={groups}
               pathname={pathname}
               roleLabel={roleLabel}
+              stats={stats}
               onNavigate={() => setMobileOpen(false)}
               onLogout={logout}
             />

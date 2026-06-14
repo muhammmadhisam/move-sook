@@ -16,10 +16,29 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  redis:
+    image: redis:7-alpine
+    container_name: movesook-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - movesook_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
   api:
     image: devpala/movesook-api:latest
     container_name: movesook-admin
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
       - "8888:8787"
     env_file:
@@ -32,3 +51,4 @@ services:
 
 volumes:
   movesook_pgdata:
+  movesook_redisdata:

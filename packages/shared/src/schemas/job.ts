@@ -11,6 +11,20 @@ const floor = z.number().int().min(0).max(200);
 // Max photos a customer can attach to a single item.
 export const MAX_ITEM_PHOTOS = 5;
 
+// Thai contact phone. Accepts the way people actually type it (spaces, dashes,
+// parens), normalises to bare digits, then requires a 9–10 digit number starting
+// with 0 (mobile = 10, e.g. Bangkok landline = 9). Clients and the API share
+// this so a job always stores a clean, dial-able number.
+export const ThaiPhoneSchema = z
+  .string()
+  .trim()
+  .transform((v) => v.replace(/[\s\-()]/g, ''))
+  .pipe(
+    z
+      .string()
+      .regex(/^0\d{8,9}$/, { message: 'กรุณากรอกเบอร์โทรให้ถูกต้อง (เช่น 081-234-5678)' }),
+  );
+
 // One item the customer wants moved (structured "add item" table row).
 export const JobItemSchema = z.object({
   name: z.string().trim().min(1).max(200),
@@ -26,7 +40,7 @@ export const CreateJobInput = z.object({
   vehicleType: VehicleTypeSchema,
   itemCategory: CargoCategorySchema.optional(), // declared cargo category (drives the prohibited-items reminder)
   needsHelpers: z.boolean().optional(), // customer wants movers to help carry
-  contactPhone: z.string().trim().min(3).max(20).optional(), // on-site contact
+  contactPhone: ThaiPhoneSchema, // on-site contact — required so the driver can reach the customer
   notes: z.string().trim().max(1000).optional(), // special instructions
   originAddress: z.string().min(3),
   originProvince: ProvinceNameSchema,

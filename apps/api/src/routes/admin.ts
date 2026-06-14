@@ -170,10 +170,13 @@ export const adminRoutes = new Hono<AppEnv>()
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const [grouped, jobsToday, pendingDrivers, delivered] = await Promise.all([
+    const [grouped, jobsToday, pendingDrivers, pendingPaymentReview, delivered] = await Promise.all([
       prisma.job.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.job.count({ where: { createdAt: { gte: startOfDay } } }),
       prisma.driver.count({ where: { verifyStatus: 'PENDING' } }),
+      // Slips uploaded by customers that are sitting in the queue waiting for an admin
+      // to approve/reject — the actionable subset of PENDING_PAYMENT.
+      prisma.job.count({ where: { status: 'PENDING_PAYMENT', paymentSlipUrl: { not: null } } }),
       prisma.job.findMany({
         where: { status: 'DELIVERED', priceQuoted: { not: null }, commissionPct: { not: null } },
         select: { priceQuoted: true, commissionPct: true },
@@ -210,6 +213,7 @@ export const adminRoutes = new Hono<AppEnv>()
       fillRate: Number(fillRate.toFixed(3)),
       openJobs: jobsByStatus.POSTED,
       pendingDrivers,
+      pendingPaymentReview,
     };
     return c.json(body);
   })

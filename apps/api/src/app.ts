@@ -14,9 +14,13 @@ import { adminRoutes } from './routes/admin';
 import { uploadRoutes, serveUploads } from './routes/uploads';
 import { webhookRoutes } from './routes/webhooks';
 
+// Skip request logging for the health probe — load balancers / uptime monitors
+// hit GET /health constantly and would otherwise drown the logs.
+const httpLogger = logger();
+
 // One chain so hc<AppType>() sees every mounted route's literal types.
 const app = new Hono<AppEnv>()
-  .use('*', logger())
+  .use('*', (c, next) => (c.req.path === '/health' ? next() : httpLogger(c, next)))
   .use(
     '*',
     cors({

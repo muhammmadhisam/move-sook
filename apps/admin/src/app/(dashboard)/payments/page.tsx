@@ -42,6 +42,7 @@ export default function PaymentsQueuePage() {
     (a, b) => Number(Boolean(b.paymentSlipUrl)) - Number(Boolean(a.paymentSlipUrl)),
   );
   const awaitingReview = items.filter((j) => j.paymentSlipUrl).length;
+  const awaitingCustomer = items.length - awaitingReview;
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'payments'] });
@@ -56,6 +57,27 @@ export default function PaymentsQueuePage() {
           {items.length} ทั้งหมด)
         </p>
       </div>
+
+      {awaitingReview > 0 && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800"
+        >
+          <span className="relative mt-0.5 flex h-2.5 w-2.5 shrink-0">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+          </span>
+          <div className="text-sm">
+            <p className="font-semibold">
+              มี {awaitingReview} รายการรอตรวจสลิป
+            </p>
+            <p className="text-red-700/80">
+              ลูกค้าโอนเงินและอัปโหลดสลิปแล้ว กรุณาตรวจสอบเพื่ออนุมัติและเผยแพร่งานให้คนขับ
+              {awaitingCustomer > 0 ? ` · อีก ${awaitingCustomer} รายการรอลูกค้าโอน` : ''}
+            </p>
+          </div>
+        </div>
+      )}
 
       {jobs.isLoading && <p className="text-sm text-muted-foreground">กำลังโหลด…</p>}
 

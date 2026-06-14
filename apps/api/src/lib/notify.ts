@@ -1,7 +1,9 @@
 import { prisma } from '@movesook/db';
 import type { NotificationType } from '@movesook/shared';
-import { pushLineText, multicastLineText } from '@movesook/auth';
-import { env } from '../config';
+// Import from the leaf queue module (not ../queues) to avoid an import cycle:
+// queues/index → maintenance → cron-tasks → notify.
+import { enqueuePush, enqueueMulticast } from '../queues/notifications';
+import { getAdminLineGroupId } from './settings';
 
 type NotifyInput = {
   userId: string;
@@ -17,10 +19,11 @@ function formatPush(title: string, body: string): string {
 }
 
 /**
- * Create an in-app notification for a recipient, then mirror it to LINE push
- * (best-effort). A failure of either channel must never break the action that
- * triggered it. LINE push is skipped automatically when no channel access token
- * is configured (see config.LINE_CHANNEL_ACCESS_TOKEN).
+ * Create an in-app notification for a recipient, then mirror it to LINE push via
+ * the notifications queue (retry/backoff handled by the worker). The in-app row
+ * is the source of truth; a failure of either channel must never break the
+ * action that triggered it. Push is skipped automatically when no channel access
+ * token is configured (see queues/notifications.ts).
  */
 export async function notify(input: NotifyInput): Promise<void> {
   try {
@@ -37,21 +40,17 @@ export async function notify(input: NotifyInput): Promise<void> {
     console.error('[notify] failed', input.type, err);
   }
 
-  // Side channel: push to the recipient's LINE account if we know it.
+  // Side channel: enqueue a LINE push to the recipient's account if we know it.
   try {
     const user = await prisma.user.findUnique({
       where: { id: input.userId },
       select: { lineUserId: true },
     });
     if (user?.lineUserId) {
-      await pushLineText(
-        env.LINE_CHANNEL_ACCESS_TOKEN,
-        user.lineUserId,
-        formatPush(input.title, input.body),
-      );
+      await enqueuePush(user.lineUserId, formatPush(input.title, input.body));
     }
   } catch (err) {
-    console.error('[notify] line push failed', input.type, err);
+    console.error('[notify] line push enqueue failed', input.type, err);
   }
 }
 
@@ -82,6 +81,23 @@ export async function notifyAdmins(input: Omit<NotifyInput, 'userId'>): Promise<
   await notifyMany(admins.map((a) => ({ ...input, userId: a.id })));
 }
 
+/**
+ * Push a single text alert to the admin LINE group/room configured in settings
+ * (`admin_line_group_id`). Best-effort: a no-op when no group is configured or no
+ * channel access token is set, and never throws (callers must not break on it).
+ * The group ID works as a LINE push `to`, same as a user ID — the OA bot must be
+ * a member of that group/room.
+ */
+export async function pushAdminLineGroup(text: string): Promise<void> {
+  try {
+    const groupId = await getAdminLineGroupId();
+    if (!groupId) return;
+    await enqueuePush(groupId, text);
+  } catch (err) {
+    console.error('[pushAdminLineGroup] failed', err);
+  }
+}
+
 /** Fan-out a freshly-posted open job to approved, available drivers in its origin province. */
 export async function notifyNewJobToArea(job: {
   id: string;
@@ -109,15 +125,15 @@ export async function notifyNewJobToArea(job: {
     })),
   );
 
-  // Push to every matched driver who has a linked LINE account (best-effort).
+  // Enqueue a LINE multicast to every matched driver with a linked account.
   try {
     const lineIds = linked
       .map((d) => d.user?.lineUserId)
       .filter((id): id is string => Boolean(id));
     if (lineIds.length > 0) {
-      await multicastLineText(env.LINE_CHANNEL_ACCESS_TOKEN, lineIds, formatPush(title, body));
+      await enqueueMulticast(lineIds, formatPush(title, body));
     }
   } catch (err) {
-    console.error('[notifyNewJobToArea] line multicast failed', err);
+    console.error('[notifyNewJobToArea] line multicast enqueue failed', err);
   }
 }

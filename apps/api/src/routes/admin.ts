@@ -17,6 +17,7 @@ import {
   AdminCreateJobInput,
   AdminPatchJobInput,
   AdminRejectPaymentInput,
+  AdminRejectDestChangeInput,
   AdminVerifyDriverInput,
   AdminListTransactionsQuery,
   AdminUpdateTransactionInput,
@@ -40,8 +41,15 @@ import {
   AdminListBlacklistQuery,
   AdminCreateBlacklistInput,
   AdminListPromosQuery,
+  AdminListPromoRedemptionsQuery,
   AdminCreatePromoInput,
   AdminUpdatePromoInput,
+  AdminListBlogQuery,
+  AdminCreateBlogInput,
+  AdminUpdateBlogInput,
+  AdminListLedgerQuery,
+  AdminCreateLedgerInput,
+  AdminUpdateLedgerInput,
   AddCustomerNoteInput,
   AdminUpdateCustomerInput,
   computeDiscount,
@@ -76,7 +84,11 @@ import {
   type CustomerDto,
   type CustomerNoteDto,
   type BlacklistDto,
+  type BlogPostDto,
+  type LedgerEntryDto,
+  type LedgerSummaryResponse,
   type PromoCodeDto,
+  type PromoRedemptionDto,
   type DisputeDto,
   type DriverDto,
   type DriverVerifyStatus,
@@ -88,7 +100,7 @@ import {
 import { hashPassword } from '@movesook/auth';
 import type { AppEnv } from '../lib/context';
 import { authenticate, requireRole, requireAdminRole } from '../middleware/auth';
-import { toJobDto, toDriverDto, toCustomerDto } from '../lib/serialize';
+import { toJobDto, toDriverDto, toCustomerDto, toBlogPostDto, toLedgerEntryDto } from '../lib/serialize';
 import { pageArgs, orderByOf } from '../lib/paginate';
 import {
   getCommissionPct,
@@ -170,13 +182,28 @@ export const adminRoutes = new Hono<AppEnv>()
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
 
-    const [grouped, jobsToday, pendingDrivers, pendingPaymentReview, delivered] = await Promise.all([
+    const [
+      grouped,
+      jobsToday,
+      pendingDrivers,
+      pendingPaymentReview,
+      openDisputes,
+      pendingDestChanges,
+      slipRejectionEscalations,
+      delivered,
+    ] = await Promise.all([
       prisma.job.groupBy({ by: ['status'], _count: { _all: true } }),
       prisma.job.count({ where: { createdAt: { gte: startOfDay } } }),
       prisma.driver.count({ where: { verifyStatus: 'PENDING' } }),
       // Slips uploaded by customers that are sitting in the queue waiting for an admin
       // to approve/reject — the actionable subset of PENDING_PAYMENT.
       prisma.job.count({ where: { status: 'PENDING_PAYMENT', paymentSlipUrl: { not: null } } }),
+      prisma.dispute.count({ where: { status: 'OPEN' } }),
+      // Destination-change requests awaiting an admin: either the request itself
+      // (REQUESTED) or the uploaded fee slip (PENDING_REVIEW).
+      prisma.job.count({ where: { destChangeStatus: { in: ['REQUESTED', 'PENDING_REVIEW'] } } }),
+      // Jobs whose payment slip has been rejected repeatedly — flagged for escalation.
+      prisma.job.count({ where: { paymentRejectedCount: { gte: 3 } } }),
       prisma.job.findMany({
         where: { status: 'DELIVERED', priceQuoted: { not: null }, commissionPct: { not: null } },
         select: { priceQuoted: true, commissionPct: true },
@@ -214,6 +241,9 @@ export const adminRoutes = new Hono<AppEnv>()
       openJobs: jobsByStatus.POSTED,
       pendingDrivers,
       pendingPaymentReview,
+      openDisputes,
+      pendingDestChanges,
+      slipRejectionEscalations,
     };
     return c.json(body);
   })
@@ -1121,6 +1151,194 @@ export const adminRoutes = new Hono<AppEnv>()
         type: 'JOB_STATUS',
         title: 'สลิปการโอนไม่ผ่าน',
         body: updated.paymentRejectedReason ?? 'กรุณาอัปโหลดสลิปใหม่อีกครั้ง',
+        jobId: updated.id,
+      });
+    }
+    return c.json(toJobDto(updated));
+  })
+
+  // ── Destination-change request review ──
+  // Approve the REQUEST itself: the customer may now transfer the change fee.
+  .post('/jobs/:id/dest-change/approve', requireAdminRole('SUPER', 'OPS'), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.destChangeStatus !== 'REQUESTED') {
+      throw new HTTPException(422, { message: 'คำขอนี้ไม่ได้อยู่ในขั้นรออนุมัติ' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: 'APPROVED_AWAITING_PAYMENT',
+        destChangeApprovedById: actorId,
+        destChangeRejectedReason: null,
+      },
+    });
+    await writeAudit({
+      actorId,
+      action: 'job.destchange.approve',
+      targetType: 'job',
+      targetId: id,
+      metadata: { newAddress: updated.destChangeNewAddress, fee: updated.destChangeFee },
+    });
+    if (job.customer.userId) {
+      await notify({
+        userId: job.customer.userId,
+        type: 'JOB_STATUS',
+        title: 'อนุมัติคำขอเปลี่ยนที่อยู่แล้ว',
+        body: `กรุณาโอนค่าธรรมเนียม ฿${(updated.destChangeFee ?? 0).toLocaleString('th-TH')} แล้วอัปโหลดสลิปเพื่อยืนยันการเปลี่ยนที่อยู่`,
+        jobId: updated.id,
+      });
+    }
+    return c.json(toJobDto(updated));
+  })
+
+  // Reject the destination-change request (customer may raise a new one later).
+  .post('/jobs/:id/dest-change/reject', requireAdminRole('SUPER', 'OPS'), zValidator('json', AdminRejectDestChangeInput), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const { reason } = c.req.valid('json');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.destChangeStatus !== 'REQUESTED' && job.destChangeStatus !== 'PENDING_REVIEW') {
+      throw new HTTPException(422, { message: 'ไม่มีคำขอเปลี่ยนที่อยู่ที่ปฏิเสธได้' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: 'REJECTED',
+        destChangeRejectedReason: reason ?? 'คำขอเปลี่ยนที่อยู่ไม่ได้รับการอนุมัติ',
+        destChangeSlipUrl: null,
+        destChangeSlipUploadedAt: null,
+      },
+    });
+    await writeAudit({
+      actorId,
+      action: 'job.destchange.reject',
+      targetType: 'job',
+      targetId: id,
+      metadata: { reason: updated.destChangeRejectedReason },
+    });
+    if (job.customer.userId) {
+      await notify({
+        userId: job.customer.userId,
+        type: 'JOB_STATUS',
+        title: 'คำขอเปลี่ยนที่อยู่ไม่ผ่าน',
+        body: updated.destChangeRejectedReason ?? 'คำขอเปลี่ยนที่อยู่ไม่ได้รับการอนุมัติ',
+        jobId: updated.id,
+      });
+    }
+    return c.json(toJobDto(updated));
+  })
+
+  // Approve the change-fee slip: write the new destination onto the live job in one
+  // transaction, then notify the assigned driver of the re-route.
+  .post('/jobs/:id/dest-change/payment/approve', requireAdminRole('SUPER', 'OPS', 'FINANCE'), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { userId: true } },
+        driver: { select: { userId: true } },
+      },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.destChangeStatus !== 'PENDING_REVIEW') {
+      throw new HTTPException(422, { message: 'ไม่มีสลิปค่าเปลี่ยนที่อยู่รออนุมัติ' });
+    }
+    if (!job.destChangeNewAddress || !job.destChangeNewProvince) {
+      throw new HTTPException(422, { message: 'ข้อมูลที่อยู่ใหม่ไม่ครบถ้วน' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        // Promote the pending destination to the live fields.
+        destAddress: job.destChangeNewAddress,
+        destProvince: job.destChangeNewProvince,
+        destLat: job.destChangeNewLat,
+        destLng: job.destChangeNewLng,
+        destChangeStatus: 'COMPLETED',
+        destChangeApprovedById: actorId,
+        destChangeCompletedAt: new Date(),
+        destChangeRejectedReason: null,
+      },
+    });
+    await writeAudit({
+      actorId,
+      action: 'job.destchange.complete',
+      targetType: 'job',
+      targetId: id,
+      metadata: {
+        from: `${job.destAddress} (${job.destProvince})`,
+        to: `${updated.destAddress} (${updated.destProvince})`,
+        fee: updated.destChangeFee,
+      },
+    });
+    // Tell the driver the drop-off moved — this is the whole point of the flow.
+    if (job.driver?.userId) {
+      await notify({
+        userId: job.driver.userId,
+        type: 'JOB_STATUS',
+        title: 'ที่อยู่ปลายทางมีการเปลี่ยนแปลง',
+        body: `งาน #${updated.id} เปลี่ยนปลายทางเป็น: ${updated.destAddress} (${updated.destProvince})`,
+        jobId: updated.id,
+      });
+    }
+    if (job.customer.userId) {
+      await notify({
+        userId: job.customer.userId,
+        type: 'JOB_STATUS',
+        title: 'เปลี่ยนที่อยู่ปลายทางสำเร็จ',
+        body: `แจ้งคนขับเรียบร้อยแล้ว ปลายทางใหม่: ${updated.destAddress} (${updated.destProvince})`,
+        jobId: updated.id,
+      });
+    }
+    return c.json(toJobDto(updated));
+  })
+
+  // Reject the change-fee slip: bounce it back so the customer can re-upload.
+  .post('/jobs/:id/dest-change/payment/reject', requireAdminRole('SUPER', 'OPS', 'FINANCE'), zValidator('json', AdminRejectDestChangeInput), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const { reason } = c.req.valid('json');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.destChangeStatus !== 'PENDING_REVIEW') {
+      throw new HTTPException(422, { message: 'ไม่มีสลิปค่าเปลี่ยนที่อยู่รอตรวจสอบ' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: 'APPROVED_AWAITING_PAYMENT',
+        destChangeSlipUrl: null,
+        destChangeSlipUploadedAt: null,
+        destChangeRejectedReason: reason ?? 'สลิปไม่ถูกต้อง กรุณาอัปโหลดใหม่',
+      },
+    });
+    await writeAudit({
+      actorId,
+      action: 'job.destchange.payment.reject',
+      targetType: 'job',
+      targetId: id,
+      metadata: { reason: updated.destChangeRejectedReason },
+    });
+    if (job.customer.userId) {
+      await notify({
+        userId: job.customer.userId,
+        type: 'JOB_STATUS',
+        title: 'สลิปค่าเปลี่ยนที่อยู่ไม่ผ่าน',
+        body: updated.destChangeRejectedReason ?? 'กรุณาอัปโหลดสลิปใหม่อีกครั้ง',
         jobId: updated.id,
       });
     }
@@ -2380,6 +2598,33 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json({ items, total, page: q.page, pageSize: q.pageSize });
   })
 
+  // Per-code redemption log: which jobs (and customers) used a promo, and when.
+  // Derived from Job.promoCode — there is no separate redemption table.
+  .get('/promos/:code/redemptions', zValidator('query', AdminListPromoRedemptionsQuery), async (c) => {
+    const code = c.req.param('code').toUpperCase();
+    const q = c.req.valid('query');
+    const where = { promoCode: code };
+    const [rows, total] = await Promise.all([
+      prisma.job.findMany({
+        where,
+        orderBy: { createdAt: q.sortDir === 'asc' ? 'asc' : 'desc' },
+        include: { customer: { select: { name: true, user: { select: { displayName: true } } } } },
+        ...pageArgs(q),
+      }),
+      prisma.job.count({ where }),
+    ]);
+    const items: PromoRedemptionDto[] = rows.map((j) => ({
+      jobId: j.id,
+      customerId: j.customerId,
+      customerName: j.customer.name ?? j.customer.user?.displayName ?? null,
+      status: j.status,
+      priceQuoted: j.priceQuoted,
+      discountAmount: j.discountAmount,
+      createdAt: j.createdAt.toISOString(),
+    }));
+    return c.json({ items, total, page: q.page, pageSize: q.pageSize });
+  })
+
   .post('/promos', requireAdminRole('SUPER', 'FINANCE'), zValidator('json', AdminCreatePromoInput), async (c) => {
     const input = c.req.valid('json');
     const actorId = c.get('claims').sub;
@@ -2440,4 +2685,214 @@ export const adminRoutes = new Hono<AppEnv>()
       createdAt: row.createdAt.toISOString(),
     };
     return c.json(dto);
+  })
+
+  // ── Blog (marketing content) ──
+  // Manages the BlogPost table that backs the public /blog site. Content ops:
+  // gated to SUPER/OPS for writes; any admin can list/read for context.
+  .get('/blog', zValidator('query', AdminListBlogQuery), async (c) => {
+    const q = c.req.valid('query');
+    const where = q.status ? { status: q.status } : {};
+    const [rows, total] = await Promise.all([
+      prisma.blogPost.findMany({
+        where,
+        orderBy: orderByOf(q.sortBy, q.sortDir, ['createdAt', 'publishedAt', 'title'], 'createdAt'),
+        ...pageArgs(q),
+      }),
+      prisma.blogPost.count({ where }),
+    ]);
+    const items: BlogPostDto[] = rows.map(toBlogPostDto);
+    return c.json({ items, total, page: q.page, pageSize: q.pageSize });
+  })
+  .get('/blog/:id', async (c) => {
+    const id = c.req.param('id');
+    const row = await prisma.blogPost.findUnique({ where: { id } });
+    if (!row) throw new HTTPException(404, { message: 'Blog post not found' });
+    return c.json(toBlogPostDto(row));
+  })
+  .post('/blog', requireAdminRole('SUPER', 'OPS'), zValidator('json', AdminCreateBlogInput), async (c) => {
+    const input = c.req.valid('json');
+    const actorId = c.get('claims').sub;
+    const slug = input.slug.trim().toLowerCase();
+    const existing = await prisma.blogPost.findUnique({ where: { slug } });
+    if (existing) throw new HTTPException(409, { message: 'มี slug นี้อยู่แล้ว' });
+    const status = input.status ?? 'DRAFT';
+    const row = await prisma.blogPost.create({
+      data: {
+        slug,
+        title: input.title,
+        excerpt: input.excerpt,
+        body: input.body,
+        coverImageUrl: input.coverImageUrl ?? null,
+        ...(input.author ? { author: input.author } : {}),
+        status,
+        // Stamp publishedAt the moment it first goes live so ordering/sitemap work.
+        publishedAt: status === 'PUBLISHED' ? new Date() : null,
+      },
+    });
+    await writeAudit({ actorId, action: 'blog.create', targetType: 'setting', targetId: row.id });
+    return c.json(toBlogPostDto(row), 201);
+  })
+  .patch('/blog/:id', requireAdminRole('SUPER', 'OPS'), zValidator('json', AdminUpdateBlogInput), async (c) => {
+    const id = c.req.param('id');
+    const input = c.req.valid('json');
+    const actorId = c.get('claims').sub;
+    const existing = await prisma.blogPost.findUnique({ where: { id } });
+    if (!existing) throw new HTTPException(404, { message: 'Blog post not found' });
+    if (input.slug !== undefined) {
+      const slug = input.slug.trim().toLowerCase();
+      const clash = await prisma.blogPost.findUnique({ where: { slug } });
+      if (clash && clash.id !== id) throw new HTTPException(409, { message: 'มี slug นี้อยู่แล้ว' });
+    }
+    // First transition to PUBLISHED stamps publishedAt; later edits keep it.
+    const goingLive = input.status === 'PUBLISHED' && existing.publishedAt === null;
+    const row = await prisma.blogPost.update({
+      where: { id },
+      data: {
+        ...(input.slug !== undefined ? { slug: input.slug.trim().toLowerCase() } : {}),
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.excerpt !== undefined ? { excerpt: input.excerpt } : {}),
+        ...(input.body !== undefined ? { body: input.body } : {}),
+        ...(input.coverImageUrl !== undefined ? { coverImageUrl: input.coverImageUrl } : {}),
+        ...(input.author !== undefined ? { author: input.author } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(goingLive ? { publishedAt: new Date() } : {}),
+      },
+    });
+    await writeAudit({ actorId, action: 'blog.update', targetType: 'setting', targetId: id });
+    return c.json(toBlogPostDto(row));
+  })
+  .delete('/blog/:id', requireAdminRole('SUPER', 'OPS'), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const existing = await prisma.blogPost.findUnique({ where: { id } });
+    if (!existing) throw new HTTPException(404, { message: 'Blog post not found' });
+    await prisma.blogPost.delete({ where: { id } });
+    await writeAudit({ actorId, action: 'blog.delete', targetType: 'setting', targetId: id });
+    return c.json({ id, deleted: true });
+  })
+
+  // ── Ledger (income/expense bookkeeping) ──
+  // The company's own cash ledger — manual INCOME/EXPENSE entries with optional
+  // receipt/document attachments. Distinct from the auto-derived commission
+  // Transaction ledger. Finance-only: gated to SUPER/FINANCE throughout.
+  .get('/ledger', requireAdminRole('SUPER', 'FINANCE'), zValidator('query', AdminListLedgerQuery), async (c) => {
+    const q = c.req.valid('query');
+    const where = {
+      ...(q.type ? { type: q.type } : {}),
+      ...(q.category ? { category: q.category } : {}),
+      ...(q.from || q.to
+        ? {
+            occurredAt: {
+              ...(q.from ? { gte: new Date(q.from) } : {}),
+              ...(q.to ? { lte: new Date(q.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const [rows, total] = await Promise.all([
+      prisma.ledgerEntry.findMany({
+        where,
+        orderBy: orderByOf(q.sortBy, q.sortDir, ['occurredAt', 'amount', 'createdAt'], 'occurredAt'),
+        include: { attachments: true, createdBy: { select: { displayName: true } } },
+        ...pageArgs(q),
+      }),
+      prisma.ledgerEntry.count({ where }),
+    ]);
+    const items: LedgerEntryDto[] = rows.map(toLedgerEntryDto);
+    return c.json({ items, total, page: q.page, pageSize: q.pageSize });
+  })
+  // Totals for the current filter (income / expense / net) — drives the summary cards.
+  .get('/ledger/summary', requireAdminRole('SUPER', 'FINANCE'), zValidator('query', AdminListLedgerQuery), async (c) => {
+    const q = c.req.valid('query');
+    const where = {
+      ...(q.type ? { type: q.type } : {}),
+      ...(q.category ? { category: q.category } : {}),
+      ...(q.from || q.to
+        ? {
+            occurredAt: {
+              ...(q.from ? { gte: new Date(q.from) } : {}),
+              ...(q.to ? { lte: new Date(q.to) } : {}),
+            },
+          }
+        : {}),
+    };
+    const grouped = await prisma.ledgerEntry.groupBy({
+      by: ['type'],
+      where,
+      _sum: { amount: true },
+    });
+    const income = grouped.find((g) => g.type === 'INCOME')?._sum.amount ?? 0;
+    const expense = grouped.find((g) => g.type === 'EXPENSE')?._sum.amount ?? 0;
+    const body: LedgerSummaryResponse = { income, expense, net: income - expense };
+    return c.json(body);
+  })
+  .get('/ledger/:id', requireAdminRole('SUPER', 'FINANCE'), async (c) => {
+    const id = c.req.param('id');
+    const row = await prisma.ledgerEntry.findUnique({
+      where: { id },
+      include: { attachments: true, createdBy: { select: { displayName: true } } },
+    });
+    if (!row) throw new HTTPException(404, { message: 'ไม่พบรายการบัญชี' });
+    return c.json(toLedgerEntryDto(row));
+  })
+  .post('/ledger', requireAdminRole('SUPER', 'FINANCE'), zValidator('json', AdminCreateLedgerInput), async (c) => {
+    const input = c.req.valid('json');
+    const actorId = c.get('claims').sub;
+    const row = await prisma.ledgerEntry.create({
+      data: {
+        type: input.type,
+        category: input.category.trim(),
+        title: input.title.trim(),
+        amount: input.amount,
+        note: input.note ?? null,
+        occurredAt: new Date(input.occurredAt),
+        createdById: actorId,
+        ...(input.attachments?.length
+          ? { attachments: { create: input.attachments.map((a) => ({ url: a.url, name: a.name, mimeType: a.mimeType })) } }
+          : {}),
+      },
+      include: { attachments: true, createdBy: { select: { displayName: true } } },
+    });
+    await writeAudit({ actorId, action: 'ledger.create', targetType: 'transaction', targetId: row.id });
+    return c.json(toLedgerEntryDto(row), 201);
+  })
+  .patch('/ledger/:id', requireAdminRole('SUPER', 'FINANCE'), zValidator('json', AdminUpdateLedgerInput), async (c) => {
+    const id = c.req.param('id');
+    const input = c.req.valid('json');
+    const actorId = c.get('claims').sub;
+    const existing = await prisma.ledgerEntry.findUnique({ where: { id } });
+    if (!existing) throw new HTTPException(404, { message: 'ไม่พบรายการบัญชี' });
+    const row = await prisma.ledgerEntry.update({
+      where: { id },
+      data: {
+        ...(input.type !== undefined ? { type: input.type } : {}),
+        ...(input.category !== undefined ? { category: input.category.trim() } : {}),
+        ...(input.title !== undefined ? { title: input.title.trim() } : {}),
+        ...(input.amount !== undefined ? { amount: input.amount } : {}),
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        ...(input.occurredAt !== undefined ? { occurredAt: new Date(input.occurredAt) } : {}),
+        // A present attachments array replaces the whole set (drop old, add new).
+        ...(input.attachments !== undefined
+          ? {
+              attachments: {
+                deleteMany: {},
+                create: input.attachments.map((a) => ({ url: a.url, name: a.name, mimeType: a.mimeType })),
+              },
+            }
+          : {}),
+      },
+      include: { attachments: true, createdBy: { select: { displayName: true } } },
+    });
+    await writeAudit({ actorId, action: 'ledger.update', targetType: 'transaction', targetId: id });
+    return c.json(toLedgerEntryDto(row));
+  })
+  .delete('/ledger/:id', requireAdminRole('SUPER', 'FINANCE'), async (c) => {
+    const id = c.req.param('id');
+    const actorId = c.get('claims').sub;
+    const existing = await prisma.ledgerEntry.findUnique({ where: { id } });
+    if (!existing) throw new HTTPException(404, { message: 'ไม่พบรายการบัญชี' });
+    await prisma.ledgerEntry.delete({ where: { id } });
+    await writeAudit({ actorId, action: 'ledger.delete', targetType: 'transaction', targetId: id });
+    return c.json({ id, deleted: true });
   });

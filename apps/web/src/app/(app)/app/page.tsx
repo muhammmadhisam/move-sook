@@ -7,17 +7,27 @@ import {
   CheckCircle2,
   Clock,
   Gift,
+  Hourglass,
   MapPin,
   Package,
   Plus,
+  ShieldX,
   Truck,
   Upload,
+  XCircle,
 } from 'lucide-react';
 import { Badge, Button, Card, CardContent, cn } from '@movesook/ui';
-import type { JobDto, JobListResponse, JobStatus } from '@movesook/shared';
+import type {
+  DriverVerifyStatus,
+  JobDto,
+  JobListResponse,
+  JobStatus,
+  MeResponse,
+} from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { AvailabilityToggle } from '@/components/availability-toggle';
+import { DriverAppealDialog } from '@/components/driver-appeal-dialog';
 import { IncentivesCard } from '@/components/incentives-card';
 import { DriverJobsMap } from '@/components/driver-jobs-map';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT } from '@/lib/job-display';
@@ -37,22 +47,24 @@ export default function AppHomePage() {
         <h2 className="text-xl font-semibold tracking-tight">{name}</h2>
       </div>
 
-      {me.role === 'DRIVER' ? (
-        <DriverHome isAvailable={me.isAvailable} />
-      ) : (
-        <CustomerHome />
-      )}
+      {me.role === 'DRIVER' || me.isDriver ? <DriverHome me={me} /> : <CustomerHome />}
     </div>
   );
 }
 
 // ── Driver ──────────────────────────────────────────────────────────────────
-function DriverHome({ isAvailable }: { isAvailable: boolean }) {
+function DriverHome({ me }: { me: MeResponse }) {
+  // Until an admin approves the application, the driver can't take jobs — show
+  // the verification status instead of the availability toggle / job feed.
+  if (me.verifyStatus !== 'APPROVED') {
+    return <DriverStatusCard verifyStatus={me.verifyStatus} rejectionReason={me.rejectionReason} />;
+  }
+
   return (
     <>
       <Card>
         <CardContent className="p-4">
-          <AvailabilityToggle initial={isAvailable} />
+          <AvailabilityToggle initial={me.isAvailable} />
         </CardContent>
       </Card>
       <IncentivesCard />
@@ -74,6 +86,81 @@ function DriverHome({ isAvailable }: { isAvailable: boolean }) {
         <Link href="/active">งานที่รับไว้</Link>
       </Button>
     </>
+  );
+}
+
+// Verification status shown on the home screen for a not-yet-approved driver.
+// Blocks access to the job feed until an admin approves the application.
+const DRIVER_STATUS_VIEW: Record<
+  Exclude<DriverVerifyStatus, 'APPROVED'>,
+  {
+    icon: React.ReactNode;
+    tone: string;
+    title: string;
+    desc: string;
+    action?: { href: string; label: string };
+  }
+> = {
+  PENDING: {
+    icon: <Hourglass className="h-7 w-7" />,
+    tone: 'bg-warning/15 text-warning',
+    title: 'รอการอนุมัติจากทีมงาน',
+    desc: 'เราได้รับใบสมัครของคุณแล้ว ทีมงานกำลังตรวจสอบข้อมูล โดยทั่วไปใช้เวลาไม่เกิน 24 ชั่วโมง คุณจะเริ่มรับงานได้ทันทีที่ได้รับการอนุมัติ',
+    action: { href: '/driver/edit', label: 'แก้ไขข้อมูลใบสมัคร' },
+  },
+  REJECTED: {
+    icon: <XCircle className="h-7 w-7" />,
+    tone: 'bg-destructive/15 text-destructive',
+    title: 'การสมัครไม่ผ่านการอนุมัติ',
+    desc: 'กรุณาตรวจสอบและแก้ไขข้อมูลให้ครบถ้วน แล้วส่งใบสมัครอีกครั้ง',
+    action: { href: '/driver/edit', label: 'แก้ไขและส่งใหม่' },
+  },
+  SUSPENDED: {
+    icon: <ShieldX className="h-7 w-7" />,
+    tone: 'bg-destructive/15 text-destructive',
+    title: 'บัญชีคนขับถูกระงับชั่วคราว',
+    desc: 'บัญชีของคุณถูกระงับการรับงาน กรุณาติดต่อทีมงานเพื่อขอข้อมูลเพิ่มเติม',
+  },
+};
+
+function DriverStatusCard({
+  verifyStatus,
+  rejectionReason,
+}: {
+  verifyStatus: DriverVerifyStatus | null;
+  rejectionReason: string | null;
+}) {
+  // verifyStatus is non-null for a driver; fall back to PENDING defensively.
+  const view = DRIVER_STATUS_VIEW[(verifyStatus ?? 'PENDING') as Exclude<DriverVerifyStatus, 'APPROVED'>];
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
+        <div className={cn('flex h-14 w-14 items-center justify-center rounded-full', view.tone)}>
+          {view.icon}
+        </div>
+        <h3 className="text-base font-semibold">{view.title}</h3>
+        <p className="text-sm text-muted-foreground">{view.desc}</p>
+        {rejectionReason && (
+          <p className="w-full rounded-lg bg-muted p-3 text-sm">
+            <span className="font-medium">เหตุผล:</span> {rejectionReason}
+          </p>
+        )}
+        <div className="mt-1 flex w-full flex-col gap-2">
+          {/* Appeal is available for rejected / suspended drivers. */}
+          {(verifyStatus === 'REJECTED' || verifyStatus === 'SUSPENDED') && (
+            <DriverAppealDialog rejected={verifyStatus === 'REJECTED'} className="w-full" />
+          )}
+          {view.action && (
+            <Button asChild variant="outline" className="w-full">
+              <Link href={view.action.href}>{view.action.label}</Link>
+            </Button>
+          )}
+          <Button asChild variant="ghost" className="w-full">
+            <Link href="/profile">ดูสถานะที่โปรไฟล์</Link>
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

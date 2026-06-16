@@ -42,6 +42,19 @@ export type CargoCategory = z.infer<typeof CargoCategorySchema>;
 export const VehicleTypeSchema = z.enum(['MOTORCYCLE', 'PICKUP', 'TRUCK_4W', 'TRUCK_6W']);
 export type VehicleType = z.infer<typeof VehicleTypeSchema>;
 
+export const GenderSchema = z.enum(['MALE', 'FEMALE', 'OTHER']);
+export type Gender = z.infer<typeof GenderSchema>;
+
+export const AddrChangeStatusSchema = z.enum([
+  'NONE',
+  'REQUESTED',
+  'APPROVED_AWAITING_PAYMENT',
+  'PENDING_REVIEW',
+  'COMPLETED',
+  'REJECTED',
+]);
+export type AddrChangeStatus = z.infer<typeof AddrChangeStatusSchema>;
+
 export const DriverVerifyStatusSchema = z.enum(['PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED']);
 export type DriverVerifyStatus = z.infer<typeof DriverVerifyStatusSchema>;
 
@@ -84,3 +97,9 @@ export type PromoType = z.infer<typeof PromoTypeSchema>;
 
 export const PricingModeSchema = z.enum(['CHARTER', 'PER_ITEM']);
 export type PricingMode = z.infer<typeof PricingModeSchema>;
+
+export const BlogStatusSchema = z.enum(['DRAFT', 'PUBLISHED']);
+export type BlogStatus = z.infer<typeof BlogStatusSchema>;
+
+export const LedgerEntryTypeSchema = z.enum(['INCOME', 'EXPENSE']);
+export type LedgerEntryType = z.infer<typeof LedgerEntryTypeSchema>;

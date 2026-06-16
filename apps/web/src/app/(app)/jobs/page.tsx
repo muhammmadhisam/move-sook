@@ -17,7 +17,17 @@ import {
   PreviewableImage,
 } from '@movesook/ui';
 import { VEHICLE_TYPE_LABEL, type JobDto, type JobListResponse } from '@movesook/shared';
-import { Navigation, MapPin, Truck, Clock, Package, ArrowRight } from 'lucide-react';
+import {
+  Navigation,
+  MapPin,
+  Truck,
+  Clock,
+  Package,
+  ArrowRight,
+  Hourglass,
+  ShieldX,
+} from 'lucide-react';
+import Link from 'next/link';
 import { api } from '@/lib/api';
 import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { useAuth } from '@/hooks/use-auth';
@@ -47,8 +57,6 @@ function formatSchedule(iso: string | null): string | null {
 
 export default function JobsPage() {
   const queryClient = useQueryClient();
-  const jobs = useQuery({ queryKey: ['jobs', 'available'], queryFn: fetchJobs });
-  const geo = useGeolocation();
   const { me } = useAuth();
 
   // The API enforces both gates at accept time (403 / 422) — mirroring them here
@@ -56,6 +64,10 @@ export default function JobsPage() {
   const notApproved = me?.verifyStatus != null && me.verifyStatus !== 'APPROVED';
   const offDuty = me?.verifyStatus === 'APPROVED' && me.isAvailable === false;
   const canAccept = !notApproved && !offDuty;
+
+  // Don't even fetch the feed for a not-yet-approved driver — they can't take work.
+  const jobs = useQuery({ queryKey: ['jobs', 'available'], queryFn: fetchJobs, enabled: !notApproved });
+  const geo = useGeolocation();
 
   // Closest pickup first; jobs without coords (or before location is granted) sink to the bottom.
   const sortedJobs = useMemo(() => {
@@ -102,14 +114,45 @@ export default function JobsPage() {
     },
   });
 
+  // Hard block: an unapproved driver can't browse the job feed at all.
+  if (notApproved) {
+    const pending = me?.verifyStatus === 'PENDING';
+    return (
+      <main className="mx-auto max-w-md p-6">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
+            <div
+              className={`flex h-14 w-14 items-center justify-center rounded-full ${
+                pending ? 'bg-warning/15 text-warning' : 'bg-destructive/15 text-destructive'
+              }`}
+            >
+              {pending ? <Hourglass className="h-7 w-7" /> : <ShieldX className="h-7 w-7" />}
+            </div>
+            <h1 className="text-lg font-semibold">
+              {pending ? 'รอการอนุมัติจากทีมงาน' : 'ยังไม่สามารถรับงานได้'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {pending
+                ? 'ทีมงานกำลังตรวจสอบใบสมัครของคุณ คุณจะเข้ารับงานได้ทันทีที่ได้รับการอนุมัติ (โดยทั่วไปไม่เกิน 24 ชั่วโมง)'
+                : 'บัญชีคนขับของคุณยังไม่พร้อมรับงาน ดูรายละเอียดและสถานะได้ที่หน้าโปรไฟล์'}
+            </p>
+            <div className="mt-1 flex w-full flex-col gap-2">
+              <Button asChild className="w-full">
+                <Link href="/profile">ดูสถานะคนขับ</Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/app">กลับหน้าหลัก</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
   return (
     <main className="mx-auto max-w-md p-6">
       <h1 className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับได้</h1>
-      {notApproved && (
-        <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
-          บัญชีคนขับของคุณยังไม่พร้อมรับงาน (รอการอนุมัติจากทีมงาน) — ดูสถานะได้ที่หน้าโปรไฟล์
-        </p>
-      )}
       {offDuty && (
         <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
           คุณปิดรับงานอยู่ — เปิดสถานะออนไลน์ที่หน้าโปรไฟล์ก่อนจึงจะรับงานได้

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { PromoTypeSchema } from '../enums';
+import { JobStatusSchema, PromoTypeSchema } from '../enums';
 import { PageQuery } from './pagination';
 
 export const PromoCodeDto = z.object({
@@ -17,6 +17,21 @@ export type PromoCodeDto = z.infer<typeof PromoCodeDto>;
 
 export const AdminListPromosQuery = PageQuery;
 export type AdminListPromosQuery = z.infer<typeof AdminListPromosQuery>;
+
+/** One job that redeemed a given promo code — who used it, when, and how much. */
+export const PromoRedemptionDto = z.object({
+  jobId: z.string(),
+  customerId: z.string(),
+  customerName: z.string().nullable(),
+  status: JobStatusSchema,
+  priceQuoted: z.number().int().nullable(),
+  discountAmount: z.number().int().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type PromoRedemptionDto = z.infer<typeof PromoRedemptionDto>;
+
+export const AdminListPromoRedemptionsQuery = PageQuery;
+export type AdminListPromoRedemptionsQuery = z.infer<typeof AdminListPromoRedemptionsQuery>;
 
 export const AdminCreatePromoInput = z.object({
   code: z.string().min(2).max(40),

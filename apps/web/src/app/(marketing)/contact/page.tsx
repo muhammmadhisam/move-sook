@@ -1,38 +1,38 @@
-import type { Metadata } from 'next';
-import { Mail, MessageCircle, Phone, Clock, ArrowRight } from 'lucide-react';
-import { PageHeader, Section } from '@/components/marketing/sections';
-import { JsonLd } from '@/components/marketing/json-ld';
-import { SITE } from '@/lib/site';
+import type { Metadata } from "next";
+import { MessageCircle, Clock, ArrowRight } from "lucide-react";
+import { PageHeader, Section } from "@/components/marketing/sections";
+import { JsonLd } from "@/components/marketing/json-ld";
+import { SITE } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: 'ติดต่อเรา',
+  title: "ติดต่อเรา",
   description:
-    'ติดต่อทีมงาน MoveSook ผ่านอีเมล LINE Official Account หรือโทรศัพท์ เราพร้อมช่วยเหลือทุกคำถามเกี่ยวกับการขนย้าย',
-  alternates: { canonical: '/contact' },
+    "ติดต่อทีมงาน MoveSook ผ่านอีเมล LINE Official Account หรือโทรศัพท์ เราพร้อมช่วยเหลือทุกคำถามเกี่ยวกับการขนย้าย",
+  alternates: { canonical: "/contact" },
 };
 
 const CHANNELS = [
   {
     icon: MessageCircle,
-    title: 'LINE Official Account',
-    value: '@movesook',
+    title: "LINE Official Account",
+    value: "@13ogbsz",
     href: SITE.lineOaUrl,
-    cta: 'แชทกับเรา',
+    cta: "แชทกับเรา",
   },
-  {
-    icon: Mail,
-    title: 'อีเมล',
-    value: SITE.email,
-    href: `mailto:${SITE.email}`,
-    cta: 'ส่งอีเมล',
-  },
-  {
-    icon: Phone,
-    title: 'โทรศัพท์',
-    value: SITE.phone,
-    href: `tel:${SITE.phone.replace(/[^+\d]/g, '')}`,
-    cta: 'โทรหาเรา',
-  },
+  // {
+  //   icon: Mail,
+  //   title: "อีเมล",
+  //   value: SITE.email,
+  //   href: `mailto:${SITE.email}`,
+  //   cta: "ส่งอีเมล",
+  // },
+  // {
+  //   icon: Phone,
+  //   title: "โทรศัพท์",
+  //   value: SITE.phone,
+  //   href: `tel:${SITE.phone.replace(/[^+\d]/g, "")}`,
+  //   cta: "โทรหาเรา",
+  // },
 ];
 
 export default function ContactPage() {
@@ -40,9 +40,9 @@ export default function ContactPage() {
     <>
       <JsonLd
         data={{
-          '@context': 'https://schema.org',
-          '@type': 'ContactPage',
-          name: 'ติดต่อ MoveSook',
+          "@context": "https://schema.org",
+          "@type": "ContactPage",
+          name: "ติดต่อ MoveSook",
           url: `${SITE.url}/contact`,
         }}
       />

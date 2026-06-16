@@ -45,6 +45,7 @@ async function reset() {
   await prisma.vehiclePricing.deleteMany();
   await prisma.serviceArea.deleteMany();
   await prisma.appSetting.deleteMany();
+  await prisma.blogPost.deleteMany();
   await prisma.user.deleteMany();
 }
 
@@ -125,6 +126,40 @@ async function main() {
       { code: 'MOVE15', type: 'PERCENT', value: 15, minOrder: 1500, isActive: true },
       { code: 'NEWYEAR', type: 'PERCENT', value: 20, minOrder: 800, usedCount: 200, expiresAt: daysAgo(30), isActive: false }, // expired
       { code: 'SOLDOUT', type: 'FIXED', value: 50, maxUses: 50, usedCount: 50, isActive: true }, // fully used
+    ],
+  });
+
+  // ── Blog posts (marketing content; migrated from the old hardcoded list) ───
+  await prisma.blogPost.createMany({
+    data: [
+      {
+        slug: 'how-to-prepare-for-moving-day',
+        title: 'เตรียมตัวก่อนวันขนย้าย ให้ราบรื่นไม่วุ่นวาย',
+        excerpt:
+          'เช็กลิสต์ก่อนวันขนย้าย ตั้งแต่การแพ็คของ การจัดลำดับกล่อง ไปจนถึงสิ่งที่ควรเตรียมให้คนขับ เพื่อให้การย้ายของจบไวและปลอดภัย',
+        author: 'ทีม MoveSook',
+        status: 'PUBLISHED',
+        publishedAt: new Date('2026-05-20'),
+        body: [
+          'การขนย้ายที่ดีเริ่มต้นจากการเตรียมตัวที่ดี ก่อนถึงวันจริงควรแพ็คของให้เรียบร้อย แยกของแตกหักง่ายไว้ต่างหาก และติดป้ายกล่องให้ชัดเจนว่าเป็นของห้องไหน',
+          'จัดลำดับกล่องที่ต้องใช้ก่อนไว้ด้านนอก เพื่อให้หยิบใช้ได้ทันทีหลังย้ายเสร็จ ของมีค่าหรือเอกสารสำคัญควรถือติดตัวไปเอง ไม่ปะปนกับของที่ขนขึ้นรถ',
+          'แจ้งจุดจอดรถและทางเข้า-ออกให้คนขับทราบล่วงหน้าผ่านแอป จะช่วยให้การโหลดของรวดเร็วและลดค่าใช้จ่ายที่ไม่จำเป็น',
+        ].join('\n\n'),
+      },
+      {
+        slug: 'choosing-the-right-vehicle',
+        title: 'เลือกขนาดรถให้เหมาะกับของ ประหยัดทั้งเงินและเวลา',
+        excerpt:
+          'รถกระบะ รถตู้ หรือรถ 6 ล้อ แบบไหนเหมาะกับของของคุณ? คู่มือสั้น ๆ ช่วยให้เลือกขนาดรถได้ถูกต้องตั้งแต่ครั้งแรก',
+        author: 'ทีม MoveSook',
+        status: 'PUBLISHED',
+        publishedAt: new Date('2026-05-28'),
+        body: [
+          'การเลือกขนาดรถให้พอดีกับปริมาณของช่วยประหยัดค่าใช้จ่ายได้มาก เพราะไม่ต้องจ่ายค่ารถใหญ่เกินจำเป็น และไม่ต้องวิ่งหลายเที่ยว',
+          'ของน้อยชิ้นหรือเฟอร์นิเจอร์ชิ้นเดียว รถกระบะมักเพียงพอ ส่วนการย้ายหอหรือคอนโดขนาดเล็กอาจใช้รถตู้ทึบ และการย้ายบ้านทั้งหลังควรพิจารณารถ 6 ล้อ',
+          'เมื่อโพสต์งานบน MoveSook ระบุปริมาณและประเภทของให้ชัด คนขับที่มีรถเหมาะสมจะรับงานได้ตรงความต้องการมากขึ้น',
+        ].join('\n\n'),
+      },
     ],
   });
 

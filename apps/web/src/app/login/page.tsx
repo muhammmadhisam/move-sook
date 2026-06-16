@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@movesook/ui";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,10 +22,14 @@ export default function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-6 p-6">
       <Link href="/" className="flex flex-col items-center text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-lg font-bold text-primary-foreground shadow-sm">
-          MS
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight">MoveSook</h1>
+        <Image
+          src="/logo.png"
+          alt="MoveSook"
+          width={200}
+          height={150}
+          className="h-auto w-48"
+          priority
+        />
         <p className="mt-1 text-sm text-muted-foreground">
           เรียกคนขับขนย้ายใกล้คุณ
         </p>

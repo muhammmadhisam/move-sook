@@ -25,7 +25,14 @@ import {
   TableHeader,
   TableRow,
 } from '@movesook/ui';
-import { PromoTypeSchema, type Paged, type PromoCodeDto, type PromoType } from '@movesook/shared';
+import {
+  JOB_STATUS_LABEL,
+  PromoTypeSchema,
+  type Paged,
+  type PromoCodeDto,
+  type PromoRedemptionDto,
+  type PromoType,
+} from '@movesook/shared';
 import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
 
@@ -35,6 +42,21 @@ export default function PromosPage() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ code: '', type: 'PERCENT' as PromoType, value: '', minOrder: '', maxUses: '' });
   const [error, setError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<string | null>(null); // code whose redemption log is open
+  const [usagePage, setUsagePage] = useState(1);
+
+  const usage = useQuery({
+    queryKey: ['admin', 'promos', viewing, 'redemptions', usagePage],
+    enabled: viewing !== null,
+    queryFn: async (): Promise<Paged<PromoRedemptionDto>> => {
+      const res = await api.admin.promos[':code'].redemptions.$get({
+        param: { code: viewing! },
+        query: { page: String(usagePage) },
+      });
+      if (!res.ok) throw new Error('โหลดประวัติการใช้งานไม่สำเร็จ');
+      return (await res.json()) as Paged<PromoRedemptionDto>;
+    },
+  });
 
   const promos = useQuery({
     queryKey: ['admin', 'promos', tbl.page, tbl.sortBy, tbl.sortDir],
@@ -132,14 +154,26 @@ export default function PromosPage() {
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={toggle.isPending}
-                  onClick={() => toggle.mutate({ code: p.code, isActive: !p.isActive })}
-                >
-                  {p.isActive ? 'ปิด' : 'เปิด'}
-                </Button>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setUsagePage(1);
+                      setViewing(p.code);
+                    }}
+                  >
+                    ดูการใช้งาน
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={toggle.isPending}
+                    onClick={() => toggle.mutate({ code: p.code, isActive: !p.isActive })}
+                  >
+                    {p.isActive ? 'ปิด' : 'เปิด'}
+                  </Button>
+                </div>
               </TableCell>
             </TableRow>
           ))}
@@ -214,6 +248,64 @@ export default function PromosPage() {
               {create.isPending ? 'กำลังสร้าง…' : 'สร้าง'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewing !== null} onOpenChange={(o) => !o && setViewing(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>การใช้งานโค้ด {viewing}</DialogTitle>
+            <DialogDescription>
+              รายการงานที่ใช้โค้ดนี้ — ใครใช้ เมื่อไหร่ และส่วนลดที่ได้รับ
+            </DialogDescription>
+          </DialogHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>วันที่ใช้</TableHead>
+                <TableHead>ลูกค้า</TableHead>
+                <TableHead>งาน</TableHead>
+                <TableHead>สถานะ</TableHead>
+                <TableHead className="text-right">ราคา</TableHead>
+                <TableHead className="text-right">ส่วนลด</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {usage.data?.items.map((r) => (
+                <TableRow key={r.jobId}>
+                  <TableCell className="whitespace-nowrap">
+                    {new Date(r.createdAt).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short' })}
+                  </TableCell>
+                  <TableCell>{r.customerName ?? '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.jobId.slice(0, 8)}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{JOB_STATUS_LABEL[r.status]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {r.priceQuoted != null ? `฿${r.priceQuoted.toLocaleString()}` : '—'}
+                  </TableCell>
+                  <TableCell className="text-right text-destructive">
+                    {r.discountAmount ? `-฿${r.discountAmount.toLocaleString()}` : '—'}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {usage.data?.items.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    {usage.isLoading ? 'กำลังโหลด…' : 'ยังไม่มีการใช้งาน'}
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+          {usage.data && (
+            <Pager
+              page={usage.data.page}
+              pageSize={usage.data.pageSize}
+              total={usage.data.total}
+              onPage={setUsagePage}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

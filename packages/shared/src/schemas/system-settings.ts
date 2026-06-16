@@ -51,6 +51,7 @@ export const SystemSettingsResponse = z.object({
   minJobPrice: z.number().int().min(0),
   maxJobPrice: z.number().int().min(0),
   cancellationFee: z.number().int().min(0),
+  addressChangeFee: z.number().int().min(0), // flat base fee for a destination-change request
   freeCancelMinutes: z.number().int().min(0),
   maxActiveJobsPerDriver: z.number().int().min(0),
   maxScheduleDays: z.number().int().min(0),
@@ -85,6 +86,7 @@ export const UpdateSystemSettingsInput = z.object({
   minJobPrice: z.number().int().min(0).max(10_000_000).optional(),
   maxJobPrice: z.number().int().min(0).max(10_000_000).optional(),
   cancellationFee: z.number().int().min(0).max(1_000_000).optional(),
+  addressChangeFee: z.number().int().min(0).max(1_000_000).optional(),
   freeCancelMinutes: z.number().int().min(0).max(10_000).optional(),
   maxActiveJobsPerDriver: z.number().int().min(0).max(100).optional(),
   maxScheduleDays: z.number().int().min(0).max(365).optional(),
@@ -124,6 +126,7 @@ export const PublicSystemConfig = z.object({
   payAccountName: z.string(),
   payAccountNumber: z.string(),
   payQrUrl: z.string(),
+  addressChangeFee: z.number().int().min(0), // flat base fee for a destination-change request (client previews the total)
   prohibitedItems: z.array(z.string()), // resolved banned-cargo list shown on the posting form
 });
 export type PublicSystemConfig = z.infer<typeof PublicSystemConfig>;

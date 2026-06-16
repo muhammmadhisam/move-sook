@@ -133,6 +133,9 @@ export default function ActiveJobsPage() {
           const photo = job.itemPhotos[0];
           // Delivery proof becomes relevant once the items are in the driver's hands.
           const canUploadDelivery = job.status === 'PICKED_UP' || job.status === 'IN_TRANSIT';
+          // Proof photos freeze once the job is closed (DELIVERED/CANCELLED) — mirror the
+          // API guard so the gallery shows photos read-only instead of an add tile that 422s.
+          const proofLocked = !isInHand(job.status) && job.status !== 'PENDING_CONFIRMATION';
           return (
             <Card key={job.id} className="overflow-hidden">
               {/* Header: thumbnail + title + status + price */}
@@ -205,18 +208,30 @@ export default function ActiveJobsPage() {
                 </div>
 
                 {/* Proof photos — multiple allowed */}
-                <ImageUploadGallery
-                  label={`รูปตอนรับของ (${job.pickupProofUrls.length})`}
-                  value={job.pickupProofUrls}
-                  onChange={(urls) => proof.mutate({ id: job.id, kind: 'PICKUP', urls })}
-                  disabled={proof.isPending}
-                />
+                {/* Pickup proof: editable while in-hand, read-only once the job is closed. */}
+                {(!proofLocked || job.pickupProofUrls.length > 0) && (
+                  <ImageUploadGallery
+                    label={`รูปตอนรับของ (${job.pickupProofUrls.length})`}
+                    value={job.pickupProofUrls}
+                    onChange={(urls) => proof.mutate({ id: job.id, kind: 'PICKUP', urls })}
+                    disabled={proof.isPending || proofLocked}
+                  />
+                )}
                 {canUploadDelivery && (
                   <ImageUploadGallery
                     label={`รูปตอนส่ง (${job.deliveryProofUrls.length})`}
                     value={job.deliveryProofUrls}
                     onChange={(urls) => proof.mutate({ id: job.id, kind: 'DELIVERY', urls })}
                     disabled={proof.isPending}
+                  />
+                )}
+                {/* Closed job with delivery photos: show them read-only for the record. */}
+                {proofLocked && job.deliveryProofUrls.length > 0 && (
+                  <ImageUploadGallery
+                    label={`รูปตอนส่ง (${job.deliveryProofUrls.length})`}
+                    value={job.deliveryProofUrls}
+                    onChange={() => {}}
+                    disabled
                   />
                 )}
 

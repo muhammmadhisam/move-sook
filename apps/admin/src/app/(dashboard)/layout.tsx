@@ -18,8 +18,10 @@ import {
   AlertTriangle,
   Receipt,
   Banknote,
+  BookText,
   ReceiptText,
   Ticket,
+  Newspaper,
   Ban,
   History,
   ShieldCheck,
@@ -32,6 +34,7 @@ import { Button, cn } from '@movesook/ui';
 import { ADMIN_ROLE_LABEL, type AdminRole, type AdminStatsResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useAdminWhoami } from '@/hooks/use-admin-whoami';
+import { AdminNotifications } from '@/components/admin-notifications';
 
 type NavItem = {
   href: string;
@@ -86,7 +89,14 @@ const NAV: NavGroup[] = [
       },
       { href: '/transactions', label: 'ธุรกรรมกับลูกค้า', icon: Receipt, roles: ['SUPER', 'FINANCE'] },
       { href: '/payouts', label: 'ธุรกรรมกับคนขับ', icon: Banknote, roles: ['SUPER', 'FINANCE'] },
+      { href: '/ledger', label: 'บัญชีรายรับ-รายจ่าย', icon: BookText, roles: ['SUPER', 'FINANCE'] },
       { href: '/promos', label: 'โค้ดส่วนลด', icon: Ticket, roles: ['SUPER', 'FINANCE'] },
+    ],
+  },
+  {
+    title: 'เนื้อหา',
+    items: [
+      { href: '/blog', label: 'บล็อก', icon: Newspaper, roles: ['SUPER', 'OPS'] },
     ],
   },
   {
@@ -104,6 +114,7 @@ function SidebarBody({
   groups,
   pathname,
   roleLabel,
+  role,
   stats,
   onNavigate,
   onLogout,
@@ -111,6 +122,7 @@ function SidebarBody({
   groups: NavGroup[];
   pathname: string;
   roleLabel?: string;
+  role?: AdminRole;
   stats?: AdminStatsResponse;
   onNavigate?: () => void;
   onLogout: () => void;
@@ -121,12 +133,13 @@ function SidebarBody({
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
           MS
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <span className="block text-base font-semibold leading-tight tracking-tight">
             MoveSook
           </span>
           {roleLabel && <span className="text-xs text-navy-300">{roleLabel}</span>}
         </div>
+        <AdminNotifications stats={stats} role={role} onNavigate={onNavigate} />
       </div>
       <nav className="flex flex-1 flex-col gap-4 overflow-y-auto">
         {groups.map((group) => (
@@ -226,6 +239,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           groups={groups}
           pathname={pathname}
           roleLabel={roleLabel}
+          role={me?.adminRole}
           stats={stats}
           onLogout={logout}
         />
@@ -252,6 +266,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
               groups={groups}
               pathname={pathname}
               roleLabel={roleLabel}
+              role={me?.adminRole}
               stats={stats}
               onNavigate={() => setMobileOpen(false)}
               onLogout={logout}

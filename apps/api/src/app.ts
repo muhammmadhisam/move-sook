@@ -11,6 +11,7 @@ import { meRoutes } from './routes/me';
 import { jobRoutes } from './routes/jobs';
 import { driverRoutes } from './routes/drivers';
 import { adminRoutes } from './routes/admin';
+import { blogRoutes } from './routes/blog';
 import { uploadRoutes, serveUploads } from './routes/uploads';
 import { webhookRoutes } from './routes/webhooks';
 
@@ -49,6 +50,7 @@ const app = new Hono<AppEnv>()
       payAccountName: s.payAccountName,
       payAccountNumber: s.payAccountNumber,
       payQrUrl: s.payQrUrl,
+      addressChangeFee: s.addressChangeFee,
       prohibitedItems: resolveProhibitedItems(s.prohibitedItemsList),
     };
     return c.json(body);
@@ -59,6 +61,7 @@ const app = new Hono<AppEnv>()
   .route('/auth', authRoutes)
   .route('/me', meRoutes)
   .route('/jobs', jobRoutes)
+  .route('/blog', blogRoutes)
   .route('/drivers', driverRoutes)
   .route('/uploads', uploadRoutes)
   .route('/admin', adminRoutes)

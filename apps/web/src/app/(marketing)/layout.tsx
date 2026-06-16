@@ -10,7 +10,7 @@ const orgLd = {
   name: SITE.name,
   alternateName: SITE.nameTh,
   url: SITE.url,
-  logo: `${SITE.url}/icon.png`,
+  logo: `${SITE.url}/brand-mark.png`,
   email: SITE.email,
   description: SITE.description,
   areaServed: { '@type': 'Country', name: 'Thailand' },

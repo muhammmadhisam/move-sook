@@ -46,6 +46,21 @@ enum VehicleType {
   TRUCK_6W
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AddrChangeStatus {
+  NONE // no active destination-change request
+  REQUESTED // customer requested a new destination; awaiting admin approval of the request
+  APPROVED_AWAITING_PAYMENT // admin approved the request; customer must transfer the fee + upload a slip
+  PENDING_REVIEW // customer uploaded the fee slip; awaiting admin approval of payment
+  COMPLETED // fee approved; destination updated on the Job and the driver was notified
+  REJECTED // admin rejected the request (terminal for this request; customer may raise a new one)
+}
+
 enum DriverVerifyStatus {
   PENDING
   APPROVED
@@ -110,6 +125,16 @@ enum PricingMode {
   PER_ITEM // หลายสินค้า: per-item rate × quantity + distance
 }
 
+enum BlogStatus {
+  DRAFT // hidden from the public site; editable in admin only
+  PUBLISHED // live on the marketing blog + sitemap
+}
+
+enum LedgerEntryType {
+  INCOME // รายรับ
+  EXPENSE // รายจ่าย
+}
+
 model User {
   id              String   @id @default(cuid())
   lineUserId      String?  @unique // sub from LINE id_token (admins may not have one)
@@ -128,6 +153,7 @@ model User {
   notifications   Notification[] @relation("UserNotifications")
   consents        ConsentRecord[] @relation("UserConsents")
   customerNotes   CustomerNote[] @relation("NoteAuthor")
+  ledgerEntries   LedgerEntry[]  @relation("LedgerCreator")
   anonymizedAt    DateTime? // PDPA erasure: PII scrubbed but row kept for accounting integrity
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -172,6 +198,8 @@ model Driver {
   licenseTw2      String? // ใบขับขี่ ท.2
   verifyStatus    DriverVerifyStatus @default(PENDING)
   rejectionReason String? // admin's note when REJECTED / SUSPENDED (shown to driver, logged)
+  appealMessage   String? // driver's message to admin when appealing a REJECTED / SUSPENDED decision
+  appealAt        DateTime? // when the driver last submitted an appeal
   serviceProvince String? // province the driver operates in (on-demand matching)
   isAvailable     Boolean            @default(false) // online / accepting jobs right now
   ratingAvg       Float              @default(0) // denormalised from Review for fast display
@@ -179,9 +207,19 @@ model Driver {
   bankName        String? // payout: bank name
   bankAccountName String? // payout: account holder
   bankAccountNo   String? // payout: account number
+  // ── Personal details (self-signup) ──
+  firstName             String? // ชื่อจริง
+  lastName              String? // นามสกุล
+  birthDate             DateTime? // วันเกิด
+  gender                Gender? // เพศ
+  email                 String? // อีเมลสำหรับติดต่อ
+  emergencyContactName  String? // ชื่อผู้ติดต่อกรณีฉุกเฉิน
+  emergencyContactPhone String? // เบอร์ผู้ติดต่อกรณีฉุกเฉิน
   // ── KYC ──
   nationalId        String? // เลขบัตรประชาชน
   nationalIdUrl     String? // รูปบัตรประชาชน
+  address           String? // ที่อยู่ตามบัตร / ที่อยู่ติดต่อของคนขับ
+  screening         Json? // คำตอบแบบสอบถามคัดกรอง (DriverScreening) ตอนสมัคร
   licenseNo         String? // เลขใบขับขี่
   licenseExpiry     DateTime? // ใบขับขี่หมดอายุ
   vehicleRegUrl     String? // รูปทะเบียนรถ
@@ -262,6 +300,23 @@ model Job {
   pickupProofUrls  String[] // driver's photos when collecting the items
   deliveryProofUrls String[] // driver's photos on delivery
   customerConfirmedAt DateTime? // customer confirmed they received the goods (admin decision aid)
+  // ── Destination-change request (customer asks to re-route mid-delivery; admin approves; customer pays a fee) ──
+  // The live destination stays on destAddress/destProvince/destLat/Lng; these hold the *pending* new values
+  // until the fee is approved, at which point they are written onto the live fields and the driver is notified.
+  destChangeStatus      AddrChangeStatus @default(NONE)
+  destChangeNewAddress  String? // requested new destination address
+  destChangeNewProvince String? // requested new destination province
+  destChangeNewLat      Float?
+  destChangeNewLng      Float?
+  destChangeReason      String? // customer's note on why the destination changed
+  destChangeFee         Int? // snapshot of the fee owed (flat + extra-distance), taken at request time
+  destChangeExtraKm     Float? // snapshot of the extra straight-line distance the new destination adds
+  destChangeRequestedAt DateTime? // when the customer raised the current request
+  destChangeApprovedById String? // admin who approved the request / the fee
+  destChangeRejectedReason String? // admin's reason when a request or its slip was rejected
+  destChangeSlipUrl       String? // customer's bank-transfer slip for the change fee
+  destChangeSlipUploadedAt DateTime? // when the current fee slip was uploaded
+  destChangeCompletedAt   DateTime? // when the destination was updated and the driver notified
   review          Review?
   transaction     Transaction?
   disputes        Dispute[]
@@ -271,6 +326,7 @@ model Job {
   @@index([status])
   @@index([originProvince, destProvince])
   @@index([driverId])
+  @@index([promoCode])
 }
 
 model AdminCredential {
@@ -462,6 +518,59 @@ model PromoCode {
   isActive   Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+model BlogPost {
+  // Marketing-blog article managed from the admin app. Replaces the old
+  // hardcoded BLOG_POSTS list in apps/web/src/lib/blog.ts.
+  id            String     @id @default(cuid())
+  slug          String     @unique // URL segment: /blog/<slug>
+  title         String
+  excerpt       String // short summary for the index card + meta description
+  body          String // Markdown source, rendered to HTML on the public site
+  coverImageUrl String? // uploaded cover (R2/local) shown on index + article + OG image
+  author        String     @default("ทีม MoveSook")
+  status        BlogStatus @default(DRAFT)
+  publishedAt   DateTime? // first time it went PUBLISHED — drives ordering + sitemap lastmod
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([status, publishedAt])
+}
+
+model LedgerEntry {
+  // Manual income/expense bookkeeping entry recorded by finance admins. This is
+  // the company's own cash ledger — separate from the commission Transaction
+  // ledger (which is auto-derived from delivered jobs). Each entry can carry any
+  // number of receipt/document attachments (images or PDFs).
+  id          String            @id @default(cuid())
+  type        LedgerEntryType // INCOME or EXPENSE
+  category    String // free-text bucket (e.g. "ค่าน้ำมัน", "เงินเดือน") — presets in the UI
+  title       String // short description of the entry
+  amount      Int // THB, always positive; sign is implied by `type`
+  note        String? // optional longer detail
+  occurredAt  DateTime // the date the money moved (may differ from createdAt)
+  createdById String // admin User who recorded it
+  createdBy   User              @relation("LedgerCreator", fields: [createdById], references: [id])
+  attachments LedgerAttachment[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([type, occurredAt])
+  @@index([occurredAt])
+}
+
+model LedgerAttachment {
+  // A receipt image or document file attached to a ledger entry.
+  id        String      @id @default(cuid())
+  entryId   String
+  entry     LedgerEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  url       String // stored upload URL (R2 or local)
+  name      String // original filename, shown in the UI
+  mimeType  String // e.g. image/jpeg, application/pdf
+  createdAt DateTime    @default(now())
+
+  @@index([entryId])
 }
 
 model CustomerNote {

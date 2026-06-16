@@ -28,7 +28,9 @@ import {
   TableRow,
 } from '@movesook/ui';
 import {
+  DRIVER_SCREENING_QUESTIONS,
   DRIVER_VERIFY_STATUS_LABEL,
+  GENDER_LABEL,
   JOB_STATUS_LABEL,
   ROLE_LABEL,
   VEHICLE_TYPE_LABEL,
@@ -278,6 +280,17 @@ export default function DriverDetailPage() {
             {driver.rejectionReason && (
               <p className="text-destructive">เหตุผลปฏิเสธ/ระงับ: {driver.rejectionReason}</p>
             )}
+            {driver.appealMessage && (
+              <div className="rounded-lg border border-warning/50 bg-warning/10 p-2">
+                <p className="font-medium">
+                  คำอุทธรณ์จากคนขับ
+                  {driver.appealAt
+                    ? ` · ${new Date(driver.appealAt).toLocaleString('th-TH')}`
+                    : ''}
+                </p>
+                <p className="whitespace-pre-wrap">{driver.appealMessage}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -340,7 +353,36 @@ export default function DriverDetailPage() {
             </Button>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
+            <p>
+              ชื่อ-สกุล:{' '}
+              {[driver.firstName, driver.lastName].filter(Boolean).join(' ') || '—'}
+            </p>
+            <p>
+              วันเกิด: {driver.birthDate ? new Date(driver.birthDate).toLocaleDateString('th-TH') : '—'}
+              {driver.gender ? ` · เพศ: ${GENDER_LABEL[driver.gender]}` : ''}
+            </p>
+            <p>อีเมล: {driver.email ?? '—'}</p>
+            <p>
+              ผู้ติดต่อฉุกเฉิน:{' '}
+              {driver.emergencyContactName || driver.emergencyContactPhone
+                ? `${driver.emergencyContactName ?? ''} ${driver.emergencyContactPhone ?? ''}`.trim()
+                : '—'}
+            </p>
             <p>เลขบัตรประชาชน: {driver.nationalId ?? '—'}</p>
+            <p>ที่อยู่: {driver.address ?? '—'}</p>
+            {driver.nationalIdUrl && (
+              <p>
+                รูปบัตรประชาชน:{' '}
+                <a
+                  href={driver.nationalIdUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-primary underline"
+                >
+                  ดูรูป
+                </a>
+              </p>
+            )}
             <p>เลขใบขับขี่: {driver.licenseNo ?? '—'}</p>
             {(
               [
@@ -370,6 +412,26 @@ export default function DriverDetailPage() {
             </p>
           </CardContent>
         </Card>
+
+        {driver.screening && (
+          <Card>
+            <CardHeader>
+              <CardTitle>แบบสอบถามคัดกรอง</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              {DRIVER_SCREENING_QUESTIONS.map((q) => {
+                const answer = driver.screening?.[q.key];
+                const label = q.options.find((o) => o.value === answer)?.label;
+                return (
+                  <div key={q.key}>
+                    <p className="text-muted-foreground">{q.question}</p>
+                    <p className="font-medium">{label ?? '—'}</p>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div>

@@ -4,6 +4,8 @@ import { HTTPException } from 'hono/http-exception';
 import { prisma } from '@movesook/db';
 import {
   ClaimDriverInput,
+  DriverAppealInput,
+  DriverApplyInput,
   DriverAvailabilityInput,
   DriverUpdateInput,
   UpdateDriverLocationInput,
@@ -19,9 +21,80 @@ import { authenticate, requireRole } from '../middleware/auth';
 import { setSessionCookie } from '../lib/cookies';
 import { getSystemSettings } from '../lib/settings';
 import { toDriverDto } from '../lib/serialize';
-import { notify } from '../lib/notify';
+import { notify, notifyAdmins } from '../lib/notify';
 
 export const driverRoutes = new Hono<AppEnv>()
+  // Public self-signup: a signed-in user applies to become a driver themselves
+  // (no admin-issued invite code needed). Creates a PENDING application and
+  // promotes USER -> DRIVER so they can complete the rest of their profile and
+  // wait for admin verification before they may accept jobs.
+  .post('/apply', authenticate('user'), zValidator('json', DriverApplyInput), async (c) => {
+    const { sub } = c.get('claims');
+    const input = c.req.valid('json');
+
+    const existing = await prisma.driver.findUnique({ where: { userId: sub } });
+    if (existing) throw new HTTPException(409, { message: 'บัญชีนี้เป็นคนขับอยู่แล้ว' });
+
+    const created = await prisma.$transaction(async (tx) => {
+      const fullName = [input.firstName, input.lastName].filter(Boolean).join(' ').trim();
+      const d = await tx.driver.create({
+        data: {
+          userId: sub,
+          vehicleType: input.vehicleType,
+          plateNumber: input.plateNumber ?? null,
+          licenseTw2: input.licenseTw2 ?? null,
+          serviceProvince: input.serviceProvince,
+          // Legal name for admin lists (LINE displayName may differ / be missing).
+          name: fullName || null,
+          firstName: input.firstName ?? null,
+          lastName: input.lastName ?? null,
+          birthDate: input.birthDate ? new Date(input.birthDate) : null,
+          gender: input.gender ?? null,
+          email: input.email ?? null,
+          emergencyContactName: input.emergencyContactName ?? null,
+          emergencyContactPhone: input.emergencyContactPhone ?? null,
+          nationalId: input.nationalId ?? null,
+          nationalIdUrl: input.nationalIdUrl ?? null,
+          address: input.address ?? null,
+          screening: input.screening,
+          licenseNo: input.licenseNo ?? null,
+          licenseExpiry: input.licenseExpiry ? new Date(input.licenseExpiry) : null,
+          verifyStatus: 'PENDING',
+          // Anchor the verify-queue SLA clock from the moment they apply.
+          submittedAt: new Date(),
+        },
+      });
+      const u = await tx.user.update({
+        where: { id: sub },
+        data: {
+          role: 'DRIVER',
+          ...(input.phone ? { phone: input.phone } : {}),
+        },
+        select: { displayName: true },
+      });
+      return { d, displayName: u.displayName };
+    });
+
+    // Refresh the session cookie so the new DRIVER role takes effect immediately.
+    const token = await signJwt({
+      sub,
+      role: 'DRIVER',
+      secret: env.JWT_SECRET,
+      ttlSec: USER_JWT_TTL_SEC,
+    });
+    setSessionCookie(c, env.USER_COOKIE_NAME, token, USER_JWT_TTL_SEC);
+
+    // Keep the new applicant warm during the verify wait (reduces drop-off).
+    await notify({
+      userId: sub,
+      type: 'DRIVER_VERIFY',
+      title: 'ได้รับใบสมัครคนขับแล้ว',
+      body: 'ทีมงานกำลังตรวจสอบข้อมูลของคุณ โดยทั่วไปใช้เวลาไม่เกิน 24 ชั่วโมง',
+    });
+
+    return c.json(toDriverDto(created.d, created.displayName), 201);
+  })
+
   // A signed-in user claims an admin-created driver application via its invite code.
   // Links the pending (unlinked) Driver to this user and promotes them to DRIVER.
   .post('/claim', authenticate('user'), zValidator('json', ClaimDriverInput), async (c) => {
@@ -87,6 +160,26 @@ export const driverRoutes = new Hono<AppEnv>()
         ...(input.plateNumber !== undefined ? { plateNumber: input.plateNumber } : {}),
         ...(input.licenseTw2 !== undefined ? { licenseTw2: input.licenseTw2 } : {}),
         ...(input.serviceProvince ? { serviceProvince: input.serviceProvince } : {}),
+        ...(input.firstName !== undefined ? { firstName: input.firstName } : {}),
+        ...(input.lastName !== undefined ? { lastName: input.lastName } : {}),
+        ...(input.firstName !== undefined || input.lastName !== undefined
+          ? { name: [input.firstName ?? driver.firstName, input.lastName ?? driver.lastName].filter(Boolean).join(' ').trim() || null }
+          : {}),
+        ...(input.birthDate !== undefined ? { birthDate: new Date(input.birthDate) } : {}),
+        ...(input.gender !== undefined ? { gender: input.gender } : {}),
+        ...(input.email !== undefined ? { email: input.email } : {}),
+        ...(input.emergencyContactName !== undefined
+          ? { emergencyContactName: input.emergencyContactName }
+          : {}),
+        ...(input.emergencyContactPhone !== undefined
+          ? { emergencyContactPhone: input.emergencyContactPhone }
+          : {}),
+        ...(input.nationalId !== undefined ? { nationalId: input.nationalId } : {}),
+        ...(input.nationalIdUrl !== undefined ? { nationalIdUrl: input.nationalIdUrl } : {}),
+        ...(input.address !== undefined ? { address: input.address } : {}),
+        ...(input.screening !== undefined ? { screening: input.screening } : {}),
+        ...(input.licenseNo !== undefined ? { licenseNo: input.licenseNo } : {}),
+        ...(input.licenseExpiry !== undefined ? { licenseExpiry: new Date(input.licenseExpiry) } : {}),
         ...(input.bankName !== undefined ? { bankName: input.bankName } : {}),
         ...(input.bankAccountName !== undefined ? { bankAccountName: input.bankAccountName } : {}),
         ...(input.bankAccountNo !== undefined ? { bankAccountNo: input.bankAccountNo } : {}),
@@ -113,6 +206,54 @@ export const driverRoutes = new Hono<AppEnv>()
     }
     const user = await prisma.user.findUnique({ where: { id: sub }, select: { displayName: true } });
     return c.json(toDriverDto(updated, user?.displayName ?? null));
+  })
+
+  // A REJECTED / SUSPENDED driver appeals the decision with a message to admins.
+  // REJECTED → goes back to PENDING for re-review; SUSPENDED stays suspended (only
+  // an admin may lift it) but the appeal + message are recorded and admins notified.
+  .post('/me/appeal', authenticate('user'), requireRole('DRIVER'), zValidator('json', DriverAppealInput), async (c) => {
+    const { sub } = c.get('claims');
+    const { message } = c.req.valid('json');
+
+    const driver = await prisma.driver.findUnique({
+      where: { userId: sub },
+      include: { user: { select: { displayName: true } } },
+    });
+    if (!driver) throw new HTTPException(403, { message: 'ยังไม่มีใบสมัครคนขับ' });
+    if (driver.verifyStatus !== 'REJECTED' && driver.verifyStatus !== 'SUSPENDED') {
+      throw new HTTPException(422, { message: 'ยื่นอุทธรณ์ได้เฉพาะบัญชีที่ถูกปฏิเสธหรือถูกระงับ' });
+    }
+
+    const wasRejected = driver.verifyStatus === 'REJECTED';
+    const updated = await prisma.driver.update({
+      where: { id: driver.id },
+      data: {
+        appealMessage: message,
+        appealAt: new Date(),
+        // A rejected applicant re-enters the verify queue; a suspended one stays
+        // suspended until an admin explicitly lifts it.
+        ...(wasRejected
+          ? { verifyStatus: 'PENDING', rejectionReason: null, submittedAt: new Date() }
+          : {}),
+      },
+    });
+
+    const who = driver.user?.displayName ?? driver.name ?? 'คนขับ';
+    await notifyAdmins({
+      type: 'DRIVER_VERIFY',
+      title: 'คนขับยื่นอุทธรณ์',
+      body: `${who} (${wasRejected ? 'ถูกปฏิเสธ' : 'ถูกระงับ'}) ยื่นอุทธรณ์: ${message}`,
+    });
+    await notify({
+      userId: sub,
+      type: 'DRIVER_VERIFY',
+      title: 'ได้รับคำอุทธรณ์แล้ว',
+      body: wasRejected
+        ? 'ใบสมัครของคุณกลับเข้าสู่การตรวจสอบอีกครั้ง ทีมงานจะแจ้งผลให้ทราบ'
+        : 'ทีมงานได้รับคำอุทธรณ์ของคุณแล้ว และจะติดต่อกลับโดยเร็ว',
+    });
+
+    return c.json(toDriverDto(updated, driver.user?.displayName ?? null));
   })
 
   // Driver toggles online/offline for the on-demand feed.

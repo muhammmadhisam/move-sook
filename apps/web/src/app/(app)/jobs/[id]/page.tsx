@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { CheckCircle2, FileText, ArrowRight, Star } from 'lucide-react';
+import { CheckCircle2, FileText, ArrowRight, Star, MapPin } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -20,6 +20,7 @@ import { isCustomerCancellable } from '@movesook/shared';
 import { api, API_BASE_URL } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
+import { DestChangeCard } from '@/components/dest-change-card';
 import { DisputeDialog } from '@/components/dispute-dialog';
 import { ReviewDialog } from '@/components/review-dialog';
 import { useAuth } from '@/hooks/use-auth';
@@ -172,6 +173,27 @@ export default function JobDetailPage() {
             </Card>
           )}
 
+          {/* Customer-driven destination change (re-route mid-delivery; admin-approved; fee). */}
+          {me?.role === 'USER' && (
+            <DestChangeCard
+              job={job.data}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
+            />
+          )}
+
+          {/* Driver banner: the drop-off was changed by an approved request. */}
+          {me?.role === 'DRIVER' && job.data.destChangeStatus === 'COMPLETED' && (
+            <Card className="border-warning/50 bg-warning/5">
+              <CardContent className="flex items-start gap-2 py-3 text-sm">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+                <div>
+                  <p className="font-medium">ที่อยู่ปลายทางมีการเปลี่ยนแปลง</p>
+                  <p className="text-muted-foreground">ปลายทางปัจจุบัน: {job.data.destAddress}</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Customer delivery confirmation — an extra signal for the admin's final decision. */}
           {(job.data.status === 'IN_TRANSIT' ||
             job.data.status === 'PENDING_CONFIRMATION') && (
@@ -314,13 +336,21 @@ export default function JobDetailPage() {
           )}
 
           {/* Review the driver once delivered — the API allows one review per job,
-              by the job's customer only (the driver viewing this page won't see it). */}
-          {job.data.status === 'DELIVERED' && me?.role === 'USER' && (
-            <ReviewDialog
-              jobId={id}
-              onDone={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
-            />
-          )}
+              by the job's customer only (the driver viewing this page won't see it).
+              Once reviewed, swap the button for a confirmation so it can't 409. */}
+          {job.data.status === 'DELIVERED' &&
+            me?.role === 'USER' &&
+            (job.data.hasReview ? (
+              <p className="flex items-center justify-center gap-1.5 text-sm text-successScale-600">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                คุณให้คะแนนคนขับแล้ว ขอบคุณค่ะ
+              </p>
+            ) : (
+              <ReviewDialog
+                jobId={id}
+                onDone={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
+              />
+            ))}
 
           {/* Report a problem — once a driver is involved through delivery */}
           {DISPUTABLE.has(job.data.status) && <DisputeDialog jobId={id} />}

@@ -33,6 +33,7 @@ import type {
 } from '@movesook/shared';
 import { useAuth } from '@/hooks/use-auth';
 import { AvailabilityToggle } from '@/components/availability-toggle';
+import { DriverAppealDialog } from '@/components/driver-appeal-dialog';
 import { api } from '@/lib/api';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
@@ -149,6 +150,11 @@ export default function ProfilePage() {
             )}
             {(me.rejectionReason || banner.note) && (
               <p className="text-sm text-muted-foreground">{me.rejectionReason || banner.note}</p>
+            )}
+            {(me.verifyStatus === 'REJECTED' || me.verifyStatus === 'SUSPENDED') && (
+              <div className="pt-2">
+                <DriverAppealDialog rejected={me.verifyStatus === 'REJECTED'} />
+              </div>
             )}
           </CardContent>
         </Card>
@@ -278,16 +284,19 @@ export default function ProfilePage() {
         </Button>
       )}
 
-      {/* Non-driver: claim an admin-issued invite code to become a driver */}
+      {/* Non-driver: apply to become a driver (self-signup), or claim an invite code */}
       {!me.isDriver && (
         <Card>
           <CardContent className="space-y-2 p-4">
             <p className="text-sm font-medium">เป็นคนขับกับเรา?</p>
             <p className="text-sm text-muted-foreground">
-              หากแอดมินสร้างใบสมัครให้แล้ว กรอกโค้ดเชิญเพื่อเริ่มใช้งาน
+              สมัครเป็นคนขับเพื่อเริ่มรับงานขนย้ายในพื้นที่ของคุณ
             </p>
-            <Button asChild variant="outline" className="w-full">
-              <Link href="/driver/claim">กรอกโค้ดเชิญคนขับ</Link>
+            <Button asChild className="w-full">
+              <Link href="/driver/apply">สมัครเป็นคนขับ</Link>
+            </Button>
+            <Button asChild variant="ghost" className="w-full">
+              <Link href="/driver/claim">มีโค้ดเชิญจากแอดมิน?</Link>
             </Button>
           </CardContent>
         </Card>

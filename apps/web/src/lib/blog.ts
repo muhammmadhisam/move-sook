@@ -1,44 +1,30 @@
-// Lightweight in-repo blog. Swap for a CMS later by replacing this module —
-// the blog index, [slug] page, and sitemap all read from BLOG_POSTS.
-export type BlogPost = {
-  slug: string;
-  title: string;
-  excerpt: string;
-  publishedAt: string; // ISO date
-  author: string;
-  /** Plain-paragraph body. Each string renders as a <p>. */
-  body: string[];
-};
+// DB-backed marketing blog. Posts are authored in the admin app (BlogPost
+// table) and served by the API's public /blog routes. These helpers wrap the
+// type-safe API client so the index, [slug] page, and sitemap share one source.
+import { api } from './api';
+import type { BlogPostPublic, BlogPostSummary } from '@movesook/shared';
 
-export const BLOG_POSTS: BlogPost[] = [
-  {
-    slug: 'how-to-prepare-for-moving-day',
-    title: 'เตรียมตัวก่อนวันขนย้าย ให้ราบรื่นไม่วุ่นวาย',
-    excerpt:
-      'เช็กลิสต์ก่อนวันขนย้าย ตั้งแต่การแพ็คของ การจัดลำดับกล่อง ไปจนถึงสิ่งที่ควรเตรียมให้คนขับ เพื่อให้การย้ายของจบไวและปลอดภัย',
-    publishedAt: '2026-05-20',
-    author: 'ทีม MoveSook',
-    body: [
-      'การขนย้ายที่ดีเริ่มต้นจากการเตรียมตัวที่ดี ก่อนถึงวันจริงควรแพ็คของให้เรียบร้อย แยกของแตกหักง่ายไว้ต่างหาก และติดป้ายกล่องให้ชัดเจนว่าเป็นของห้องไหน',
-      'จัดลำดับกล่องที่ต้องใช้ก่อนไว้ด้านนอก เพื่อให้หยิบใช้ได้ทันทีหลังย้ายเสร็จ ของมีค่าหรือเอกสารสำคัญควรถือติดตัวไปเอง ไม่ปะปนกับของที่ขนขึ้นรถ',
-      'แจ้งจุดจอดรถและทางเข้า-ออกให้คนขับทราบล่วงหน้าผ่านแอป จะช่วยให้การโหลดของรวดเร็วและลดค่าใช้จ่ายที่ไม่จำเป็น',
-    ],
-  },
-  {
-    slug: 'choosing-the-right-vehicle',
-    title: 'เลือกขนาดรถให้เหมาะกับของ ประหยัดทั้งเงินและเวลา',
-    excerpt:
-      'รถกระบะ รถตู้ หรือรถ 6 ล้อ แบบไหนเหมาะกับของของคุณ? คู่มือสั้น ๆ ช่วยให้เลือกขนาดรถได้ถูกต้องตั้งแต่ครั้งแรก',
-    publishedAt: '2026-05-28',
-    author: 'ทีม MoveSook',
-    body: [
-      'การเลือกขนาดรถให้พอดีกับปริมาณของช่วยประหยัดค่าใช้จ่ายได้มาก เพราะไม่ต้องจ่ายค่ารถใหญ่เกินจำเป็น และไม่ต้องวิ่งหลายเที่ยว',
-      'ของน้อยชิ้นหรือเฟอร์นิเจอร์ชิ้นเดียว รถกระบะมักเพียงพอ ส่วนการย้ายหอหรือคอนโดขนาดเล็กอาจใช้รถตู้ทึบ และการย้ายบ้านทั้งหลังควรพิจารณารถ 6 ล้อ',
-      'เมื่อโพสต์งานบน MoveSook ระบุปริมาณและประเภทของให้ชัด คนขับที่มีรถเหมาะสมจะรับงานได้ตรงความต้องการมากขึ้น',
-    ],
-  },
-];
+export type { BlogPostPublic, BlogPostSummary };
 
-export function getPost(slug: string): BlogPost | undefined {
-  return BLOG_POSTS.find((p) => p.slug === slug);
+/** All published posts, newest first. Returns [] if the API is unreachable. */
+export async function getBlogPosts(): Promise<BlogPostSummary[]> {
+  try {
+    const res = await api.blog.$get();
+    if (!res.ok) return [];
+    const data = (await res.json()) as { items: BlogPostSummary[] };
+    return data.items;
+  } catch {
+    return [];
+  }
+}
+
+/** One published post by slug, or null if not found / unpublished. */
+export async function getBlogPost(slug: string): Promise<BlogPostPublic | null> {
+  try {
+    const res = await api.blog[':slug'].$get({ param: { slug } });
+    if (!res.ok) return null;
+    return (await res.json()) as BlogPostPublic;
+  } catch {
+    return null;
+  }
 }

@@ -10,12 +10,15 @@ import {
   EstimateJobInput,
   FlagJobIllegalInput,
   ListJobsQuery,
+  RequestDestChangeInput,
   SetJobProofInput,
   UpdateJobStatusInput,
+  UploadDestChangeSlipInput,
   UploadPaymentSlipInput,
   VehicleTypeSchema,
   canTransition,
   clampJobPrice,
+  computeAddressChangeFee,
   computeJobQuote,
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
@@ -358,6 +361,149 @@ export const jobRoutes = new Hono<AppEnv>()
     return c.json(toJobDto(updated));
   })
 
+  // CUSTOMER requests a destination change mid-delivery. The live destination is
+  // untouched; the requested new address is parked on destChange* until an admin
+  // approves the request AND the customer pays the change fee. The fee is snapshotted
+  // now (flat base + extra straight-line distance the new drop-off adds).
+  .post('/:id/dest-change', authenticate('user'), requireRole('USER', 'DRIVER'), zValidator('json', RequestDestChangeInput), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const input = c.req.valid('json');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
+    if (!isInHand(job.status)) {
+      throw new HTTPException(422, { message: 'เปลี่ยนที่อยู่ได้เฉพาะระหว่างที่คนขับกำลังดำเนินงาน' });
+    }
+    // One active request at a time; a prior NONE/REJECTED/COMPLETED may be superseded.
+    const activeStatuses = ['REQUESTED', 'APPROVED_AWAITING_PAYMENT', 'PENDING_REVIEW'];
+    if (activeStatuses.includes(job.destChangeStatus)) {
+      throw new HTTPException(422, { message: 'มีคำขอเปลี่ยนที่อยู่ที่กำลังดำเนินการอยู่แล้ว' });
+    }
+
+    const settings = await getSystemSettings();
+    const pricePerKm = await getEffectivePricePerKm(job.vehicleType);
+    const fee = computeAddressChangeFee({
+      origin: job.originLat != null && job.originLng != null ? { lat: job.originLat, lng: job.originLng } : null,
+      oldDest: job.destLat != null && job.destLng != null ? { lat: job.destLat, lng: job.destLng } : null,
+      newDest: input.destLat != null && input.destLng != null ? { lat: input.destLat, lng: input.destLng } : null,
+      baseFee: settings.addressChangeFee,
+      pricePerKm,
+    });
+
+    // When the customer attaches the transfer slip up front, skip the separate
+    // "approve request" gate and go straight to admin payment review.
+    const withSlip = Boolean(input.slipUrl);
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: withSlip ? 'PENDING_REVIEW' : 'REQUESTED',
+        destChangeNewAddress: input.destAddress,
+        destChangeNewProvince: input.destProvince,
+        destChangeNewLat: input.destLat ?? null,
+        destChangeNewLng: input.destLng ?? null,
+        destChangeReason: input.reason ?? null,
+        destChangeFee: fee.total,
+        destChangeExtraKm: fee.extraKm,
+        destChangeRequestedAt: new Date(),
+        destChangeSlipUrl: input.slipUrl ?? null,
+        destChangeSlipUploadedAt: withSlip ? new Date() : null,
+        // Clear any leftovers from a previous (rejected/completed) request.
+        destChangeRejectedReason: null,
+        destChangeApprovedById: null,
+        destChangeCompletedAt: null,
+      },
+    });
+
+    const title = withSlip
+      ? '📍 คำขอเปลี่ยนที่อยู่ + สลิปรอตรวจสอบ'
+      : '📍 คำขอเปลี่ยนที่อยู่ปลายทางใหม่';
+    const body = [
+      `งาน #${updated.id}`,
+      `เดิม: ${job.destAddress} (${job.destProvince})`,
+      `ใหม่: ${input.destAddress} (${input.destProvince})`,
+      `ค่าธรรมเนียม: ฿${fee.total.toLocaleString('th-TH')}`,
+    ].join('\n');
+    await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
+    await pushAdminLineGroup(`${title}\n${body}`);
+
+    return c.json(toJobDto(updated));
+  })
+
+  // CUSTOMER uploads the change-fee transfer slip (only after admin approved the request).
+  .post('/:id/dest-change/slip', authenticate('user'), requireRole('USER', 'DRIVER'), zValidator('json', UploadDestChangeSlipInput), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const { slipUrl } = c.req.valid('json');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
+    if (job.destChangeStatus !== 'APPROVED_AWAITING_PAYMENT') {
+      throw new HTTPException(422, { message: 'ยังไม่ถึงขั้นชำระค่าธรรมเนียมเปลี่ยนที่อยู่' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: 'PENDING_REVIEW',
+        destChangeSlipUrl: slipUrl,
+        destChangeSlipUploadedAt: new Date(),
+        destChangeRejectedReason: null,
+      },
+    });
+
+    const title = '💰 มีสลิปค่าเปลี่ยนที่อยู่รอตรวจสอบ';
+    const body = [
+      `งาน #${updated.id}`,
+      `ที่อยู่ใหม่: ${updated.destChangeNewAddress} (${updated.destChangeNewProvince})`,
+      `ค่าธรรมเนียม: ฿${(updated.destChangeFee ?? 0).toLocaleString('th-TH')}`,
+    ].join('\n');
+    await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
+    await pushAdminLineGroup(`${title}\n${body}`);
+
+    return c.json(toJobDto(updated));
+  })
+
+  // CUSTOMER withdraws their own pending destination-change request.
+  .post('/:id/dest-change/cancel', authenticate('user'), requireRole('USER', 'DRIVER'), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
+    const cancellable = ['REQUESTED', 'APPROVED_AWAITING_PAYMENT', 'PENDING_REVIEW'];
+    if (!cancellable.includes(job.destChangeStatus)) {
+      throw new HTTPException(422, { message: 'ไม่มีคำขอเปลี่ยนที่อยู่ที่ยกเลิกได้' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        destChangeStatus: 'NONE',
+        destChangeNewAddress: null,
+        destChangeNewProvince: null,
+        destChangeNewLat: null,
+        destChangeNewLng: null,
+        destChangeReason: null,
+        destChangeFee: null,
+        destChangeExtraKm: null,
+        destChangeRequestedAt: null,
+        destChangeApprovedById: null,
+        destChangeRejectedReason: null,
+        destChangeSlipUrl: null,
+        destChangeSlipUploadedAt: null,
+      },
+    });
+    return c.json(toJobDto(updated));
+  })
+
   // DRIVER browses matching/backhaul jobs; USER lists their own jobs.
   .get('/', authenticate('user'), zValidator('query', ListJobsQuery), async (c) => {
     const { sub, role } = c.get('claims');
@@ -422,6 +568,7 @@ export const jobRoutes = new Hono<AppEnv>()
       include: {
         customer: { select: { userId: true } },
         driver: { include: { user: { select: { displayName: true, phone: true } } } },
+        review: { select: { id: true } },
       },
     });
     if (!job) throw new HTTPException(404, { message: 'Job not found' });
@@ -434,6 +581,7 @@ export const jobRoutes = new Hono<AppEnv>()
 
     const body: JobDetailResponse = {
       ...toJobDto(job),
+      hasReview: job.review !== null,
       driver: job.driver
         ? {
             displayName: job.driver.user?.displayName ?? null,

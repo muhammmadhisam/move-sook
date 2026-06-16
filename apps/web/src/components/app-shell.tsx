@@ -2,6 +2,7 @@
 
 import { useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft, Home, Truck, Package, Bell, User } from 'lucide-react';
@@ -84,9 +85,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               <ChevronLeft className="h-5 w-5" />
             </button>
           ) : (
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-              MS
-            </div>
+            <Image
+              src="/brand-mark.png"
+              alt="MoveSook"
+              width={28}
+              height={28}
+              className="h-7 w-7 rounded-lg"
+              priority
+            />
           )}
           <span className="text-base font-semibold tracking-tight">MoveSook</span>
         </div>

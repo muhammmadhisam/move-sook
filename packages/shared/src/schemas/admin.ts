@@ -22,6 +22,9 @@ export const AdminStatsResponse = z.object({
   openJobs: z.number().int(), // POSTED, unassigned
   pendingDrivers: z.number().int(),
   pendingPaymentReview: z.number().int(), // PENDING_PAYMENT jobs with a slip uploaded, awaiting admin approval
+  openDisputes: z.number().int(), // Dispute rows still OPEN, awaiting resolution
+  pendingDestChanges: z.number().int(), // destination-change requests awaiting admin action (REQUESTED + PENDING_REVIEW)
+  slipRejectionEscalations: z.number().int(), // jobs whose slip has been rejected >= 3 times (needs attention)
 });
 export type AdminStatsResponse = z.infer<typeof AdminStatsResponse>;
 
@@ -235,6 +238,13 @@ export const AdminRejectPaymentInput = z.object({
   reason: z.string().trim().max(500).optional(),
 });
 export type AdminRejectPaymentInput = z.infer<typeof AdminRejectPaymentInput>;
+
+// POST /admin/jobs/:id/dest-change/reject and .../payment/reject — admin rejects
+// a destination-change request or bounces its fee slip back to the customer.
+export const AdminRejectDestChangeInput = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+export type AdminRejectDestChangeInput = z.infer<typeof AdminRejectDestChangeInput>;
 
 // Job row enriched with customer summary for the admin job board.
 export const AdminJobListItem = JobDto.extend({

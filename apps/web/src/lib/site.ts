@@ -1,32 +1,32 @@
 // Central site metadata — single source of truth for SEO, sitemap, JSON-LD,
 // and marketing copy. Override the URL per-environment via NEXT_PUBLIC_SITE_URL.
 export const SITE = {
-  name: 'MoveSook',
-  nameTh: 'มูฟสุข',
-  tagline: 'เรียกคนขับขนย้ายใกล้คุณ',
+  name: "MoveSook",
+  nameTh: "มูฟสุข",
+  tagline: "เรียกคนขับขนย้ายใกล้คุณ",
   description:
-    'MoveSook (มูฟสุข) แพลตฟอร์มเรียกรถขนย้าย โพสต์งานขนย้าย แล้วให้คนขับที่อยู่ใกล้และว่างรับงาน ราคาโปร่งใส ปลอดภัย ติดตามสถานะได้แบบเรียลไทม์',
+    "MoveSook (มูฟสุข) แพลตฟอร์มเรียกรถขนย้าย โพสต์งานขนย้าย แล้วให้คนขับที่อยู่ใกล้และว่างรับงาน ราคาโปร่งใส ปลอดภัย ติดตามสถานะได้แบบเรียลไทม์",
   // Tolerate a bare hostname in NEXT_PUBLIC_SITE_URL (e.g. "movesook.samdev.cloud"):
   // metadataBase/new URL() require a protocol, so default to https:// if none is given.
-  url: (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://movesook.com')
-    .replace(/\/$/, '')
-    .replace(/^(?!https?:\/\/)/, 'https://'),
-  email: 'support@movesook.com',
-  phone: '+66-2-000-0000',
-  lineOaUrl: 'https://line.me/R/ti/p/@movesook',
+  url: (process.env.NEXT_PUBLIC_SITE_URL ?? "https://movesook.com")
+    .replace(/\/$/, "")
+    .replace(/^(?!https?:\/\/)/, "https://"),
+  email: "support@movesook.com",
+  phone: "+66-2-000-0000",
+  lineOaUrl: "https://line.me/R/ti/p/@013ogbsz",
   commissionPct: 12,
 } as const;
 
 // Marketing routes that belong in the sitemap (public, indexable).
 export const MARKETING_ROUTES = [
-  { path: '/', priority: 1.0, changeFrequency: 'weekly' as const },
-  { path: '/how-it-works', priority: 0.9, changeFrequency: 'monthly' as const },
-  { path: '/drivers', priority: 0.9, changeFrequency: 'monthly' as const },
-  { path: '/pricing', priority: 0.8, changeFrequency: 'monthly' as const },
-  { path: '/about', priority: 0.7, changeFrequency: 'monthly' as const },
-  { path: '/faq', priority: 0.8, changeFrequency: 'monthly' as const },
-  { path: '/contact', priority: 0.6, changeFrequency: 'yearly' as const },
-  { path: '/blog', priority: 0.7, changeFrequency: 'weekly' as const },
-  { path: '/terms', priority: 0.3, changeFrequency: 'yearly' as const },
-  { path: '/privacy', priority: 0.3, changeFrequency: 'yearly' as const },
+  { path: "/", priority: 1.0, changeFrequency: "weekly" as const },
+  { path: "/how-it-works", priority: 0.9, changeFrequency: "monthly" as const },
+  { path: "/drivers", priority: 0.9, changeFrequency: "monthly" as const },
+  { path: "/pricing", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/about", priority: 0.7, changeFrequency: "monthly" as const },
+  { path: "/faq", priority: 0.8, changeFrequency: "monthly" as const },
+  { path: "/contact", priority: 0.6, changeFrequency: "yearly" as const },
+  { path: "/blog", priority: 0.7, changeFrequency: "weekly" as const },
+  { path: "/terms", priority: 0.3, changeFrequency: "yearly" as const },
+  { path: "/privacy", priority: 0.3, changeFrequency: "yearly" as const },
 ];

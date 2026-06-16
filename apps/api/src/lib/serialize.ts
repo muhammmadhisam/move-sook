@@ -1,5 +1,62 @@
-import type { Customer, Driver, Job } from '@movesook/db';
-import type { CustomerDto, DriverDto, JobDto, JobItem } from '@movesook/shared';
+import type {
+  BlogPost,
+  Customer,
+  Driver,
+  Job,
+  LedgerAttachment,
+  LedgerEntry,
+  User,
+} from '@movesook/db';
+import type {
+  BlogPostDto,
+  CustomerDto,
+  DriverDto,
+  JobDto,
+  JobItem,
+  LedgerEntryDto,
+} from '@movesook/shared';
+
+// Convert a Prisma BlogPost row to the admin wire DTO (Dates -> ISO strings).
+export function toBlogPostDto(post: BlogPost): BlogPostDto {
+  return {
+    id: post.id,
+    slug: post.slug,
+    title: post.title,
+    excerpt: post.excerpt,
+    body: post.body,
+    coverImageUrl: post.coverImageUrl,
+    author: post.author,
+    status: post.status,
+    publishedAt: post.publishedAt ? post.publishedAt.toISOString() : null,
+    createdAt: post.createdAt.toISOString(),
+    updatedAt: post.updatedAt.toISOString(),
+  };
+}
+
+// Convert a Prisma LedgerEntry (with attachments + creator) to the admin DTO.
+export function toLedgerEntryDto(
+  entry: LedgerEntry & { attachments: LedgerAttachment[]; createdBy: Pick<User, 'displayName'> | null },
+): LedgerEntryDto {
+  return {
+    id: entry.id,
+    type: entry.type,
+    category: entry.category,
+    title: entry.title,
+    amount: entry.amount,
+    note: entry.note,
+    occurredAt: entry.occurredAt.toISOString(),
+    createdById: entry.createdById,
+    createdByName: entry.createdBy?.displayName ?? null,
+    attachments: entry.attachments.map((a) => ({
+      id: a.id,
+      url: a.url,
+      name: a.name,
+      mimeType: a.mimeType,
+    })),
+    createdAt: entry.createdAt.toISOString(),
+    updatedAt: entry.updatedAt.toISOString(),
+  };
+}
 
 // Convert a Prisma Job row to the wire DTO (Dates -> ISO strings).
 export function toJobDto(job: Job): JobDto {
@@ -48,6 +105,19 @@ export function toJobDto(job: Job): JobDto {
     pickupProofUrls: job.pickupProofUrls,
     deliveryProofUrls: job.deliveryProofUrls,
     customerConfirmedAt: job.customerConfirmedAt ? job.customerConfirmedAt.toISOString() : null,
+    destChangeStatus: job.destChangeStatus,
+    destChangeNewAddress: job.destChangeNewAddress,
+    destChangeNewProvince: job.destChangeNewProvince,
+    destChangeNewLat: job.destChangeNewLat,
+    destChangeNewLng: job.destChangeNewLng,
+    destChangeReason: job.destChangeReason,
+    destChangeFee: job.destChangeFee,
+    destChangeExtraKm: job.destChangeExtraKm,
+    destChangeRequestedAt: job.destChangeRequestedAt ? job.destChangeRequestedAt.toISOString() : null,
+    destChangeRejectedReason: job.destChangeRejectedReason,
+    destChangeSlipUrl: job.destChangeSlipUrl,
+    destChangeSlipUploadedAt: job.destChangeSlipUploadedAt ? job.destChangeSlipUploadedAt.toISOString() : null,
+    destChangeCompletedAt: job.destChangeCompletedAt ? job.destChangeCompletedAt.toISOString() : null,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
   };
@@ -64,6 +134,8 @@ export function toDriverDto(driver: Driver, displayName: string | null): DriverD
     licenseTw2: driver.licenseTw2,
     verifyStatus: driver.verifyStatus,
     rejectionReason: driver.rejectionReason,
+    appealMessage: driver.appealMessage,
+    appealAt: driver.appealAt ? driver.appealAt.toISOString() : null,
     serviceProvince: driver.serviceProvince,
     isAvailable: driver.isAvailable,
     ratingAvg: driver.ratingAvg,
@@ -72,8 +144,17 @@ export function toDriverDto(driver: Driver, displayName: string | null): DriverD
     bankAccountName: driver.bankAccountName,
     bankAccountNo: driver.bankAccountNo,
     phone: driver.phone,
+    firstName: driver.firstName,
+    lastName: driver.lastName,
+    birthDate: driver.birthDate ? driver.birthDate.toISOString() : null,
+    gender: driver.gender,
+    email: driver.email,
+    emergencyContactName: driver.emergencyContactName,
+    emergencyContactPhone: driver.emergencyContactPhone,
     nationalId: driver.nationalId,
     nationalIdUrl: driver.nationalIdUrl,
+    address: driver.address,
+    screening: (driver.screening as unknown as DriverDto['screening']) ?? null,
     licenseNo: driver.licenseNo,
     licenseExpiry: driver.licenseExpiry ? driver.licenseExpiry.toISOString() : null,
     vehicleRegUrl: driver.vehicleRegUrl,

@@ -1,14 +1,115 @@
 import { z } from 'zod';
-import { DriverVerifyStatusSchema, VehicleTypeSchema } from '../enums';
+import { DriverVerifyStatusSchema, GenderSchema, VehicleTypeSchema } from '../enums';
 import { ProvinceNameSchema } from './province';
 
-// POST /drivers/apply
+// Thai national ID: exactly 13 digits.
+const NationalIdSchema = z.string().regex(/^\d{13}$/, 'เลขบัตรประชาชนต้องมี 13 หลัก');
+// Date-only string (YYYY-MM-DD); server coerces to a Date.
+const DateOnlySchema = z.string().date();
+
+// ── Driver screening questionnaire ──────────────────────────────────────────
+// Basic multiple-choice questions answered during self-signup. Stored as JSON on
+// the Driver and shown to admins to help decide whether to approve the applicant.
+// Keep option values in sync with DriverScreeningSchema below.
+export const DRIVER_SCREENING_QUESTIONS = [
+  {
+    key: 'ownVehicle',
+    question: 'คุณมีรถสำหรับรับงานหรือไม่?',
+    options: [
+      { value: 'OWN', label: 'มีรถเป็นของตัวเอง' },
+      { value: 'FINANCING', label: 'กำลังผ่อน / เช่า' },
+      { value: 'NONE', label: 'ยังไม่มีรถ' },
+    ],
+  },
+  {
+    key: 'experience',
+    question: 'ประสบการณ์ขับรถขนส่ง / ขนย้าย',
+    options: [
+      { value: 'LT1', label: 'น้อยกว่า 1 ปี' },
+      { value: 'Y1_3', label: '1 – 3 ปี' },
+      { value: 'Y3_5', label: '3 – 5 ปี' },
+      { value: 'GT5', label: 'มากกว่า 5 ปี' },
+    ],
+  },
+  {
+    key: 'commitment',
+    question: 'รูปแบบการรับงานที่ต้องการ',
+    options: [
+      { value: 'FULLTIME', label: 'เต็มเวลา' },
+      { value: 'PARTTIME', label: 'พาร์ทไทม์ / งานเสริม' },
+    ],
+  },
+  {
+    key: 'availability',
+    question: 'ช่วงเวลาที่สะดวกรับงาน',
+    options: [
+      { value: 'ANYTIME', label: 'ได้ทุกวัน' },
+      { value: 'WEEKDAY', label: 'วันธรรมดา' },
+      { value: 'WEEKEND', label: 'วันหยุดสุดสัปดาห์' },
+      { value: 'EVENING', label: 'ช่วงเย็น / กลางคืน' },
+    ],
+  },
+  {
+    key: 'lifting',
+    question: 'การยกของหนัก',
+    options: [
+      { value: 'SELF', label: 'ยกเองได้' },
+      { value: 'HELPER', label: 'มีผู้ช่วยยก' },
+      { value: 'NO', label: 'ยกของหนักไม่ได้' },
+    ],
+  },
+  {
+    key: 'smartphone',
+    question: 'คุณมีสมาร์ทโฟนสำหรับใช้แอปรับงานหรือไม่?',
+    options: [
+      { value: 'YES', label: 'มี' },
+      { value: 'NO', label: 'ไม่มี' },
+    ],
+  },
+] as const;
+
+export const DriverScreeningSchema = z.object({
+  ownVehicle: z.enum(['OWN', 'FINANCING', 'NONE']),
+  experience: z.enum(['LT1', 'Y1_3', 'Y3_5', 'GT5']),
+  commitment: z.enum(['FULLTIME', 'PARTTIME']),
+  availability: z.enum(['ANYTIME', 'WEEKDAY', 'WEEKEND', 'EVENING']),
+  lifting: z.enum(['SELF', 'HELPER', 'NO']),
+  smartphone: z.enum(['YES', 'NO']),
+});
+export type DriverScreening = z.infer<typeof DriverScreeningSchema>;
+
+// Personal-detail fields shared by apply (create) and PATCH /me (edit).
+const driverPersonalFields = {
+  firstName: z.string().min(1).max(80).optional(), // ชื่อจริง
+  lastName: z.string().min(1).max(80).optional(), // นามสกุล
+  birthDate: DateOnlySchema.optional(), // วันเกิด
+  gender: GenderSchema.optional(), // เพศ
+  email: z.string().email().max(120).optional(), // อีเมล
+  emergencyContactName: z.string().min(1).max(120).optional(), // ผู้ติดต่อฉุกเฉิน
+  emergencyContactPhone: z.string().min(6).max(20).optional(), // เบอร์ผู้ติดต่อฉุกเฉิน
+  nationalId: NationalIdSchema.optional(), // เลขบัตรประชาชน
+  nationalIdUrl: z.string().min(1).optional(), // รูปบัตรประชาชน
+  address: z.string().min(1).max(300).optional(), // ที่อยู่คนขับ
+  licenseNo: z.string().min(1).max(40).optional(), // เลขใบขับขี่
+  licenseExpiry: DateOnlySchema.optional(), // วันหมดอายุใบขับขี่
+  screening: DriverScreeningSchema.optional(), // คำตอบแบบสอบถามคัดกรอง
+} as const;
+
+// POST /drivers/apply — self-signup. Identity + contact + service area are
+// REQUIRED here (overriding the optional personal fields) so an application can
+// actually be verified; the rest can be completed later via PATCH /me.
 export const DriverApplyInput = z.object({
   vehicleType: VehicleTypeSchema,
   plateNumber: z.string().min(1).max(20).optional(),
   licenseTw2: z.string().min(1).optional(), // uploaded doc reference / URL
   serviceProvince: ProvinceNameSchema, // province the driver operates in (canonical name_th)
-  phone: z.string().min(6).max(20).optional(),
+  ...driverPersonalFields,
+  // ── required for self-signup ──
+  firstName: z.string().min(1, 'กรุณากรอกชื่อ').max(80),
+  lastName: z.string().min(1, 'กรุณากรอกนามสกุล').max(80),
+  phone: z.string().min(6, 'กรุณากรอกเบอร์โทร').max(20),
+  nationalId: NationalIdSchema, // เลขบัตรประชาชน (13 หลัก)
+  screening: DriverScreeningSchema, // ต้องตอบแบบสอบถามคัดกรองให้ครบ
 });
 export type DriverApplyInput = z.infer<typeof DriverApplyInput>;
 
@@ -17,6 +118,13 @@ export const ClaimDriverInput = z.object({
   code: z.string().min(4).max(20),
 });
 export type ClaimDriverInput = z.infer<typeof ClaimDriverInput>;
+
+// POST /drivers/me/appeal — a REJECTED / SUSPENDED driver appeals the decision
+// with a message to the admin. A rejected application returns to PENDING review.
+export const DriverAppealInput = z.object({
+  message: z.string().min(1, 'กรุณากรอกข้อความถึงทีมงาน').max(1000),
+});
+export type DriverAppealInput = z.infer<typeof DriverAppealInput>;
 
 // PATCH /drivers/me/availability — driver toggles online/offline (on-demand)
 export const DriverAvailabilityInput = z.object({
@@ -32,14 +140,15 @@ export const UpdateDriverLocationInput = z.object({
 export type UpdateDriverLocationInput = z.infer<typeof UpdateDriverLocationInput>;
 
 // PATCH /drivers/me — the driver fills in / edits their own application details.
-// Only usable by an existing (admin-created, linked) driver; there is no public
-// self-signup. All fields optional so the driver can complete it progressively.
+// Usable by an existing (linked) driver — whether self-signed-up via /drivers/apply
+// or admin-created. All fields optional so the driver can complete it progressively.
 export const DriverUpdateInput = z.object({
   vehicleType: VehicleTypeSchema.optional(),
   plateNumber: z.string().min(1).max(20).optional(),
   licenseTw2: z.string().min(1).optional(), // uploaded ใบขับขี่ ท.2 image URL
   serviceProvince: ProvinceNameSchema.optional(),
   phone: z.string().min(6).max(20).optional(),
+  ...driverPersonalFields,
   bankName: z.string().max(100).optional(),
   bankAccountName: z.string().max(120).optional(),
   bankAccountNo: z.string().max(40).optional(),
@@ -54,6 +163,8 @@ export const DriverDto = z.object({
   licenseTw2: z.string().nullable(),
   verifyStatus: DriverVerifyStatusSchema,
   rejectionReason: z.string().nullable(),
+  appealMessage: z.string().nullable(),
+  appealAt: z.string().datetime().nullable(),
   serviceProvince: z.string().nullable(),
   isAvailable: z.boolean(),
   ratingAvg: z.number(),
@@ -62,8 +173,17 @@ export const DriverDto = z.object({
   bankAccountName: z.string().nullable(),
   bankAccountNo: z.string().nullable(),
   phone: z.string().nullable(),
+  firstName: z.string().nullable(),
+  lastName: z.string().nullable(),
+  birthDate: z.string().datetime().nullable(),
+  gender: GenderSchema.nullable(),
+  email: z.string().nullable(),
+  emergencyContactName: z.string().nullable(),
+  emergencyContactPhone: z.string().nullable(),
   nationalId: z.string().nullable(),
   nationalIdUrl: z.string().nullable(),
+  address: z.string().nullable(),
+  screening: DriverScreeningSchema.nullable(),
   licenseNo: z.string().nullable(),
   licenseExpiry: z.string().datetime().nullable(),
   vehicleRegUrl: z.string().nullable(),

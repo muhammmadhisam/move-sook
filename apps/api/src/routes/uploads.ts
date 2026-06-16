@@ -27,12 +27,23 @@ const authAny = createMiddleware<AppEnv>(async (c, next) => {
 // Without them (dev), files land in ./uploads (relative to apps/api cwd).
 export const UPLOAD_DIR = 'uploads';
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
-const EXT_BY_MIME: Record<string, string> = {
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_DOC_BYTES = 10 * 1024 * 1024; // 10 MB — receipts/documents can be larger
+
+// Images (proof photos, slips, blog covers) and documents (receipts, invoices)
+// are both accepted; the ledger feature attaches either kind to an entry.
+const IMAGE_EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
   'image/heic': 'heic',
+};
+const DOC_EXT_BY_MIME: Record<string, string> = {
+  'application/pdf': 'pdf',
+  'application/msword': 'doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+  'application/vnd.ms-excel': 'xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
 };
 
 const r2 = r2Enabled
@@ -96,22 +107,31 @@ export const uploadRoutes = new Hono<AppEnv>()
     if (!(file instanceof File)) {
       throw new HTTPException(400, { message: 'Missing "file" field' });
     }
-    const ext = EXT_BY_MIME[file.type];
+    const isImage = file.type in IMAGE_EXT_BY_MIME;
+    const ext = IMAGE_EXT_BY_MIME[file.type] ?? DOC_EXT_BY_MIME[file.type];
     if (!ext) {
-      throw new HTTPException(415, { message: 'Only JPEG/PNG/WebP/HEIC images allowed' });
+      throw new HTTPException(415, {
+        message: 'Only JPEG/PNG/WebP/HEIC images or PDF/DOC/XLS documents allowed',
+      });
     }
-    if (file.size > MAX_BYTES) {
-      throw new HTTPException(413, { message: 'Image exceeds 5MB' });
+    const maxBytes = isImage ? MAX_IMAGE_BYTES : MAX_DOC_BYTES;
+    if (file.size > maxBytes) {
+      throw new HTTPException(413, {
+        message: isImage ? 'Image exceeds 5MB' : 'Document exceeds 10MB',
+      });
     }
 
-    const name = `${randomUUID()}.${ext}`;
+    const key = `${randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
-    await store(name, buffer, file.type);
+    await store(key, buffer, file.type);
 
-    // Absolute URL so the web/admin apps (different origin) can render it.
+    // Original filename + mime travel back so callers can label document
+    // attachments (images just use the URL). Absolute URL so web/admin
+    // (different origin) can render/link it.
+    const meta = { name: file.name || key, type: file.type };
     if (r2 && env.R2_PUBLIC_URL) {
-      return c.json({ url: `${env.R2_PUBLIC_URL.replace(/\/$/, '')}/${name}` }, 201);
+      return c.json({ url: `${env.R2_PUBLIC_URL.replace(/\/$/, '')}/${key}`, ...meta }, 201);
     }
     const origin = new URL(c.req.url).origin;
-    return c.json({ url: `${origin}/${UPLOAD_DIR}/${name}` }, 201);
+    return c.json({ url: `${origin}/${UPLOAD_DIR}/${key}`, ...meta }, 201);
   });

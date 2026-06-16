@@ -43,7 +43,10 @@ export function ReviewDialog({ jobId, onDone }: { jobId: string; onDone: () => v
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="flex-1">ให้คะแนนคนขับ</Button>
+        <Button className="w-full">
+          <Star className="mr-1.5 h-4 w-4" />
+          ให้คะแนนคนขับ
+        </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>

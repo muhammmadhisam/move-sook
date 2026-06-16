@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { CargoCategorySchema, JobStatusSchema, PricingModeSchema, VehicleTypeSchema } from '../enums';
+import {
+  AddrChangeStatusSchema,
+  CargoCategorySchema,
+  JobStatusSchema,
+  PricingModeSchema,
+  VehicleTypeSchema,
+} from '../enums';
 import { ProvinceNameSchema } from './province';
 
 const latitude = z.number().min(-90).max(90);
@@ -124,6 +130,29 @@ export const UploadPaymentSlipInput = z.object({
 });
 export type UploadPaymentSlipInput = z.infer<typeof UploadPaymentSlipInput>;
 
+// POST /jobs/:id/dest-change — customer asks to re-route the job to a new
+// destination mid-delivery. Allowed only while the driver holds the job
+// (ACCEPTED/PICKED_UP/IN_TRANSIT) and there is no active request already.
+export const RequestDestChangeInput = z.object({
+  destAddress: z.string().min(3),
+  destProvince: ProvinceNameSchema,
+  destLat: latitude.optional(),
+  destLng: longitude.optional(),
+  reason: z.string().trim().max(500).optional(),
+  // Optional: attach the fee transfer slip in the same step. When present the
+  // request skips straight to admin payment review (PENDING_REVIEW); otherwise
+  // it waits for the admin to approve the request before the customer pays.
+  slipUrl: z.string().url().optional(),
+});
+export type RequestDestChangeInput = z.infer<typeof RequestDestChangeInput>;
+
+// POST /jobs/:id/dest-change/slip — customer uploads the change-fee transfer slip
+// (only once an admin has approved the request).
+export const UploadDestChangeSlipInput = z.object({
+  slipUrl: z.string().url(),
+});
+export type UploadDestChangeSlipInput = z.infer<typeof UploadDestChangeSlipInput>;
+
 // POST /jobs/:id/proof — driver attaches a pickup or delivery photo.
 export const SetJobProofInput = z.object({
   kind: z.enum(['PICKUP', 'DELIVERY']),
@@ -201,6 +230,20 @@ export const JobDto = z.object({
   pickupProofUrls: z.array(z.string()),
   deliveryProofUrls: z.array(z.string()),
   customerConfirmedAt: z.string().datetime().nullable(),
+  // Destination-change request (re-route mid-delivery; admin-approved; customer pays a fee).
+  destChangeStatus: AddrChangeStatusSchema,
+  destChangeNewAddress: z.string().nullable(),
+  destChangeNewProvince: z.string().nullable(),
+  destChangeNewLat: z.number().nullable(),
+  destChangeNewLng: z.number().nullable(),
+  destChangeReason: z.string().nullable(),
+  destChangeFee: z.number().int().nullable(),
+  destChangeExtraKm: z.number().nullable(),
+  destChangeRequestedAt: z.string().datetime().nullable(),
+  destChangeRejectedReason: z.string().nullable(),
+  destChangeSlipUrl: z.string().nullable(),
+  destChangeSlipUploadedAt: z.string().datetime().nullable(),
+  destChangeCompletedAt: z.string().datetime().nullable(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -238,6 +281,9 @@ export type JobTrackEvent = z.infer<typeof JobTrackEvent>;
 
 export const JobDetailResponse = JobDto.extend({
   driver: JobDriverSummary.nullable(),
+  // True once the job's customer has left their one allowed review — clients
+  // hide the "rate driver" button instead of letting a second submit 409.
+  hasReview: z.boolean(),
 });
 export type JobDetailResponse = z.infer<typeof JobDetailResponse>;
 

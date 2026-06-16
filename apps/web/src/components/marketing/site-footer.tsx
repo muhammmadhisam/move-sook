@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { SITE } from '@/lib/site';
 
 const GROUPS = [
@@ -36,9 +37,13 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-6xl gap-8 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Link href="/" className="flex items-center gap-2 text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-              MS
-            </span>
+            <Image
+              src="/brand-mark.png"
+              alt="MoveSook"
+              width={36}
+              height={36}
+              className="h-9 w-9 rounded-lg"
+            />
             <span className="text-lg font-semibold tracking-tight">MoveSook</span>
           </Link>
           <p className="mt-3 max-w-xs text-sm leading-relaxed">{SITE.tagline}</p>

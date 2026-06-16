@@ -23,6 +23,7 @@ import {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { PaymentReview } from '@/components/payment-review';
+import { DestChangeReview } from '@/components/dest-change-review';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787';
@@ -186,6 +187,22 @@ export default function AdminJobDetailPage() {
           </CardHeader>
           <CardContent>
             <PaymentReview
+              job={j}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin', 'job', id] })}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Destination-change request review (re-route mid-delivery; fee-gated). */}
+      {j.destChangeStatus !== 'NONE' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>คำขอเปลี่ยนที่อยู่ปลายทาง</CardTitle>
+            <CardDescription>อนุมัติคำขอ → ตรวจสลิปค่าธรรมเนียม → ระบบแจ้งคนขับ</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <DestChangeReview
               job={j}
               onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin', 'job', id] })}
             />

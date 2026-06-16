@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { Button, cn } from '@movesook/ui';
 
@@ -22,9 +23,14 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b border-navy-800 bg-navy-900 text-white">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-            MS
-          </span>
+          <Image
+            src="/brand-mark.png"
+            alt="MoveSook"
+            width={36}
+            height={36}
+            className="h-9 w-9 rounded-lg"
+            priority
+          />
           <span className="text-lg font-semibold tracking-tight">MoveSook</span>
         </Link>
 

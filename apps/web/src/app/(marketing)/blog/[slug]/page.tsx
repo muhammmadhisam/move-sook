@@ -2,16 +2,17 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { CalendarDays, ChevronLeft } from 'lucide-react';
+import { PreviewableImage } from '@movesook/ui';
 import { Prose } from '@/components/marketing/sections';
+import { Markdown } from '@/components/marketing/markdown';
 import { JsonLd } from '@/components/marketing/json-ld';
-import { BLOG_POSTS, getPost } from '@/lib/blog';
+import { getBlogPost } from '@/lib/blog';
 import { SITE } from '@/lib/site';
 
-type Params = { slug: string };
+// ISR: published article content refreshes at most every 5 minutes.
+export const revalidate = 300;
 
-export function generateStaticParams(): Params[] {
-  return BLOG_POSTS.map((p) => ({ slug: p.slug }));
-}
+type Params = { slug: string };
 
 export async function generateMetadata({
   params,
@@ -19,7 +20,7 @@ export async function generateMetadata({
   params: Promise<Params>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getBlogPost(slug);
   if (!post) return { title: 'ไม่พบบทความ' };
   return {
     title: post.title,
@@ -29,9 +30,10 @@ export async function generateMetadata({
       type: 'article',
       title: post.title,
       description: post.excerpt,
-      publishedTime: post.publishedAt,
+      ...(post.publishedAt ? { publishedTime: post.publishedAt } : {}),
       authors: [post.author],
       url: `${SITE.url}/blog/${post.slug}`,
+      ...(post.coverImageUrl ? { images: [{ url: post.coverImageUrl }] } : {}),
     },
   };
 }
@@ -44,7 +46,7 @@ const dateFmt = new Intl.DateTimeFormat('th-TH', {
 
 export default async function BlogPostPage({ params }: { params: Promise<Params> }) {
   const { slug } = await params;
-  const post = getPost(slug);
+  const post = await getBlogPost(slug);
   if (!post) notFound();
 
   return (
@@ -55,7 +57,8 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
           '@type': 'BlogPosting',
           headline: post.title,
           description: post.excerpt,
-          datePublished: post.publishedAt,
+          ...(post.publishedAt ? { datePublished: post.publishedAt } : {}),
+          ...(post.coverImageUrl ? { image: post.coverImageUrl } : {}),
           author: { '@type': 'Organization', name: post.author },
           publisher: { '@type': 'Organization', name: SITE.name, url: SITE.url },
           mainEntityOfPage: `${SITE.url}/blog/${post.slug}`,
@@ -75,17 +78,27 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
           </h1>
           <p className="mt-4 flex items-center gap-2 text-sm text-navy-200">
             <CalendarDays className="h-4 w-4" />
-            <time dateTime={post.publishedAt}>{dateFmt.format(new Date(post.publishedAt))}</time>
+            {post.publishedAt && (
+              <time dateTime={post.publishedAt}>{dateFmt.format(new Date(post.publishedAt))}</time>
+            )}
             <span aria-hidden>·</span>
             <span>{post.author}</span>
           </p>
         </div>
       </header>
 
+      {post.coverImageUrl && (
+        <div className="mx-auto max-w-3xl px-4">
+          <PreviewableImage
+            src={post.coverImageUrl}
+            alt={post.title}
+            className="-mt-8 w-full rounded-xl border object-cover shadow-sm"
+          />
+        </div>
+      )}
+
       <Prose>
-        {post.body.map((para, i) => (
-          <p key={i}>{para}</p>
-        ))}
+        <Markdown>{post.body}</Markdown>
       </Prose>
     </article>
   );

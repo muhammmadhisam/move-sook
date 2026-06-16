@@ -105,6 +105,7 @@ export function SystemSettingsCard() {
           {numField('minJobPrice', 'ราคาต่ำสุด (บาท)')}
           {numField('maxJobPrice', 'ราคาสูงสุด (บาท, 0=ไม่จำกัด)')}
           {numField('cancellationFee', 'ค่าธรรมเนียมยกเลิก (บาท)')}
+          {numField('addressChangeFee', 'ค่าธรรมเนียมเปลี่ยนที่อยู่ (บาท, +ตามระยะทาง)')}
           {numField('freeCancelMinutes', 'ยกเลิกฟรีภายใน (นาที)')}
           {numField('pendingPaymentExpireDays', 'ยกเลิกงานไม่จ่ายเงินใน (วัน, 0=ไม่ยกเลิก)')}
         </div>

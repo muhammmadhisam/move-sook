@@ -159,7 +159,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
       key: {
         in: [
           K.MAINTENANCE_MODE, K.MAINTENANCE_MESSAGE, K.MIN_JOB_PRICE, K.MAX_JOB_PRICE,
-          K.CANCELLATION_FEE, K.FREE_CANCEL_MINUTES, K.MAX_ACTIVE_JOBS_PER_DRIVER,
+          K.CANCELLATION_FEE, K.ADDRESS_CHANGE_FEE, K.FREE_CANCEL_MINUTES, K.MAX_ACTIVE_JOBS_PER_DRIVER,
           K.MAX_SCHEDULE_DAYS, K.MIN_DISTANCE_KM, K.MAX_DISTANCE_KM, K.VERIFY_SLA_HOURS,
           K.IDLE_NUDGE_DAYS, K.PENDING_PAYMENT_EXPIRE_DAYS, K.REFERRAL_REWARD, K.DRIVER_WEEKLY_GOAL, K.SUPPORT_PHONE,
           K.SUPPORT_LINE_ID, K.SUPPORT_EMAIL, K.PAY_BANK_NAME, K.PAY_ACCOUNT_NAME,
@@ -183,6 +183,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     minJobPrice: num(K.MIN_JOB_PRICE, D.minJobPrice),
     maxJobPrice: num(K.MAX_JOB_PRICE, D.maxJobPrice),
     cancellationFee: num(K.CANCELLATION_FEE, D.cancellationFee),
+    addressChangeFee: num(K.ADDRESS_CHANGE_FEE, D.addressChangeFee),
     freeCancelMinutes: num(K.FREE_CANCEL_MINUTES, D.freeCancelMinutes),
     maxActiveJobsPerDriver: num(K.MAX_ACTIVE_JOBS_PER_DRIVER, D.maxActiveJobsPerDriver),
     maxScheduleDays: num(K.MAX_SCHEDULE_DAYS, D.maxScheduleDays),
@@ -230,6 +231,7 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.MIN_JOB_PRICE, patch.minJobPrice);
   put(K.MAX_JOB_PRICE, patch.maxJobPrice);
   put(K.CANCELLATION_FEE, patch.cancellationFee);
+  put(K.ADDRESS_CHANGE_FEE, patch.addressChangeFee);
   put(K.FREE_CANCEL_MINUTES, patch.freeCancelMinutes);
   put(K.MAX_ACTIVE_JOBS_PER_DRIVER, patch.maxActiveJobsPerDriver);
   put(K.MAX_SCHEDULE_DAYS, patch.maxScheduleDays);

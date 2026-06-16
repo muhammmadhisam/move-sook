@@ -8,6 +8,7 @@ export const APP_SETTING_KEYS = {
   MIN_JOB_PRICE: 'min_job_price',
   MAX_JOB_PRICE: 'max_job_price',
   CANCELLATION_FEE: 'cancellation_fee',
+  ADDRESS_CHANGE_FEE: 'address_change_fee', // flat THB base fee for a customer destination-change request (extra-distance added on top)
   TERMS_VERSION: 'terms_version',
   PRIVACY_VERSION: 'privacy_version',
   FLOOR_SURCHARGE: 'floor_surcharge', // THB per floor above ground when no elevator (per end)
@@ -47,6 +48,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   minJobPrice: 0,
   maxJobPrice: 1_000_000,
   cancellationFee: 0,
+  addressChangeFee: 100, // flat base; extra straight-line distance × price/km is added at request time
   freeCancelMinutes: 60,
   maxActiveJobsPerDriver: 3,
   maxScheduleDays: 14,
@@ -275,6 +277,44 @@ export function haversineKm(
       Math.cos((lat2 * Math.PI) / 180) *
       Math.sin(dLng / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** Default flat base fee (THB) for a customer destination-change request. */
+export const DEFAULT_ADDRESS_CHANGE_FEE = 100;
+
+export type AddressChangeFeeInput = {
+  origin: { lat: number; lng: number } | null; // job origin coords (null = unknown)
+  oldDest: { lat: number; lng: number } | null; // current destination coords
+  newDest: { lat: number; lng: number } | null; // requested new destination coords
+  baseFee: number; // flat base fee (THB), from the address_change_fee setting
+  pricePerKm: number; // per-km rate for the job's vehicle type
+};
+
+export type AddressChangeFee = {
+  baseFee: number;
+  extraKm: number; // straight-line distance the new destination adds to the route (>= 0)
+  distanceFee: number; // round(extraKm × pricePerKm)
+  total: number; // baseFee + distanceFee
+};
+
+/**
+ * Fee for re-routing a job to a new destination: a flat base plus the *extra*
+ * straight-line distance the new drop-off adds to the trip (origin→newDest minus
+ * origin→oldDest, clamped at 0 so a closer destination never discounts the base).
+ * Returns base-only when any coordinate is missing (can't measure the delta).
+ * Single source of truth shared by the API (snapshot) and clients (preview).
+ */
+export function computeAddressChangeFee(input: AddressChangeFeeInput): AddressChangeFee {
+  const baseFee = Math.max(0, Math.round(input.baseFee));
+  const { origin, oldDest, newDest } = input;
+  let extraKm = 0;
+  if (origin && oldDest && newDest) {
+    const oldKm = haversineKm(origin.lat, origin.lng, oldDest.lat, oldDest.lng);
+    const newKm = haversineKm(origin.lat, origin.lng, newDest.lat, newDest.lng);
+    extraKm = Math.max(0, newKm - oldKm);
+  }
+  const distanceFee = Math.round(extraKm * Math.max(0, input.pricePerKm));
+  return { baseFee, extraKm, distanceFee, total: baseFee + distanceFee };
 }
 
 

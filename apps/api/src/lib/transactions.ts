@@ -27,6 +27,49 @@ export async function createDeliveryTransaction(
       commissionPct,
       commissionAmount,
       netToDriver,
+      paymentMethod: job.paymentMethod,
+      // For COD the commission was already collected from the driver up-front (and the
+      // driver kept the gross in cash) — there is nothing to pay out, so it lands PAID.
+      // Normally a COD job already has its row from createCodCommissionTransaction(); this
+      // is the defensive fallback if delivery is confirmed without that step.
+      status: job.paymentMethod === 'COD' ? 'PAID' : 'PENDING',
+    },
+  });
+}
+
+/**
+ * Create the commission ledger entry for a COD job at the moment an admin approves
+ * the driver's commission-fee slip — i.e. BEFORE delivery. Unlike the prepaid flow,
+ * the driver collects the gross in cash and has already transferred commissionAmount
+ * to the platform, so the row is recorded as `PAID` with NO payout to the driver
+ * (it is excluded from payout bundling). Idempotent via the jobId unique: a later
+ * `createDeliveryTransaction()` for the same job is a no-op. Must run inside the same
+ * prisma transaction that stamps `codCommissionApprovedAt`.
+ */
+export async function createCodCommissionTransaction(
+  tx: Prisma.TransactionClient,
+  job: Job,
+  slipUrl: string | null,
+): Promise<Transaction | null> {
+  if (!job.driverId || job.priceQuoted == null) return null;
+
+  const existing = await tx.transaction.findUnique({ where: { jobId: job.id } });
+  if (existing) return null;
+
+  const commissionPct = job.commissionPct ?? DEFAULT_COMMISSION_PCT;
+  const { commissionAmount, netToDriver } = computeCommission(job.priceQuoted, commissionPct);
+
+  return tx.transaction.create({
+    data: {
+      jobId: job.id,
+      driverId: job.driverId,
+      grossAmount: job.priceQuoted,
+      commissionPct,
+      commissionAmount,
+      netToDriver,
+      paymentMethod: 'COD',
+      status: 'PAID', // commission already collected from the driver; nothing left to pay out
+      slipUrl,
     },
   });
 }

@@ -16,7 +16,7 @@ import {
   DialogTrigger,
   PreviewableImage,
 } from '@movesook/ui';
-import { VEHICLE_TYPE_LABEL, type JobDto, type JobListResponse } from '@movesook/shared';
+import { vehicleTypeLabel, type JobDto, type JobListResponse } from '@movesook/shared';
 import {
   Navigation,
   MapPin,
@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Hourglass,
   ShieldX,
+  Wallet,
 } from 'lucide-react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
@@ -208,8 +209,14 @@ export default function JobsPage() {
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <Badge variant="secondary" className="gap-1">
                       <Truck className="h-3 w-3" />
-                      {VEHICLE_TYPE_LABEL[job.vehicleType]}
+                      {vehicleTypeLabel(job.vehicleType)}
                     </Badge>
+                    {job.paymentMethod === 'COD' && (
+                      <Badge className="gap-1 border-warning/50 bg-warning/10 text-warning">
+                        <Wallet className="h-3 w-3" />
+                        เก็บปลายทาง
+                      </Badge>
+                    )}
                     {pickupDistance != null && (
                       <Badge className="gap-1 border-transparent bg-brand-50 text-brand-700">
                         <Navigation className="h-3 w-3" />

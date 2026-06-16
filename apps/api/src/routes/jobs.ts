@@ -13,12 +13,13 @@ import {
   RequestDestChangeInput,
   SetJobProofInput,
   UpdateJobStatusInput,
+  UploadCommissionSlipInput,
   UploadDestChangeSlipInput,
   UploadPaymentSlipInput,
-  VehicleTypeSchema,
   canTransition,
   clampJobPrice,
   computeAddressChangeFee,
+  computeCommission,
   computeJobQuote,
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
@@ -52,26 +53,25 @@ import {
 import { evaluatePromo } from '../lib/promo';
 import { getSurge } from '../lib/surge';
 import { buildJobDocument } from '../lib/pdf';
-import { notify, notifyAdmins, pushAdminLineGroup } from '../lib/notify';
+import { notify, notifyAdmins, notifyNewJobToArea, pushAdminLineGroup } from '../lib/notify';
 
 export const jobRoutes = new Hono<AppEnv>()
   // Public: price-per-km per vehicle type — used by the web summary screen (read-only display).
   .get('/pricing', async (c) => {
-    // All config rows (not just active) so we can surface the admin-set label even
-    // for a type that's temporarily closed; absence of a row defaults to active.
-    const rows = await prisma.vehiclePricing.findMany();
-    const byType = new Map(rows.map((r) => [r.vehicleType, r]));
+    // The catalog drives the list: one rate per VehiclePricing row (the admin-managed
+    // set of vehicle types). Inactive rows are still returned so clients can surface a
+    // closed type's label; clients filter on `isActive` when offering a choice.
+    const rows = await prisma.vehiclePricing.findMany({
+      orderBy: [{ isActive: 'desc' }, { vehicleType: 'asc' }],
+    });
     const rates = await Promise.all(
-      VehicleTypeSchema.options.map(async (vt) => {
-        const row = byType.get(vt);
-        return {
-          vehicleType: vt,
-          label: row?.label ?? null,
-          imageUrl: row?.imageUrl ?? null,
-          pricePerKm: await getEffectivePricePerKm(vt),
-          isActive: row?.isActive ?? true,
-        };
-      }),
+      rows.map(async (row) => ({
+        vehicleType: row.vehicleType,
+        label: row.label ?? null,
+        imageUrl: row.imageUrl ?? null,
+        pricePerKm: await getEffectivePricePerKm(row.vehicleType),
+        isActive: row.isActive,
+      })),
     );
     const body: JobPricingResponse = { rates };
     return c.json(body);
@@ -234,6 +234,33 @@ export const jobRoutes = new Hono<AppEnv>()
       priceQuoted = clampJobPrice(net, sys.minJobPrice, sys.maxJobPrice) || null;
     }
 
+    // Payment method: COD is offered only when ops enabled it AND the quoted price
+    // sits inside [codMinPrice, codMaxPrice] (0 = unbounded). Falls back to PREPAID.
+    const paymentMethod = input.paymentMethod ?? 'PREPAID';
+    if (paymentMethod === 'COD') {
+      if (!sys.codEnabled) {
+        throw new HTTPException(422, { message: 'ขณะนี้ยังไม่เปิดให้ใช้บริการเก็บเงินปลายทาง (COD)' });
+      }
+      if (priceQuoted == null) {
+        throw new HTTPException(422, {
+          message: 'งานเก็บเงินปลายทางต้องปักหมุดต้นทาง-ปลายทางเพื่อคำนวณราคา',
+        });
+      }
+      if (sys.codMinPrice > 0 && priceQuoted < sys.codMinPrice) {
+        throw new HTTPException(422, {
+          message: `งานเก็บเงินปลายทางต้องมีมูลค่าอย่างน้อย ฿${sys.codMinPrice.toLocaleString('th-TH')}`,
+        });
+      }
+      if (sys.codMaxPrice > 0 && priceQuoted > sys.codMaxPrice) {
+        throw new HTTPException(422, {
+          message: `งานเก็บเงินปลายทางต้องมีมูลค่าไม่เกิน ฿${sys.codMaxPrice.toLocaleString('th-TH')}`,
+        });
+      }
+    }
+    // COD jobs publish to drivers immediately (no up-front customer transfer); PREPAID
+    // jobs stay hidden until the customer's slip is approved.
+    const initialStatus = paymentMethod === 'COD' ? 'POSTED' : 'PENDING_PAYMENT';
+
     // Self-serve: find-or-create this user's own Customer record.
     const me = await prisma.user.findUnique({
       where: { id: sub },
@@ -271,9 +298,10 @@ export const jobRoutes = new Hono<AppEnv>()
       const created = await tx.job.create({
         data: {
           customerId: customer.id,
-          // Held until the customer uploads a transfer slip and an admin approves
-          // payment; only then does it flip to POSTED and become visible to drivers.
-          status: 'PENDING_PAYMENT',
+          // PREPAID is held at PENDING_PAYMENT until the customer uploads a transfer
+          // slip and an admin approves it; COD publishes straight to POSTED.
+          status: initialStatus,
+          paymentMethod,
           itemDescription,
           items,
           vehicleType: input.vehicleType,
@@ -314,8 +342,12 @@ export const jobRoutes = new Hono<AppEnv>()
       }
       return created;
     });
-    // Do NOT alert drivers yet — the job is PENDING_PAYMENT and stays hidden until
-    // the customer uploads a slip and an admin approves it (POST /admin/jobs/:id/payment/approve).
+    // PREPAID: do NOT alert drivers yet — the job is PENDING_PAYMENT and stays hidden
+    // until the customer uploads a slip and an admin approves it. COD: it's already
+    // POSTED, so fan it out to available drivers in the origin province right away.
+    if (job.status === 'POSTED') {
+      await notifyNewJobToArea(job);
+    }
     return c.json(toJobDto(job), 201);
   })
 
@@ -864,10 +896,30 @@ export const jobRoutes = new Hono<AppEnv>()
     // Winning a claim counts as activity (resets the idle-churn clock).
     await prisma.driver.update({ where: { id: driver.id }, data: { lastActiveAt: new Date() } });
 
-    const job = await prisma.job.findUniqueOrThrow({
+    let job = await prisma.job.findUniqueOrThrow({
       where: { id: jobId },
       include: { customer: { select: { userId: true } } },
     });
+    // COD: snapshot the commission "fee" the driver must transfer to the platform
+    // before starting the job, and prompt them to pay it. Pickup stays blocked until
+    // an admin approves the slip (POST /admin/jobs/:id/commission/approve).
+    if (job.paymentMethod === 'COD' && job.priceQuoted != null) {
+      const { commissionAmount } = computeCommission(job.priceQuoted, commissionPct);
+      job = await prisma.job.update({
+        where: { id: jobId },
+        data: { codCommissionFee: commissionAmount },
+        include: { customer: { select: { userId: true } } },
+      });
+      if (driver.userId) {
+        await notify({
+          userId: driver.userId,
+          type: 'JOB_STATUS',
+          title: 'รับงานเก็บเงินปลายทางแล้ว',
+          body: `กรุณาโอนค่าธรรมเนียม (ค่าคอม) ฿${commissionAmount.toLocaleString('th-TH')} และแนบสลิปก่อนเริ่มงาน`,
+          jobId: job.id,
+        });
+      }
+    }
     // Notify the customer (if they have an app account) that a driver took the job.
     if (job.customer.userId) {
       await notify({
@@ -879,6 +931,49 @@ export const jobRoutes = new Hono<AppEnv>()
       });
     }
     return c.json(toJobDto(job));
+  })
+
+  // DRIVER uploads the bank-transfer slip for the COD commission "fee" they owe the
+  // platform. The job stays at ACCEPTED (pickup blocked) until an admin approves it.
+  .post('/:id/commission-slip', authenticate('user'), requireRole('DRIVER'), zValidator('json', UploadCommissionSlipInput), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const { slipUrl } = c.req.valid('json');
+    const driver = await prisma.driver.findUnique({ where: { userId: sub } });
+    if (!driver) throw new HTTPException(403, { message: 'Not a driver' });
+    const job = await prisma.job.findUnique({ where: { id } });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.driverId !== driver.id) throw new HTTPException(403, { message: 'Not your job' });
+    if (job.paymentMethod !== 'COD') {
+      throw new HTTPException(422, { message: 'งานนี้ไม่ใช่งานเก็บเงินปลายทาง' });
+    }
+    if (job.status !== 'ACCEPTED') {
+      throw new HTTPException(422, { message: 'ชำระค่าธรรมเนียมได้เฉพาะก่อนเริ่มงาน' });
+    }
+    if (job.codCommissionApprovedAt) {
+      throw new HTTPException(422, { message: 'ค่าธรรมเนียมงานนี้ได้รับการอนุมัติแล้ว' });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        codCommissionSlipUrl: slipUrl,
+        codCommissionSlipUploadedAt: new Date(),
+        codCommissionRejectedReason: null, // clear any previous rejection on re-upload
+      },
+    });
+    // Alert ops that a commission slip is waiting for review.
+    const feeText = updated.codCommissionFee != null
+      ? `฿${updated.codCommissionFee.toLocaleString('th-TH')}`
+      : 'ไม่ระบุยอด';
+    const title = '💰 มีสลิปค่าคอม (COD) รอตรวจสอบ';
+    const body = [
+      `${updated.originProvince} → ${updated.destProvince}`,
+      `ค่าธรรมเนียม: ${feeText}`,
+      `งาน #${updated.id}`,
+    ].join('\n');
+    await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
+    await pushAdminLineGroup(`${title}\n${body}`);
+    return c.json(toJobDto(updated));
   })
 
   // DRIVER flags the cargo as prohibited/illegal. Puts the job on hold
@@ -958,6 +1053,13 @@ export const jobRoutes = new Hono<AppEnv>()
     // Delivery success is confirmed by an admin only; a driver marks PENDING_CONFIRMATION.
     if (!DRIVER_ADVANCEABLE.includes(next)) {
       throw new HTTPException(403, { message: 'ต้องให้แอดมินยืนยันการส่งสำเร็จ' });
+    }
+    // COD gate: the driver must have paid the commission fee (and an admin approved it)
+    // before they can start the job. Block the ACCEPTED → PICKED_UP step until then.
+    if (job.paymentMethod === 'COD' && next === 'PICKED_UP' && !job.codCommissionApprovedAt) {
+      throw new HTTPException(422, {
+        message: 'กรุณาชำระค่าธรรมเนียม (ค่าคอม) และรอแอดมินอนุมัติก่อนเริ่มงาน',
+      });
     }
 
     // Flip status. The commission ledger is written when an admin confirms DELIVERED.

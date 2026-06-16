@@ -52,6 +52,9 @@ const app = new Hono<AppEnv>()
       payQrUrl: s.payQrUrl,
       addressChangeFee: s.addressChangeFee,
       prohibitedItems: resolveProhibitedItems(s.prohibitedItemsList),
+      codEnabled: s.codEnabled,
+      codMinPrice: s.codMinPrice,
+      codMaxPrice: s.codMaxPrice,
     };
     return c.json(body);
   })

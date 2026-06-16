@@ -39,12 +39,9 @@ enum JobStatus {
   CANCELLED
 }
 
-enum VehicleType {
-  MOTORCYCLE
-  PICKUP
-  TRUCK_4W
-  TRUCK_6W
-}
+// NOTE: vehicle types are an admin-managed catalog (model VehiclePricing), not a
+// fixed enum — the type lives on Driver/Job/VehiclePricing as a free-form slug
+// (e.g. "MOTORCYCLE", "VAN") so ops can add new ones at runtime without a migration.
 
 enum Gender {
   MALE
@@ -72,6 +69,12 @@ enum TransactionStatus {
   PENDING
   PAID
   REFUNDED
+}
+
+enum PaymentMethod {
+  PREPAID // customer transfers the full amount up-front to the platform (default flow)
+  COD // cash on delivery: customer pays the driver at the destination; the driver
+  //   transfers the commission (a "fee") to the platform BEFORE starting the job
 }
 
 enum ConsentType {
@@ -193,7 +196,7 @@ model Driver {
   claimCode       String?            @unique // invite code an admin hands the driver to claim this application
   name            String? // fallback display name for an admin-added driver not yet linked
   phone           String? // contact phone for an admin-added driver
-  vehicleType     VehicleType
+  vehicleType     String // slug into the VehiclePricing catalog (admin-managed)
   plateNumber     String?
   licenseTw2      String? // ใบขับขี่ ท.2
   verifyStatus    DriverVerifyStatus @default(PENDING)
@@ -256,7 +259,7 @@ model Job {
   status          JobStatus   @default(DRAFT)
   itemDescription String // human-readable summary, derived from `items` at post time
   items           Json? // structured list: [{ name, quantity }]
-  vehicleType     VehicleType
+  vehicleType     String // slug into the VehiclePricing catalog (admin-managed)
   itemCategory    String? // customer-declared cargo category (see CARGO_CATEGORIES in @movesook/shared)
   prohibitedAck   Boolean  @default(false) // customer acknowledged the prohibited-items policy at post time
   // ── Illegal-cargo flag (a driver reports prohibited goods; admin reviews) ──
@@ -282,13 +285,24 @@ model Job {
   itemCount       Int? // approximate number of items/boxes
   needsHelpers    Boolean   @default(false) // customer wants movers to help carry
   termsAcceptedAt DateTime? // when the customer accepted the posting agreement
-  // ── Up-front payment (customer pays before the job is published to drivers) ──
+  // ── Payment method (how the job is settled) ──
+  paymentMethod   PaymentMethod @default(PREPAID)
+  // ── Up-front payment (PREPAID: customer pays before the job is published to drivers) ──
   paymentSlipUrl        String? // customer's bank-transfer slip image
   paymentSlipUploadedAt DateTime? // when the customer uploaded the current slip
   paymentApprovedAt     DateTime? // when an admin approved the transfer (job then goes POSTED / public)
   paymentApprovedById   String? // admin User who approved the payment
   paymentRejectedReason String? // admin's reason when a slip was rejected (shown to customer to re-upload)
   paymentRejectedCount  Int       @default(0) // how many times a slip was rejected (ops escalation signal)
+  // ── COD commission ("ค่าธรรมเนียม"): for COD jobs the driver transfers the commission
+  //    to the platform BEFORE starting the job; an admin approves the slip to unlock pickup. ──
+  codCommissionFee          Int? // snapshot of the commission amount owed (THB), taken at accept time
+  codCommissionSlipUrl      String? // driver's bank-transfer slip for the commission fee
+  codCommissionSlipUploadedAt DateTime? // when the driver uploaded the current commission slip
+  codCommissionApprovedAt   DateTime? // when an admin approved the commission transfer (pickup then unlocked)
+  codCommissionApprovedById String? // admin User who approved the commission payment
+  codCommissionRejectedReason String? // admin's reason when a commission slip was rejected (driver re-uploads)
+  codCommissionRejectedCount  Int  @default(0) // how many times the commission slip was rejected
   // Snapshot of the cancellation fee owed at cancel time (collected manually by
   // ops — there is no customer wallet). Null = cancelled inside the free window.
   cancellationFeeApplied Int?
@@ -374,6 +388,10 @@ model Transaction {
   commissionPct    Float // snapshot from the job
   commissionAmount Int // platform cut (THB)
   netToDriver      Int // grossAmount - commissionAmount
+  // PREPAID: platform holds the gross and owes the driver netToDriver (bundled into a Payout).
+  // COD: the driver collected the gross in cash and already transferred commissionAmount to the
+  //   platform up-front — there is NO payout to the driver (excluded from payout bundling).
+  paymentMethod    PaymentMethod     @default(PREPAID)
   status           TransactionStatus @default(PENDING)
   slipUrl          String? // uploaded payment slip when settled
   payoutId         String? // bundled into a payout run when paid out to the driver
@@ -479,9 +497,10 @@ model ServiceArea {
 }
 
 model VehiclePricing {
-  // Per-vehicle-type configuration: join criteria/specs + delivery rate.
-  // `isActive=false` blocks this vehicle type from joining / being chosen.
-  vehicleType  VehicleType @id
+  // The vehicle-type catalog: one row per type. Adding a row = adding a vehicle
+  // type ops can join with. `vehicleType` is the admin-entered slug (the @id), and
+  // `isActive=false` blocks this type from joining / being chosen without deleting it.
+  vehicleType  String  @id
   label        String? // ชื่อที่แสดง เช่น "กระบะตอนเดียว"
   description  String? // คำอธิบายสั้น
   imageUrl     String? // รูปตัวอย่างรถ (โชว์ให้ลูกค้าเห็นว่ารถที่จะได้หน้าตาประมาณนี้)

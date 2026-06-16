@@ -26,6 +26,9 @@ export const APP_SETTING_KEYS = {
   PENDING_PAYMENT_EXPIRE_DAYS: 'pending_payment_expire_days', // auto-cancel unpaid jobs after N days (0 = never)
   REFERRAL_REWARD: 'referral_reward', // two-sided referral reward (THB)
   DRIVER_WEEKLY_GOAL: 'driver_weekly_goal', // weekly delivered-jobs target for the incentive bar
+  COD_ENABLED: 'cod_enabled', // 'true'/'false' — offer COD (เก็บเงินปลายทาง) as a customer payment option
+  COD_MIN_PRICE: 'cod_min_price', // job price floor to allow COD (0 = no floor)
+  COD_MAX_PRICE: 'cod_max_price', // job price ceiling to allow COD (0 = no ceiling)
   SUPPORT_PHONE: 'support_phone',
   SUPPORT_LINE_ID: 'support_line_id',
   SUPPORT_EMAIL: 'support_email',
@@ -59,6 +62,9 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   pendingPaymentExpireDays: 3, // 0 = never auto-expire
   referralRewardThb: 50,
   driverWeeklyGoal: 20,
+  codEnabled: false, // COD off by default — ops opts in via system settings
+  codMinPrice: 0, // 0 = no floor
+  codMaxPrice: 0, // 0 = no ceiling
   supportPhone: '',
   supportLineId: '',
   supportEmail: '',

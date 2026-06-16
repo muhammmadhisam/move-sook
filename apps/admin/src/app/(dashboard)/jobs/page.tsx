@@ -29,7 +29,7 @@ import {
 import {
   JobStatusSchema,
   JOB_STATUS_LABEL,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type AdminJobListItem,
   type JobDto,
   type JobStatus,
@@ -190,7 +190,7 @@ export default function JobsMonitorPage() {
               <TableCell>
                 {j.originProvince} → {j.destProvince}
               </TableCell>
-              <TableCell>{VEHICLE_TYPE_LABEL[j.vehicleType]}</TableCell>
+              <TableCell>{vehicleTypeLabel(j.vehicleType)}</TableCell>
               <TableCell>{j.priceQuoted ? `฿${j.priceQuoted.toLocaleString()}` : '—'}</TableCell>
               <TableCell>
                 {j.driverId ? (

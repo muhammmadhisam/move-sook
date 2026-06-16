@@ -20,6 +20,7 @@ import { isCustomerCancellable } from '@movesook/shared';
 import { api, API_BASE_URL } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
+import { CommissionSlipCard } from '@/components/commission-slip-card';
 import { DestChangeCard } from '@/components/dest-change-card';
 import { DisputeDialog } from '@/components/dispute-dialog';
 import { ReviewDialog } from '@/components/review-dialog';
@@ -124,6 +125,11 @@ export default function JobDetailPage() {
                 <ArrowRight className="h-3.5 w-3.5 shrink-0" />
                 {job.data.destProvince}
                 {job.data.priceQuoted ? ` · ฿${job.data.priceQuoted.toLocaleString()}` : ''}
+                {job.data.paymentMethod === 'COD' && (
+                  <Badge variant="outline" className="ml-1 border-warning/50 text-warning">
+                    เก็บเงินปลายทาง
+                  </Badge>
+                )}
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
@@ -172,6 +178,32 @@ export default function JobDetailPage() {
               </CardContent>
             </Card>
           )}
+
+          {/* COD: the assigned driver pays the commission "fee" before they can start. */}
+          {me?.role === 'DRIVER' && (
+            <CommissionSlipCard
+              job={job.data}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
+            />
+          )}
+
+          {/* COD: driver already paid + got approved — confirm they're cleared to start. */}
+          {me?.role === 'DRIVER' &&
+            job.data.paymentMethod === 'COD' &&
+            job.data.codCommissionApprovedAt &&
+            job.data.status === 'ACCEPTED' && (
+              <Card className="border-successScale-500/40 bg-successScale-500/5">
+                <CardContent className="flex items-start gap-2 py-3 text-sm">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-successScale-600" />
+                  <div>
+                    <p className="font-medium">ชำระค่าธรรมเนียมแล้ว เริ่มงานได้เลย</p>
+                    <p className="text-muted-foreground">
+                      เก็บเงินค่างานเต็มจำนวนจากลูกค้าที่ปลายทาง
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
           {/* Customer-driven destination change (re-route mid-delivery; admin-approved; fee). */}
           {me?.role === 'USER' && (

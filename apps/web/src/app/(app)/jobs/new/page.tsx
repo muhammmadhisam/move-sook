@@ -40,9 +40,9 @@ import {
   ThaiPhoneSchema,
   JOB_POSTING_TERMS,
   MAX_ITEM_PHOTOS,
-  VehicleTypeSchema,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   PRICING_MODE_LABEL,
+  PAYMENT_METHOD_LABEL,
   CargoCategorySchema,
   CARGO_CATEGORY_LABELS,
   DEFAULT_PROHIBITED_ITEMS,
@@ -53,7 +53,9 @@ import {
   type JobItem,
   type JobPricingResponse,
   type JobServiceAreasResponse,
+  type PaymentMethod,
   type PricingMode,
+  type PublicSystemConfig,
   type VehicleType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -68,8 +70,41 @@ const PIN_RED = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
 
 const STEPS = ['รายละเอียด', 'ที่รับ', 'ปลายทาง', 'สรุป'] as const;
 
+// Draft autosave: keep what the customer typed for 1 day so a refresh/back never
+// loses it. Cleared on successful post (or once the draft is older than the TTL).
+const DRAFT_KEY = 'movesook:new-job-draft';
+const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
+
 // Tri-state for "has elevator": unknown keeps the field null on the server.
 type Lift = 'unknown' | 'yes' | 'no';
+
+// What we autosave to localStorage. Consent checkboxes are intentionally excluded
+// so the customer always re-acknowledges the terms before posting.
+type JobDraft = {
+  form: {
+    vehicleType: VehicleType;
+    contactPhone: string;
+    notes: string;
+    originAddress: string;
+    originProvince: string;
+    originFloor: string;
+    destAddress: string;
+    destProvince: string;
+    destFloor: string;
+    scheduledAt: string;
+  };
+  items: JobItem[];
+  needsHelpers: boolean;
+  originLift: Lift;
+  destLift: Lift;
+  origin: LatLng | null;
+  dest: LatLng | null;
+  scheduled: boolean;
+  itemCategory: CargoCategory;
+  pricingMode: PricingMode;
+  promoCode: string;
+  step: number;
+};
 const liftToBool = (v: Lift): boolean | undefined =>
   v === 'yes' ? true : v === 'no' ? false : undefined;
 
@@ -85,6 +120,8 @@ function SummaryStep({
   destLift,
   pricingMode,
   onPricingModeChange,
+  paymentMethod,
+  onPaymentMethodChange,
   promoCode,
   onPromoApply,
   acceptedTerms,
@@ -115,6 +152,8 @@ function SummaryStep({
   destLift: Lift;
   pricingMode: PricingMode;
   onPricingModeChange: (m: PricingMode) => void;
+  paymentMethod: PaymentMethod;
+  onPaymentMethodChange: (m: PaymentMethod) => void;
   promoCode: string;
   onPromoApply: (code: string) => void;
   acceptedTerms: boolean;
@@ -161,6 +200,31 @@ function SummaryStep({
       return (await res.json()) as EstimateJobResponse;
     },
   });
+
+  // Public config drives whether COD is offered (master switch + price window).
+  const { data: sysConfig } = useQuery({
+    queryKey: ['system', 'public'],
+    queryFn: async (): Promise<PublicSystemConfig> => {
+      const res = await api.system.public.$get();
+      if (!res.ok) throw new Error();
+      return (await res.json()) as PublicSystemConfig;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // COD is available only when enabled AND the quoted price sits in [min, max]
+  // (0 = unbounded). Without a quote yet we can't know the price, so COD is hidden.
+  const quoted = estimate && estimate.total > 0 ? estimate.total : null;
+  const codInRange =
+    quoted != null &&
+    (!sysConfig?.codMinPrice || quoted >= sysConfig.codMinPrice) &&
+    (!sysConfig?.codMaxPrice || quoted <= sysConfig.codMaxPrice);
+  const codAvailable = Boolean(sysConfig?.codEnabled) && codInRange;
+
+  // If COD becomes unavailable (price moved out of range, etc.), snap back to PREPAID.
+  useEffect(() => {
+    if (paymentMethod === 'COD' && !codAvailable) onPaymentMethodChange('PREPAID');
+  }, [paymentMethod, codAvailable, onPaymentMethodChange]);
 
   // Local text field; only pushed up to the applied promo on "ใช้โค้ด".
   const [promoInput, setPromoInput] = useState(promoCode);
@@ -293,6 +357,51 @@ function SummaryStep({
             <p className="mt-1 text-xs text-green-600">ใช้โค้ด {estimate.promoCode} แล้ว</p>
           )}
         </div>
+      </div>
+
+      {/* Payment method — COD shown only when enabled + the price is in range */}
+      <div className="rounded-xl border bg-muted/30 p-3">
+        <p className="mb-2 text-xs font-semibold text-muted-foreground">วิธีชำระเงิน</p>
+        <div className="grid gap-2">
+          {(
+            [
+              {
+                method: 'PREPAID' as PaymentMethod,
+                desc: 'โอนเต็มจำนวนก่อน แล้วแนบสลิปให้แอดมินตรวจสอบ',
+                available: true,
+              },
+              {
+                method: 'COD' as PaymentMethod,
+                desc: 'จ่ายเงินสดให้คนขับเมื่อของถึงปลายทาง',
+                available: codAvailable,
+              },
+            ] as const
+          ).map(({ method, desc, available }) => (
+            <button
+              key={method}
+              type="button"
+              disabled={!available}
+              onClick={() => available && onPaymentMethodChange(method)}
+              className={cn(
+                'rounded-lg border-2 p-3 text-left transition-colors',
+                paymentMethod === method
+                  ? 'border-primary bg-primary/5'
+                  : 'border-transparent bg-background hover:border-border',
+                !available && 'cursor-not-allowed opacity-50 hover:border-transparent',
+              )}
+            >
+              <p className="text-sm font-semibold">{PAYMENT_METHOD_LABEL[method]}</p>
+              <p className="text-[11px] leading-tight text-muted-foreground">{desc}</p>
+            </button>
+          ))}
+        </div>
+        {!codAvailable && sysConfig?.codEnabled && (
+          <p className="mt-2 text-[11px] leading-tight text-muted-foreground">
+            * เก็บเงินปลายทางใช้ได้กับงานที่มีมูลค่า
+            {sysConfig.codMinPrice ? ` ตั้งแต่ ฿${sysConfig.codMinPrice.toLocaleString()}` : ''}
+            {sysConfig.codMaxPrice ? ` ไม่เกิน ฿${sysConfig.codMaxPrice.toLocaleString()}` : ''}
+          </p>
+        )}
       </div>
 
       {/* รายการของ */}
@@ -477,6 +586,8 @@ export default function NewJobPage() {
   const [acceptedProhibitedPolicy, setAcceptedProhibitedPolicy] = useState(false);
   const [itemCategory, setItemCategory] = useState<CargoCategory>('GENERAL');
   const [pricingMode, setPricingMode] = useState<PricingMode>('CHARTER');
+  // How the customer pays: PREPAID (transfer up-front) or COD (pay at destination).
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PREPAID');
   // Applied promo code (validated server-side via the estimate endpoint).
   const [promoCode, setPromoCode] = useState('');
 
@@ -537,6 +648,88 @@ export default function NewJobPage() {
     setForm((f) => (f.contactPhone ? f : { ...f, contactPhone: me.phone as string }));
   }, [me?.phone]);
 
+  // Restore an autosaved draft once on mount (unless we're re-booking — that flow
+  // owns the prefill). Drafts older than the TTL are discarded. `draftReady` gates
+  // the save effect so the initial empty state never clobbers a just-loaded draft.
+  const [draftReady, setDraftReady] = useState(false);
+  useEffect(() => {
+    if (draftReady) return;
+    if (fromId) {
+      setDraftReady(true);
+      return;
+    }
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) {
+        setDraftReady(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as { savedAt?: number; draft?: JobDraft } | null;
+      if (!parsed?.savedAt || !parsed.draft || Date.now() - parsed.savedAt > DRAFT_TTL_MS) {
+        localStorage.removeItem(DRAFT_KEY);
+        setDraftReady(true);
+        return;
+      }
+      const d = parsed.draft;
+      setForm((f) => ({ ...f, ...d.form }));
+      setItems(d.items ?? []);
+      setNeedsHelpers(d.needsHelpers);
+      setOriginLift(d.originLift);
+      setDestLift(d.destLift);
+      setOrigin(d.origin);
+      setDest(d.dest);
+      setScheduled(d.scheduled);
+      setItemCategory(d.itemCategory);
+      setPricingMode(d.pricingMode);
+      setPromoCode(d.promoCode);
+      setStep(Math.min(4, Math.max(1, d.step || 1)));
+      toast.info('กู้คืนข้อมูลที่กรอกไว้ก่อนหน้าแล้ว');
+    } catch {
+      localStorage.removeItem(DRAFT_KEY);
+    } finally {
+      setDraftReady(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromId]);
+
+  // Persist the draft on every change (after hydration). 1-day TTL via savedAt.
+  useEffect(() => {
+    if (!draftReady) return;
+    const draft: JobDraft = {
+      form,
+      items,
+      needsHelpers,
+      originLift,
+      destLift,
+      origin,
+      dest,
+      scheduled,
+      itemCategory,
+      pricingMode,
+      promoCode,
+      step,
+    };
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify({ savedAt: Date.now(), draft }));
+    } catch {
+      // storage full / disabled — drafting is best-effort, never block the form.
+    }
+  }, [
+    draftReady,
+    form,
+    items,
+    needsHelpers,
+    originLift,
+    destLift,
+    origin,
+    dest,
+    scheduled,
+    itemCategory,
+    pricingMode,
+    promoCode,
+    step,
+  ]);
+
   const set = (key: keyof typeof form) => (value: string) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -549,16 +742,17 @@ export default function NewJobPage() {
       return (await res.json()) as JobPricingResponse;
     },
   });
-  const activeVehicleTypes = useMemo(() => {
-    const active = pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType);
-    // Before pricing loads (or if none configured) fall back to all known types.
-    return active && active.length > 0 ? active : VehicleTypeSchema.options;
-  }, [pricing.data]);
-  // Prefer the admin-configured display name (VehiclePricing.label); fall back to
-  // the generic enum label so it always matches the settings page.
+  // The catalog (VehiclePricing via the pricing API) is the source of truth for which
+  // vehicle types exist and are open — no hardcoded fallback list.
+  const activeVehicleTypes = useMemo(
+    () => pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType) ?? [],
+    [pricing.data],
+  );
+  // Prefer the admin-configured display name (VehiclePricing.label); fall back to the
+  // known label or the slug so it always matches the settings page.
   const vehicleLabel = useMemo(() => {
     const byType = new Map(pricing.data?.rates.map((r) => [r.vehicleType, r.label]) ?? []);
-    return (vt: VehicleType) => byType.get(vt) || VEHICLE_TYPE_LABEL[vt];
+    return (vt: VehicleType) => vehicleTypeLabel(vt, byType.get(vt));
   }, [pricing.data]);
   // Representative photo per vehicle type (admin-set) to show what the customer gets.
   const vehicleImage = useMemo(() => {
@@ -649,6 +843,7 @@ export default function NewJobPage() {
         destHasElevator: liftToBool(destLift),
         scheduledAt: scheduled && form.scheduledAt ? bangkokInstant(form.scheduledAt) : undefined,
         pricingMode,
+        paymentMethod,
         promoCode: promoCode.trim() || undefined,
         acceptedTerms,
         acceptedProhibitedPolicy: acceptedProhibitedPolicy as true,
@@ -664,6 +859,11 @@ export default function NewJobPage() {
       return res.json();
     },
     onSuccess: () => {
+      try {
+        localStorage.removeItem(DRAFT_KEY);
+      } catch {
+        // ignore — draft cleanup is best-effort.
+      }
       toast.success('โพสต์งานแล้ว');
       router.push('/my-jobs');
     },
@@ -1159,6 +1359,8 @@ export default function NewJobPage() {
               totalQty={totalQty}
               pricingMode={pricingMode}
               onPricingModeChange={setPricingMode}
+              paymentMethod={paymentMethod}
+              onPaymentMethodChange={setPaymentMethod}
               needsHelpers={needsHelpers}
               origin={origin}
               dest={dest}

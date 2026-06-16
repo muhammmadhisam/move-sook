@@ -1,4 +1,4 @@
-import { prisma, type VehicleType } from '@movesook/db';
+import { prisma } from '@movesook/db';
 import {
   APP_SETTING_KEYS,
   DEFAULT_COMMISSION_PCT,
@@ -11,6 +11,7 @@ import {
   DEFAULT_SYSTEM_SETTINGS,
   type SystemSettingsResponse,
   type UpdateSystemSettingsInput,
+  type VehicleType,
 } from '@movesook/shared';
 
 export async function getCommissionPct(): Promise<number> {
@@ -161,7 +162,8 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
           K.MAINTENANCE_MODE, K.MAINTENANCE_MESSAGE, K.MIN_JOB_PRICE, K.MAX_JOB_PRICE,
           K.CANCELLATION_FEE, K.ADDRESS_CHANGE_FEE, K.FREE_CANCEL_MINUTES, K.MAX_ACTIVE_JOBS_PER_DRIVER,
           K.MAX_SCHEDULE_DAYS, K.MIN_DISTANCE_KM, K.MAX_DISTANCE_KM, K.VERIFY_SLA_HOURS,
-          K.IDLE_NUDGE_DAYS, K.PENDING_PAYMENT_EXPIRE_DAYS, K.REFERRAL_REWARD, K.DRIVER_WEEKLY_GOAL, K.SUPPORT_PHONE,
+          K.IDLE_NUDGE_DAYS, K.PENDING_PAYMENT_EXPIRE_DAYS, K.REFERRAL_REWARD, K.DRIVER_WEEKLY_GOAL,
+          K.COD_ENABLED, K.COD_MIN_PRICE, K.COD_MAX_PRICE, K.SUPPORT_PHONE,
           K.SUPPORT_LINE_ID, K.SUPPORT_EMAIL, K.PAY_BANK_NAME, K.PAY_ACCOUNT_NAME,
           K.PAY_ACCOUNT_NUMBER, K.PAY_QR_URL, K.COMPANY_NAME, K.COMPANY_ADDRESS,
           K.COMPANY_TAX_ID, K.COMPANY_LOGO_URL, K.TERMS_VERSION, K.PRIVACY_VERSION,
@@ -194,6 +196,9 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     pendingPaymentExpireDays: num(K.PENDING_PAYMENT_EXPIRE_DAYS, D.pendingPaymentExpireDays),
     referralRewardThb: num(K.REFERRAL_REWARD, D.referralRewardThb),
     driverWeeklyGoal: num(K.DRIVER_WEEKLY_GOAL, D.driverWeeklyGoal),
+    codEnabled: map.get(K.COD_ENABLED) === 'true',
+    codMinPrice: num(K.COD_MIN_PRICE, D.codMinPrice),
+    codMaxPrice: num(K.COD_MAX_PRICE, D.codMaxPrice),
     supportPhone: str(K.SUPPORT_PHONE, D.supportPhone),
     supportLineId: str(K.SUPPORT_LINE_ID, D.supportLineId),
     supportEmail: str(K.SUPPORT_EMAIL, D.supportEmail),
@@ -242,6 +247,9 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.PENDING_PAYMENT_EXPIRE_DAYS, patch.pendingPaymentExpireDays);
   put(K.REFERRAL_REWARD, patch.referralRewardThb);
   put(K.DRIVER_WEEKLY_GOAL, patch.driverWeeklyGoal);
+  put(K.COD_ENABLED, patch.codEnabled);
+  put(K.COD_MIN_PRICE, patch.codMinPrice);
+  put(K.COD_MAX_PRICE, patch.codMaxPrice);
   put(K.SUPPORT_PHONE, patch.supportPhone);
   put(K.SUPPORT_LINE_ID, patch.supportLineId);
   put(K.SUPPORT_EMAIL, patch.supportEmail);

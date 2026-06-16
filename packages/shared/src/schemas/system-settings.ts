@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { VehicleTypeSchema } from '../enums';
+import { VehicleTypeSchema, VehicleTypeSlugSchema } from '../enums';
 import { ProvinceNameSchema } from './province';
 
 // ── Service areas (which provinces the platform serves) ──────────────────────
@@ -31,7 +31,8 @@ export const VehiclePricingDto = z.object({
 export type VehiclePricingDto = z.infer<typeof VehiclePricingDto>;
 
 export const AdminUpsertVehiclePricingInput = z.object({
-  vehicleType: VehicleTypeSchema,
+  // Slug-validated: an admin coining a new type must use a clean UPPER_SNAKE slug.
+  vehicleType: VehicleTypeSlugSchema,
   label: z.string().max(80).nullable().optional(),
   description: z.string().max(300).nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
@@ -62,6 +63,10 @@ export const SystemSettingsResponse = z.object({
   pendingPaymentExpireDays: z.number().int().min(0), // 0 = never auto-expire
   referralRewardThb: z.number().int().min(0),
   driverWeeklyGoal: z.number().int().min(1),
+  // ── COD (cash-on-delivery / เก็บเงินปลายทาง) ──
+  codEnabled: z.boolean(), // master switch: offer COD as a payment option to customers
+  codMinPrice: z.number().int().min(0), // job price floor to allow COD (0 = no floor)
+  codMaxPrice: z.number().int().min(0), // job price ceiling to allow COD (0 = no ceiling)
   supportPhone: z.string(),
   supportLineId: z.string(),
   supportEmail: z.string(),
@@ -97,6 +102,9 @@ export const UpdateSystemSettingsInput = z.object({
   pendingPaymentExpireDays: z.number().int().min(0).max(365).optional(),
   referralRewardThb: z.number().int().min(0).max(100_000).optional(),
   driverWeeklyGoal: z.number().int().min(1).max(1000).optional(),
+  codEnabled: z.boolean().optional(),
+  codMinPrice: z.number().int().min(0).max(10_000_000).optional(),
+  codMaxPrice: z.number().int().min(0).max(10_000_000).optional(),
   supportPhone: z.string().max(40).optional(),
   supportLineId: z.string().max(80).optional(),
   supportEmail: z.string().max(120).optional(),
@@ -128,5 +136,10 @@ export const PublicSystemConfig = z.object({
   payQrUrl: z.string(),
   addressChangeFee: z.number().int().min(0), // flat base fee for a destination-change request (client previews the total)
   prohibitedItems: z.array(z.string()), // resolved banned-cargo list shown on the posting form
+  // COD availability — the posting form offers the COD option only when enabled and
+  // the quoted price falls within [codMinPrice, codMaxPrice] (0 = unbounded on that side).
+  codEnabled: z.boolean(),
+  codMinPrice: z.number().int().min(0),
+  codMaxPrice: z.number().int().min(0),
 });
 export type PublicSystemConfig = z.infer<typeof PublicSystemConfig>;

@@ -110,6 +110,24 @@ export function SystemSettingsCard() {
           {numField('pendingPaymentExpireDays', 'ยกเลิกงานไม่จ่ายเงินใน (วัน, 0=ไม่ยกเลิก)')}
         </div>
 
+        <Section title="เก็บเงินปลายทาง (COD)" />
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={form.codEnabled}
+            onChange={(e) => setForm({ ...form, codEnabled: e.target.checked })}
+          />
+          เปิดให้ลูกค้าเลือกเก็บเงินปลายทาง (COD)
+        </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {numField('codMinPrice', 'ราคาขั้นต่ำที่ใช้ COD ได้ (บาท, 0=ไม่จำกัด)')}
+          {numField('codMaxPrice', 'ราคาสูงสุดที่ใช้ COD ได้ (บาท, 0=ไม่จำกัด)')}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          งาน COD จะเปิดให้คนขับเห็นทันที — คนขับต้องโอนค่าธรรมเนียม (ค่าคอม)
+          ให้แพลตฟอร์มและรอแอดมินอนุมัติก่อนเริ่มงาน แล้วเก็บเงินสดเต็มจำนวนจากลูกค้าที่ปลายทาง
+        </p>
+
         <Section title="กฎการใช้งาน" />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {numField('maxActiveJobsPerDriver', 'งานพร้อมกันสูงสุด/คนขับ (0=ไม่จำกัด)')}

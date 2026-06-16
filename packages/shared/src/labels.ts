@@ -10,11 +10,11 @@ import type {
   JobStatus,
   LedgerEntryType,
   NotificationType,
+  PaymentMethod,
   PayoutStatus,
   PricingMode,
   Role,
   TransactionStatus,
-  VehicleType,
 } from './enums';
 
 export const BLOG_STATUS_LABEL: Record<BlogStatus, string> = {
@@ -77,12 +77,24 @@ export const ADDR_CHANGE_STATUS_LABEL: Record<AddrChangeStatus, string> = {
   REJECTED: 'คำขอถูกปฏิเสธ',
 };
 
-export const VEHICLE_TYPE_LABEL: Record<VehicleType, string> = {
+// Seed labels for the built-in vehicle types. Vehicle types are now admin-managed
+// (VehiclePricing rows carry their own label), so this is only a display fallback for
+// the known slugs — custom types fall back to their slug via vehicleTypeLabel().
+export const VEHICLE_TYPE_LABEL: Record<string, string> = {
   MOTORCYCLE: 'มอเตอร์ไซค์',
   PICKUP: 'รถกระบะ',
   TRUCK_4W: 'รถบรรทุก 4 ล้อ',
   TRUCK_6W: 'รถบรรทุก 6 ล้อ',
 };
+
+/**
+ * Display name for a vehicle-type slug. Prefers an explicit admin-set label (e.g. from
+ * the VehiclePricing/pricing API), then the built-in label, then the slug itself — so a
+ * type added at runtime always renders something sensible.
+ */
+export function vehicleTypeLabel(vehicleType: string, override?: string | null): string {
+  return override || VEHICLE_TYPE_LABEL[vehicleType] || vehicleType;
+}
 
 export const GENDER_LABEL: Record<Gender, string> = {
   MALE: 'ชาย',
@@ -93,6 +105,17 @@ export const GENDER_LABEL: Record<Gender, string> = {
 export const PRICING_MODE_LABEL: Record<PricingMode, string> = {
   CHARTER: 'เหมาลำ',
   PER_ITEM: 'คิดตามจำนวนสินค้า',
+};
+
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  PREPAID: 'โอนเต็มจำนวน (จ่ายล่วงหน้า)',
+  COD: 'เก็บเงินปลายทาง (COD)',
+};
+
+// Short chip/badge variant for tight spaces (job cards, tables).
+export const PAYMENT_METHOD_SHORT_LABEL: Record<PaymentMethod, string> = {
+  PREPAID: 'จ่ายล่วงหน้า',
+  COD: 'ปลายทาง',
 };
 
 export const DRIVER_VERIFY_STATUS_LABEL: Record<DriverVerifyStatus, string> = {

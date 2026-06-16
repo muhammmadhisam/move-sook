@@ -3,6 +3,7 @@ import {
   AddrChangeStatusSchema,
   CargoCategorySchema,
   JobStatusSchema,
+  PaymentMethodSchema,
   PricingModeSchema,
   VehicleTypeSchema,
 } from '../enums';
@@ -62,6 +63,9 @@ export const CreateJobInput = z.object({
   destHasElevator: z.boolean().optional(),
   scheduledAt: z.coerce.date().optional(),
   pricingMode: PricingModeSchema.optional(), // เหมาลำ (default) vs คิดตามจำนวนสินค้า
+  // How the customer pays. PREPAID (default) = transfer full amount up-front; COD =
+  // pay the driver at the destination (only offered when enabled + price in range).
+  paymentMethod: PaymentMethodSchema.optional(),
   // NOTE: no priceQuoted here — the server always computes the price itself
   // (computeJobQuote + clamp); a client-sent price would be ignored anyway.
   promoCode: z.string().trim().min(2).max(40).optional(), // optional discount code applied at posting
@@ -129,6 +133,14 @@ export const UploadPaymentSlipInput = z.object({
   slipUrl: z.string().url(),
 });
 export type UploadPaymentSlipInput = z.infer<typeof UploadPaymentSlipInput>;
+
+// POST /jobs/:id/commission-slip — for a COD job, the assigned DRIVER uploads the
+// bank-transfer slip for the commission "fee" they owe the platform. The job stays
+// at ACCEPTED (pickup is blocked) until an admin approves the commission.
+export const UploadCommissionSlipInput = z.object({
+  slipUrl: z.string().url(),
+});
+export type UploadCommissionSlipInput = z.infer<typeof UploadCommissionSlipInput>;
 
 // POST /jobs/:id/dest-change — customer asks to re-route the job to a new
 // destination mid-delivery. Allowed only while the driver holds the job
@@ -216,11 +228,19 @@ export const JobDto = z.object({
   destHasElevator: z.boolean().nullable(),
   scheduledAt: z.string().datetime().nullable(),
   termsAcceptedAt: z.string().datetime().nullable(),
-  // Up-front payment (customer transfers before the job is published to drivers).
+  paymentMethod: PaymentMethodSchema,
+  // Up-front payment (PREPAID: customer transfers before the job is published to drivers).
   paymentSlipUrl: z.string().nullable(),
   paymentSlipUploadedAt: z.string().datetime().nullable(),
   paymentApprovedAt: z.string().datetime().nullable(),
   paymentRejectedReason: z.string().nullable(),
+  // COD commission ("ค่าธรรมเนียม"): the assigned driver transfers the commission to the
+  // platform before starting the job; an admin approves the slip to unlock pickup.
+  codCommissionFee: z.number().int().nullable(),
+  codCommissionSlipUrl: z.string().nullable(),
+  codCommissionSlipUploadedAt: z.string().datetime().nullable(),
+  codCommissionApprovedAt: z.string().datetime().nullable(),
+  codCommissionRejectedReason: z.string().nullable(),
   pricingMode: PricingModeSchema,
   priceQuoted: z.number().int().nullable(),
   promoCode: z.string().nullable(),

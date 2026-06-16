@@ -29,11 +29,11 @@ import {
 } from '@movesook/ui';
 import {
   DriverVerifyStatusSchema,
-  VehicleTypeSchema,
   DRIVER_VERIFY_STATUS_LABEL,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type DriverDto,
   type DriverVerifyStatus,
+  type JobPricingResponse,
   type Paged,
   type VehicleType,
 } from '@movesook/shared';
@@ -88,6 +88,19 @@ export default function DriversPage() {
       return (await res.json()) as DriversResponse;
     },
   });
+
+  // Vehicle types come from the admin catalog (VehiclePricing via the pricing API).
+  const pricing = useQuery({
+    queryKey: ['jobs', 'pricing'],
+    queryFn: async (): Promise<JobPricingResponse> => {
+      const res = await api.jobs.pricing.$get();
+      if (!res.ok) throw new Error('โหลดประเภทรถไม่สำเร็จ');
+      return (await res.json()) as JobPricingResponse;
+    },
+  });
+  const activeVehicleTypes = pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType) ?? [];
+  const vehicleLabelOf = (vt: string) =>
+    vehicleTypeLabel(vt, pricing.data?.rates.find((r) => r.vehicleType === vt)?.label);
 
   const verify = useMutation({
     mutationFn: async (args: { id: string; decision: Decision; reason?: string }) => {
@@ -219,7 +232,7 @@ export default function DriversPage() {
                   {d.displayName ?? '—'}
                 </Link>
               </TableCell>
-              <TableCell>{VEHICLE_TYPE_LABEL[d.vehicleType]}</TableCell>
+              <TableCell>{vehicleLabelOf(d.vehicleType)}</TableCell>
               <TableCell>{d.plateNumber ?? '—'}</TableCell>
               <TableCell>{d.serviceProvince ?? '—'}</TableCell>
               <TableCell>
@@ -401,9 +414,9 @@ export default function DriversPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {VehicleTypeSchema.options.map((v) => (
+                    {activeVehicleTypes.map((v) => (
                       <SelectItem key={v} value={v}>
-                        {VEHICLE_TYPE_LABEL[v]}
+                        {vehicleLabelOf(v)}
                       </SelectItem>
                     ))}
                   </SelectContent>

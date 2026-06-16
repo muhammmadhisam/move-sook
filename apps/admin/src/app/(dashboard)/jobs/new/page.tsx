@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from '@movesook/ui';
 import {
-  VehicleTypeSchema,
   estimateJobPrice,
   type CustomerDto,
   type DriverDto,
@@ -78,10 +77,10 @@ export default function AdminNewJobPage() {
     },
   });
   const configByType = new Map((vehicleConfig.data?.items ?? []).map((c) => [c.vehicleType, c]));
-  // A type with no config row defaults to active.
-  const activeVehicleTypes = VehicleTypeSchema.options.filter(
-    (vt) => configByType.get(vt)?.isActive ?? true,
-  );
+  // The catalog drives the list — only types that are open for joining.
+  const activeVehicleTypes = (vehicleConfig.data?.items ?? [])
+    .filter((c) => c.isActive)
+    .map((c) => c.vehicleType);
 
   // If the current selection got disabled, fall back to the first active type.
   useEffect(() => {

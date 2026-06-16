@@ -92,10 +92,20 @@ export function toJobDto(job: Job): JobDto {
     destHasElevator: job.destHasElevator,
     scheduledAt: job.scheduledAt ? job.scheduledAt.toISOString() : null,
     termsAcceptedAt: job.termsAcceptedAt ? job.termsAcceptedAt.toISOString() : null,
+    paymentMethod: job.paymentMethod,
     paymentSlipUrl: job.paymentSlipUrl,
     paymentSlipUploadedAt: job.paymentSlipUploadedAt ? job.paymentSlipUploadedAt.toISOString() : null,
     paymentApprovedAt: job.paymentApprovedAt ? job.paymentApprovedAt.toISOString() : null,
     paymentRejectedReason: job.paymentRejectedReason,
+    codCommissionFee: job.codCommissionFee,
+    codCommissionSlipUrl: job.codCommissionSlipUrl,
+    codCommissionSlipUploadedAt: job.codCommissionSlipUploadedAt
+      ? job.codCommissionSlipUploadedAt.toISOString()
+      : null,
+    codCommissionApprovedAt: job.codCommissionApprovedAt
+      ? job.codCommissionApprovedAt.toISOString()
+      : null,
+    codCommissionRejectedReason: job.codCommissionRejectedReason,
     pricingMode: job.pricingMode,
     priceQuoted: job.priceQuoted,
     promoCode: job.promoCode,

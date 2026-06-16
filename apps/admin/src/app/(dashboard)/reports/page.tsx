@@ -19,10 +19,9 @@ import {
   TableRow,
 } from '@movesook/ui';
 import {
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type ReportSummaryResponse,
   type ReportExportType,
-  type VehicleType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 
@@ -182,7 +181,7 @@ export default function ReportsPage() {
               title="แยกตามประเภทรถ"
               keyHeader="ประเภทรถ"
               rows={data.byVehicleType}
-              labelOf={(k) => VEHICLE_TYPE_LABEL[k as VehicleType] ?? k}
+              labelOf={(k) => vehicleTypeLabel(k)}
             />
           </div>
         </div>

@@ -3,6 +3,7 @@ import {
   AdminRoleSchema,
   DriverVerifyStatusSchema,
   JobStatusSchema,
+  PaymentMethodSchema,
   RoleSchema,
   VehicleTypeSchema,
 } from '../enums';
@@ -226,6 +227,7 @@ export const AdminCreateJobInput = z
     priceQuoted: z.number().int().positive().optional(),
     promoCode: z.string().max(40).optional(),
     assignDriverId: z.string().optional(),
+    paymentMethod: PaymentMethodSchema.optional(), // PREPAID (default) or COD (เก็บเงินปลายทาง)
     paymentSlipUrl: z.string().url().optional(), // customer's transfer slip, kept on record (admin vouches for payment)
   })
   .refine((d) => Boolean(d.customerId ?? d.customerName ?? d.customerPhone), {

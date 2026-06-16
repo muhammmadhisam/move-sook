@@ -26,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from '@movesook/ui';
-import { VEHICLE_TYPE_LABEL, type DriverQueueResponse, type DriverQueueItem } from '@movesook/shared';
+import { vehicleTypeLabel, type DriverQueueResponse, type DriverQueueItem } from '@movesook/shared';
 import { api } from '@/lib/api';
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -129,7 +129,7 @@ export default function DriverQueuePage() {
                   </Link>
                 </TableCell>
                 <TableCell>{d.phone ?? '—'}</TableCell>
-                <TableCell>{VEHICLE_TYPE_LABEL[d.vehicleType]}</TableCell>
+                <TableCell>{vehicleTypeLabel(d.vehicleType)}</TableCell>
                 <TableCell>{d.serviceProvince ?? '—'}</TableCell>
                 <TableCell>
                   <Badge variant={d.slaBreached ? 'destructive' : 'secondary'}>

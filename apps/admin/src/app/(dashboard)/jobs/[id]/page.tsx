@@ -18,11 +18,13 @@ import {
 } from '@movesook/ui';
 import {
   JOB_STATUS_LABEL,
-  VEHICLE_TYPE_LABEL,
+  PAYMENT_METHOD_LABEL,
+  vehicleTypeLabel,
   type AdminJobDetailResponse,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { PaymentReview } from '@/components/payment-review';
+import { CommissionReview } from '@/components/commission-review';
 import { DestChangeReview } from '@/components/dest-change-review';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
@@ -131,7 +133,7 @@ export default function AdminJobDetailPage() {
             <CardTitle>รายละเอียดงาน</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p>ประเภทรถ: {VEHICLE_TYPE_LABEL[j.vehicleType]}</p>
+            <p>ประเภทรถ: {vehicleTypeLabel(j.vehicleType)}</p>
             <p>
               ต้นทาง: {j.originAddress} ({j.originProvince})
             </p>
@@ -149,6 +151,12 @@ export default function AdminJobDetailPage() {
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             <p>ราคา: {j.priceQuoted != null ? baht(j.priceQuoted) : '—'}</p>
+            <p>
+              วิธีชำระเงิน: {PAYMENT_METHOD_LABEL[j.paymentMethod]}
+              {j.paymentMethod === 'COD' && j.codCommissionFee != null
+                ? ` · ค่าธรรมเนียม ${baht(j.codCommissionFee)}`
+                : ''}
+            </p>
             {j.discountAmount != null && j.discountAmount > 0 && (
               <p className="text-emerald-600">
                 ส่วนลด: -{baht(j.discountAmount)} {j.promoCode ? `(${j.promoCode})` : ''}
@@ -187,6 +195,24 @@ export default function AdminJobDetailPage() {
           </CardHeader>
           <CardContent>
             <PaymentReview
+              job={j}
+              onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin', 'job', id] })}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* COD commission slip review (gates the driver from starting the job). */}
+      {j.paymentMethod === 'COD' && (j.status === 'ACCEPTED' || j.codCommissionSlipUrl) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>ค่าธรรมเนียม COD (คนขับ)</CardTitle>
+            <CardDescription>
+              ตรวจสลิปค่าคอมจากคนขับก่อนปลดล็อกให้เริ่มงาน (ลูกค้าจ่ายเงินสดปลายทาง)
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CommissionReview
               job={j}
               onChanged={() => queryClient.invalidateQueries({ queryKey: ['admin', 'job', id] })}
             />

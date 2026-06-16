@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TransactionStatusSchema } from '../enums';
+import { PaymentMethodSchema, TransactionStatusSchema } from '../enums';
 import { PageQuery } from './pagination';
 
 export const TransactionDto = z.object({
@@ -12,6 +12,9 @@ export const TransactionDto = z.object({
   commissionPct: z.number(),
   commissionAmount: z.number().int(),
   netToDriver: z.number().int(),
+  // PREPAID: platform owes the driver netToDriver (payout). COD: the driver already
+  // collected the cash and paid commissionAmount up-front — no payout owed.
+  paymentMethod: PaymentMethodSchema,
   status: TransactionStatusSchema,
   slipUrl: z.string().nullable(),
   customerPaidAt: z.string().datetime().nullable(), // when the customer's transfer was approved (auto)

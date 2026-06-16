@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps';
 import { toast } from 'sonner';
-import { ArrowRight, MapPin, Navigation, Truck, X } from 'lucide-react';
+import { ArrowRight, MapPin, Navigation, Truck, Wallet, X } from 'lucide-react';
 import { Button, Badge, cn } from '@movesook/ui';
-import { VEHICLE_TYPE_LABEL, type JobListResponse } from '@movesook/shared';
+import { vehicleTypeLabel, type JobListResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { distanceKm, formatDistance, directionsUrl } from '@/lib/geo';
@@ -167,8 +167,14 @@ export function DriverJobsMap() {
             )}
             <Badge variant="secondary" className="gap-1">
               <Truck className="h-3 w-3" />
-              {VEHICLE_TYPE_LABEL[selected.vehicleType]}
+              {vehicleTypeLabel(selected.vehicleType)}
             </Badge>
+            {selected.paymentMethod === 'COD' && (
+              <Badge className="gap-1 border-warning/50 bg-warning/10 text-warning">
+                <Wallet className="h-3 w-3" />
+                เก็บปลายทาง
+              </Badge>
+            )}
             {geo.position && selected.originLat != null && selected.originLng != null && (
               <Badge className="gap-1 border-transparent bg-brand-50 text-brand-700">
                 <Navigation className="h-3 w-3" />

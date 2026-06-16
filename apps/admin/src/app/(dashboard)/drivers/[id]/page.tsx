@@ -33,7 +33,7 @@ import {
   GENDER_LABEL,
   JOB_STATUS_LABEL,
   ROLE_LABEL,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type AdminDriverDetailResponse,
   type AdminUserListItem,
   type DriverVerifyStatus,
@@ -248,7 +248,7 @@ export default function DriverDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p>ประเภทรถ: {VEHICLE_TYPE_LABEL[driver.vehicleType]}</p>
+            <p>ประเภทรถ: {vehicleTypeLabel(driver.vehicleType)}</p>
             <p>ทะเบียน: {driver.plateNumber ?? '—'}</p>
             <p>จังหวัดบริการ: {driver.serviceProvince ?? '—'}</p>
             <p>ออนไลน์: {driver.isAvailable ? 'ใช่' : 'ไม่'}</p>

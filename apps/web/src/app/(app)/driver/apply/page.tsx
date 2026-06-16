@@ -27,8 +27,7 @@ import {
   DRIVER_SCREENING_QUESTIONS,
   GenderSchema,
   GENDER_LABEL,
-  VehicleTypeSchema,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type Gender,
   type JobPricingResponse,
   type VehicleType,
@@ -76,13 +75,13 @@ export default function DriverApplyPage() {
       return (await res.json()) as JobPricingResponse;
     },
   });
-  const activeVehicleTypes = useMemo(() => {
-    const active = pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType);
-    return active && active.length > 0 ? active : VehicleTypeSchema.options;
-  }, [pricing.data]);
+  const activeVehicleTypes = useMemo(
+    () => pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType) ?? [],
+    [pricing.data],
+  );
   const vehicleLabel = useMemo(() => {
     const byType = new Map(pricing.data?.rates.map((r) => [r.vehicleType, r.label]) ?? []);
-    return (vt: VehicleType) => byType.get(vt) || VEHICLE_TYPE_LABEL[vt];
+    return (vt: VehicleType) => vehicleTypeLabel(vt, byType.get(vt));
   }, [pricing.data]);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -24,10 +24,10 @@ import {
   DriverUpdateInput,
   GenderSchema,
   GENDER_LABEL,
-  VehicleTypeSchema,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   type DriverDto,
   type Gender,
+  type JobPricingResponse,
   type VehicleType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -68,6 +68,27 @@ export default function DriverEditPage() {
       return (await res.json()) as DriverDto;
     },
   });
+
+  // Vehicle types come from the admin catalog (VehiclePricing via the pricing API).
+  const pricing = useQuery({
+    queryKey: ['jobs', 'pricing'],
+    queryFn: async (): Promise<JobPricingResponse> => {
+      const res = await api.jobs.pricing.$get();
+      if (!res.ok) throw new Error('โหลดประเภทรถไม่สำเร็จ');
+      return (await res.json()) as JobPricingResponse;
+    },
+  });
+  // Active types, plus the driver's current type even if it was since closed, so the
+  // select still shows what they have.
+  const vehicleOptions = useMemo(() => {
+    const active = pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType) ?? [];
+    const current = me.data?.vehicleType;
+    return current && !active.includes(current) ? [current, ...active] : active;
+  }, [pricing.data, me.data]);
+  const vehicleLabel = useMemo(() => {
+    const byType = new Map(pricing.data?.rates.map((r) => [r.vehicleType, r.label]) ?? []);
+    return (vt: string) => vehicleTypeLabel(vt, byType.get(vt));
+  }, [pricing.data]);
 
   // Seed the form once the driver record loads.
   useEffect(() => {
@@ -243,9 +264,9 @@ export default function DriverEditPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {VehicleTypeSchema.options.map((v) => (
+                {vehicleOptions.map((v) => (
                   <SelectItem key={v} value={v}>
-                    {VEHICLE_TYPE_LABEL[v]}
+                    {vehicleLabel(v)}
                   </SelectItem>
                 ))}
               </SelectContent>

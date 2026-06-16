@@ -3,7 +3,7 @@ import PDFDocument from 'pdfkit';
 import type { Job, Customer, Driver, User, Transaction } from '@movesook/db';
 import {
   JOB_STATUS_LABEL,
-  VEHICLE_TYPE_LABEL,
+  vehicleTypeLabel,
   PRICING_MODE_LABEL,
   type SystemSettingsResponse,
 } from '@movesook/shared';
@@ -137,7 +137,7 @@ function routeBlock(doc: Doc, job: Job) {
   sectionTitle(doc, 'เส้นทาง');
   kv(doc, 'ต้นทาง', `${job.originAddress} (${job.originProvince})`);
   kv(doc, 'ปลายทาง', `${job.destAddress} (${job.destProvince})`);
-  kv(doc, 'ประเภทรถ', VEHICLE_TYPE_LABEL[job.vehicleType]);
+  kv(doc, 'ประเภทรถ', vehicleTypeLabel(job.vehicleType));
 }
 
 // ── Document builders ─────────────────────────────────────────────────────────

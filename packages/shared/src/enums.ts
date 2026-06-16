@@ -39,8 +39,17 @@ export const CargoCategorySchema = z.enum([
 ]);
 export type CargoCategory = z.infer<typeof CargoCategorySchema>;
 
-export const VehicleTypeSchema = z.enum(['MOTORCYCLE', 'PICKUP', 'TRUCK_4W', 'TRUCK_6W']);
+// Vehicle type is an admin-managed catalog (see VehiclePricing), not a fixed enum:
+// new types can be added at runtime, so the value is a free-form slug rather than a
+// closed union. VehicleTypeSchema validates the *reference* (any non-empty slug);
+// VehicleTypeSlugSchema validates a *new* slug an admin coins (uppercase A–Z, 0–9, _).
+export const VehicleTypeSchema = z.string().min(1).max(40);
 export type VehicleType = z.infer<typeof VehicleTypeSchema>;
+
+export const VehicleTypeSlugSchema = z
+  .string()
+  .regex(/^[A-Z][A-Z0-9_]{0,39}$/, 'รหัสประเภทรถต้องขึ้นต้นด้วย A-Z และมีได้เฉพาะ A-Z, 0-9, _');
+export type VehicleTypeSlug = z.infer<typeof VehicleTypeSlugSchema>;
 
 export const GenderSchema = z.enum(['MALE', 'FEMALE', 'OTHER']);
 export type Gender = z.infer<typeof GenderSchema>;
@@ -60,6 +69,13 @@ export type DriverVerifyStatus = z.infer<typeof DriverVerifyStatusSchema>;
 
 export const TransactionStatusSchema = z.enum(['PENDING', 'PAID', 'REFUNDED']);
 export type TransactionStatus = z.infer<typeof TransactionStatusSchema>;
+
+// How a job is settled. PREPAID = customer transfers the full amount up-front to the
+// platform (default flow). COD = cash on delivery: the customer pays the driver at the
+// destination and the driver transfers the commission ("ค่าธรรมเนียม") to the platform
+// before starting the job.
+export const PaymentMethodSchema = z.enum(['PREPAID', 'COD']);
+export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 
 export const AdminRoleSchema = z.enum(['SUPER', 'OPS', 'FINANCE']);
 export type AdminRole = z.infer<typeof AdminRoleSchema>;

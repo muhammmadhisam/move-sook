@@ -1,5 +1,5 @@
 import type { Prisma } from '@movesook/db';
-import { enqueueAudit } from '../queues/side-effects';
+import { enqueueAudit } from './queues/side-effects';
 
 export type AuditTargetType = 'user' | 'driver' | 'job' | 'transaction' | 'setting';
 

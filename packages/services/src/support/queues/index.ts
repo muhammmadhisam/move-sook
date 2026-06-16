@@ -1,6 +1,6 @@
 import type { Worker } from 'bullmq';
-import { env } from '../config';
-import { closeRedis } from '../lib/redis';
+import { getEnv } from '../../runtime/env';
+import { closeRedis } from '../redis';
 import { startNotificationsWorker } from './notifications';
 import { startMaintenanceWorker, registerMaintenanceSchedules } from './maintenance';
 import { startSideEffectsWorker } from './side-effects';
@@ -14,7 +14,7 @@ let workers: Worker[] = [];
 // No-op when WORKERS_ENABLED=false (e.g. a web-only replica with workers running
 // as a separate process).
 export async function startWorkers(): Promise<void> {
-  if (!env.WORKERS_ENABLED) {
+  if (!getEnv().WORKERS_ENABLED) {
     console.info('[workers] disabled (WORKERS_ENABLED=false) — no queue processing in this process');
     return;
   }

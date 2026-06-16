@@ -26,6 +26,55 @@ export async function signJwt({ sub, role, secret, ttlSec }: SignJwtArgs): Promi
     .sign(key(secret));
 }
 
+// ── Document-access tokens ────────────────────────────────────────────────────
+// A scoped, signed token that grants read-only access to a single job document
+// (e.g. a receipt PDF) without a session cookie — so it can ride in a LINE Flex
+// button that opens in an external browser. It carries only a jobId + doc type
+// and is purpose-tagged so it can never be mistaken for a session JWT.
+
+export type DocTokenType = 'receipt' | 'delivery';
+
+export interface SignDocTokenArgs {
+  jobId: string;
+  type: DocTokenType;
+  secret: string;
+  /** Time-to-live in seconds. */
+  ttlSec: number;
+}
+
+export async function signDocToken({
+  jobId,
+  type,
+  secret,
+  ttlSec,
+}: SignDocTokenArgs): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  return new SignJWT({ purpose: 'doc', jid: jobId, typ: type })
+    .setProtectedHeader({ alg: ALG })
+    .setIssuedAt(now)
+    .setExpirationTime(now + ttlSec)
+    .sign(key(secret));
+}
+
+export type VerifyDocTokenResult =
+  | { ok: true; jobId: string; type: DocTokenType }
+  | { ok: false };
+
+export async function verifyDocToken(
+  token: string,
+  secret: string,
+): Promise<VerifyDocTokenResult> {
+  try {
+    const { payload } = await jwtVerify(token, key(secret), { algorithms: [ALG] });
+    const { purpose, jid, typ } = payload as Record<string, unknown>;
+    if (purpose !== 'doc' || typeof jid !== 'string') return { ok: false };
+    if (typ !== 'receipt' && typ !== 'delivery') return { ok: false };
+    return { ok: true, jobId: jid, type: typ };
+  } catch {
+    return { ok: false };
+  }
+}
+
 export type VerifyJwtResult =
   | { ok: true; claims: JwtClaims }
   | { ok: false; reason: 'expired' | 'invalid' };

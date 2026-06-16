@@ -1,7 +1,7 @@
 import { Queue, Worker, type Job } from 'bullmq';
 import { prisma, type Prisma } from '@movesook/db';
-import { bullConnection } from '../lib/redis';
-import { runReferralRewardGrant } from '../lib/referral';
+import { bullConnection } from '../redis';
+import { runReferralRewardGrant } from '../referral';
 
 // Durable side-effects queue. These are post-commit side effects that used to run
 // inline as best-effort (try/catch + log): a transient failure silently lost the
@@ -29,7 +29,7 @@ const jobOpts = {
 
 let queue: Queue | null = null;
 function getQueue(): Queue {
-  if (!queue) queue = new Queue(SIDE_EFFECTS_QUEUE, { connection: bullConnection });
+  if (!queue) queue = new Queue(SIDE_EFFECTS_QUEUE, { connection: bullConnection() });
   return queue;
 }
 
@@ -77,7 +77,7 @@ async function process(job: Job): Promise<void> {
 
 export function startSideEffectsWorker(): Worker {
   const worker = new Worker(SIDE_EFFECTS_QUEUE, process, {
-    connection: bullConnection,
+    connection: bullConnection(),
     concurrency: 5,
   });
   worker.on('failed', (job, err) => {

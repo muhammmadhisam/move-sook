@@ -149,10 +149,24 @@ export default function TransactionsPage() {
               </TableCell>
             </TableRow>
           ))}
+          {txns.isLoading && (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center text-muted-foreground">
+                กำลังโหลด…
+              </TableCell>
+            </TableRow>
+          )}
+          {txns.isError && (
+            <TableRow>
+              <TableCell colSpan={8} className="text-center text-destructive">
+                {(txns.error as Error)?.message ?? 'โหลดรายการธุรกรรมไม่สำเร็จ'}
+              </TableCell>
+            </TableRow>
+          )}
           {txns.data?.items.length === 0 && (
             <TableRow>
               <TableCell colSpan={8} className="text-center text-muted-foreground">
-                {txns.isLoading ? 'กำลังโหลด…' : 'ไม่พบธุรกรรม'}
+                ไม่พบธุรกรรม
               </TableCell>
             </TableRow>
           )}

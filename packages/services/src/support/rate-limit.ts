@@ -19,7 +19,7 @@ export interface RateResult {
 
 export async function checkAdminLogin(key: string): Promise<RateResult> {
   try {
-    const pttl = await redis.pttl(lockKey(key));
+    const pttl = await redis().pttl(lockKey(key));
     if (pttl > 0) return { allowed: false, retryAfterSec: Math.ceil(pttl / 1000) };
     return { allowed: true, retryAfterSec: 0 };
   } catch (err) {
@@ -31,10 +31,10 @@ export async function checkAdminLogin(key: string): Promise<RateResult> {
 /** Record a failed attempt; locks the key once the threshold is exceeded. */
 export async function recordFailure(key: string): Promise<void> {
   try {
-    const count = await redis.incr(cntKey(key));
-    if (count === 1) await redis.pexpire(cntKey(key), ADMIN_LOGIN_LOCKOUT_MS);
+    const count = await redis().incr(cntKey(key));
+    if (count === 1) await redis().pexpire(cntKey(key), ADMIN_LOGIN_LOCKOUT_MS);
     if (count >= ADMIN_LOGIN_MAX_ATTEMPTS) {
-      await redis.set(lockKey(key), '1', 'PX', ADMIN_LOGIN_LOCKOUT_MS);
+      await redis().set(lockKey(key), '1', 'PX', ADMIN_LOGIN_LOCKOUT_MS);
     }
   } catch (err) {
     console.error('[rate-limit] recordFailure failed', err);
@@ -44,7 +44,7 @@ export async function recordFailure(key: string): Promise<void> {
 /** Clear the counter + lock on successful login. */
 export async function recordSuccess(key: string): Promise<void> {
   try {
-    await redis.del(cntKey(key), lockKey(key));
+    await redis().del(cntKey(key), lockKey(key));
   } catch (err) {
     console.error('[rate-limit] recordSuccess failed', err);
   }

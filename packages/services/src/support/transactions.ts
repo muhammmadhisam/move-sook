@@ -28,11 +28,45 @@ export async function createDeliveryTransaction(
       commissionAmount,
       netToDriver,
       paymentMethod: job.paymentMethod,
-      // For COD the commission was already collected from the driver up-front (and the
-      // driver kept the gross in cash) — there is nothing to pay out, so it lands PAID.
-      // Normally a COD job already has its row from createCodCommissionTransaction(); this
-      // is the defensive fallback if delivery is confirmed without that step.
+      // For COD the commission was already collected from the customer up-front — there is
+      // nothing to pay out, so it lands PAID. Normally a COD job already has its row from
+      // createCodCommissionTransaction() (created at commission approval); this is the
+      // defensive fallback if delivery is confirmed without that step.
       status: job.paymentMethod === 'COD' ? 'PAID' : 'PENDING',
+    },
+  });
+}
+
+/**
+ * Create the commission ledger entry for a COD job at the moment an admin approves the
+ * customer's up-front commission transfer. This runs BEFORE any driver claims the job,
+ * so the row has no driver (driverId null) and no payout — the commission is platform
+ * revenue collected from the customer, marked PAID immediately. Idempotent: returns
+ * `null` if the job isn't COD, has no price, or already has a transaction. Must run
+ * inside the same prisma transaction that flips the job to POSTED.
+ */
+export async function createCodCommissionTransaction(
+  tx: Prisma.TransactionClient,
+  job: Job,
+): Promise<Transaction | null> {
+  if (job.paymentMethod !== 'COD' || job.priceQuoted == null) return null;
+
+  const existing = await tx.transaction.findUnique({ where: { jobId: job.id } });
+  if (existing) return null;
+
+  const commissionPct = job.commissionPct ?? DEFAULT_COMMISSION_PCT;
+  const { commissionAmount, netToDriver } = computeCommission(job.priceQuoted, commissionPct);
+
+  return tx.transaction.create({
+    data: {
+      jobId: job.id,
+      driverId: null, // COD commission is collected before a driver is assigned
+      grossAmount: job.priceQuoted,
+      commissionPct,
+      commissionAmount,
+      netToDriver,
+      paymentMethod: 'COD',
+      status: 'PAID', // commission already collected up-front from the customer
     },
   });
 }
@@ -51,9 +85,11 @@ export async function attachToDriverPayout(
   actorId: string | null,
 ): Promise<void> {
   if (txn.payoutId) return; // already bundled
+  if (!txn.driverId) return; // COD commission rows have no driver / no payout
+  const driverId = txn.driverId;
 
   const open = await tx.payout.findFirst({
-    where: { driverId: txn.driverId, status: 'PENDING' },
+    where: { driverId, status: 'PENDING' },
   });
   if (open) {
     await tx.payout.update({
@@ -63,7 +99,7 @@ export async function attachToDriverPayout(
     await tx.transaction.update({ where: { id: txn.id }, data: { payoutId: open.id } });
   } else {
     const payout = await tx.payout.create({
-      data: { driverId: txn.driverId, amount: txn.netToDriver, createdById: actorId },
+      data: { driverId, amount: txn.netToDriver, createdById: actorId },
     });
     await tx.transaction.update({ where: { id: txn.id }, data: { payoutId: payout.id } });
   }

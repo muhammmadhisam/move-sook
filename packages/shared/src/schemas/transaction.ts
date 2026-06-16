@@ -5,9 +5,9 @@ import { PageQuery } from './pagination';
 export const TransactionDto = z.object({
   id: z.string(),
   jobId: z.string(),
-  driverId: z.string(),
+  driverId: z.string().nullable(), // null for COD commission rows booked before a driver is assigned
   driverName: z.string().nullable(), // for the per-job driver-payout view
-  driverCompletedCount: z.number().int(), // driver's lifetime delivered jobs
+  driverCompletedCount: z.number().int(), // driver's lifetime delivered jobs (0 when no driver yet)
   grossAmount: z.number().int(),
   commissionPct: z.number(),
   commissionAmount: z.number().int(),

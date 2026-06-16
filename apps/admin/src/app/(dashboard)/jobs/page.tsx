@@ -31,6 +31,7 @@ import {
   JOB_STATUS_LABEL,
   vehicleTypeLabel,
   type AdminJobListItem,
+  type DriverDto,
   type JobDto,
   type JobStatus,
   type Paged,
@@ -39,8 +40,16 @@ import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
 
 const ALL = 'ALL';
+// Select sentinel for "no driver assigned" (Radix Select can't use an empty string value).
+const NO_DRIVER = 'NONE';
 
 type JobsResponse = Paged<AdminJobListItem>;
+
+function driverLabel(d: DriverDto): string {
+  const fullName = [d.firstName, d.lastName].filter(Boolean).join(' ').trim();
+  const name = d.displayName?.trim() || fullName;
+  return name.length > 0 ? name : `คนขับ ${d.id.slice(0, 6)}`;
+}
 
 export default function JobsMonitorPage() {
   const queryClient = useQueryClient();
@@ -49,8 +58,34 @@ export default function JobsMonitorPage() {
   const [editing, setEditing] = useState<JobDto | null>(null);
   const [nextStatus, setNextStatus] = useState<JobStatus>('POSTED');
   const [price, setPrice] = useState('');
-  const [unassign, setUnassign] = useState(false);
+  const [assignDriverId, setAssignDriverId] = useState<string>(NO_DRIVER);
   const [error, setError] = useState<string | null>(null);
+
+  // Approved drivers available to assign. Fetched only while the dialog is open.
+  const drivers = useQuery({
+    queryKey: ['admin', 'drivers', 'approved'],
+    enabled: editing !== null,
+    queryFn: async (): Promise<DriverDto[]> => {
+      const res = await api.admin.drivers.$get({
+        query: { status: 'APPROVED', pageSize: '100', sortBy: 'ratingAvg', sortDir: 'desc' },
+      });
+      if (!res.ok) throw new Error('โหลดรายชื่อคนขับไม่สำเร็จ');
+      const body = (await res.json()) as Paged<DriverDto>;
+      return body.items;
+    },
+  });
+
+  // Origin-province matches first (the drivers who'd normally see this job), then the rest.
+  const driverOptions = (() => {
+    const list = drivers.data ?? [];
+    if (!editing) return list;
+    const origin = editing.originProvince;
+    return [...list].sort((a, b) => {
+      const am = a.serviceProvince === origin ? 0 : 1;
+      const bm = b.serviceProvince === origin ? 0 : 1;
+      return am - bm;
+    });
+  })();
 
   const jobs = useQuery({
     queryKey: ['admin', 'jobs', status, t.page, t.sortBy, t.sortDir],
@@ -94,7 +129,7 @@ export default function JobsMonitorPage() {
     if (editing) {
       setNextStatus(editing.status);
       setPrice(editing.priceQuoted != null ? String(editing.priceQuoted) : '');
-      setUnassign(false);
+      setAssignDriverId(editing.driverId ?? NO_DRIVER);
       setError(null);
     }
   }, [editing]);
@@ -102,11 +137,19 @@ export default function JobsMonitorPage() {
   const onSubmit = () => {
     if (!editing) return;
     setError(null);
-    const json: { id: string; status?: JobStatus; driverId?: null; priceQuoted?: number } = {
+    const json: {
+      id: string;
+      status?: JobStatus;
+      driverId?: string | null;
+      priceQuoted?: number;
+    } = {
       id: editing.id,
     };
     if (nextStatus !== editing.status) json.status = nextStatus;
-    if (unassign && editing.driverId) json.driverId = null;
+    const currentDriver = editing.driverId ?? NO_DRIVER;
+    if (assignDriverId !== currentDriver) {
+      json.driverId = assignDriverId === NO_DRIVER ? null : assignDriverId;
+    }
     const trimmed = price.trim();
     if (trimmed !== '' && String(editing.priceQuoted ?? '') !== trimmed) {
       const n = Number(trimmed);
@@ -311,16 +354,29 @@ export default function JobsMonitorPage() {
               />
             </div>
 
-            {editing?.driverId && (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={unassign}
-                  onChange={(e) => setUnassign(e.target.checked)}
-                />
-                ปลดคนขับออกจากงานนี้
-              </label>
-            )}
+            <div className="space-y-2">
+              <Label>คนขับ</Label>
+              <Select value={assignDriverId} onValueChange={setAssignDriverId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="เลือกคนขับ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_DRIVER}>— ไม่มอบหมาย —</SelectItem>
+                  {driverOptions.map((d) => (
+                    <SelectItem key={d.id} value={d.id}>
+                      {driverLabel(d)}
+                      {d.serviceProvince ? ` · ${d.serviceProvince}` : ''}
+                      {` · ${vehicleTypeLabel(d.vehicleType)}`}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {drivers.isLoading
+                  ? 'กำลังโหลดรายชื่อคนขับ…'
+                  : 'มอบหมายคนขับให้งานนี้ หรือเลือก “ไม่มอบหมาย” เพื่อปลดคนขับ (เฉพาะคนขับที่อนุมัติแล้ว — คนที่ตรงจังหวัดต้นทางจะอยู่ด้านบน)'}
+              </p>
+            </div>
 
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>

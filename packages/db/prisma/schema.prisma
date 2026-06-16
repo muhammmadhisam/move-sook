@@ -378,19 +378,21 @@ model Review {
 }
 
 model Transaction {
-  // Commission ledger entry, created when a job reaches DELIVERED.
+  // Commission ledger entry. PREPAID: created when a job reaches DELIVERED (driver
+  // assigned). COD: created when an admin approves the customer's up-front commission
+  // transfer — that happens BEFORE any driver claims the job, so driverId is null.
   id               String            @id @default(cuid())
   jobId            String            @unique
   job              Job               @relation(fields: [jobId], references: [id])
-  driverId         String
-  driver           Driver            @relation(fields: [driverId], references: [id])
+  driverId         String? // null for COD commission rows collected before a driver is assigned
+  driver           Driver?           @relation(fields: [driverId], references: [id])
   grossAmount      Int // job priceQuoted at delivery (THB)
   commissionPct    Float // snapshot from the job
   commissionAmount Int // platform cut (THB)
   netToDriver      Int // grossAmount - commissionAmount
   // PREPAID: platform holds the gross and owes the driver netToDriver (bundled into a Payout).
-  // COD: the driver collected the gross in cash and already transferred commissionAmount to the
-  //   platform up-front — there is NO payout to the driver (excluded from payout bundling).
+  // COD: the customer paid commissionAmount to the platform up-front and pays the rest in cash to
+  //   the driver at the destination — there is NO payout to the driver (excluded from bundling).
   paymentMethod    PaymentMethod     @default(PREPAID)
   status           TransactionStatus @default(PENDING)
   slipUrl          String? // uploaded payment slip when settled

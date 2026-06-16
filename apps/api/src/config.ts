@@ -1,6 +1,7 @@
 import { config as loadDotenv } from "dotenv";
 import { resolve } from "node:path";
 import { z } from "zod";
+import { configureServices } from "@movesook/services/runtime";
 
 // Load the repo-root .env (single source for all apps in dev).
 loadDotenv({ path: resolve(process.cwd(), "../../.env") });
@@ -24,6 +25,10 @@ const EnvSchema = z.object({
   // static x-system-key gate (dev / before the channel is wired).
   LINE_CHANNEL_SECRET: z.string().optional(),
   SYSTEM_API_KEY: z.string().min(8, "SYSTEM_API_KEY is required"),
+  // Public base URL of THIS api (used to build absolute links the customer opens
+  // from outside a session — e.g. the receipt button in a LINE Flex card). In
+  // prod set it to the api's https origin; falls back to localhost:PORT in dev.
+  PUBLIC_API_URL: z.string().url().optional(),
   WEB_ORIGIN: z.string().url().default("http://localhost:9000"),
   ADMIN_ORIGIN: z.string().url().default("http://localhost:9001"),
   COOKIE_DOMAIN: z.string().optional(),
@@ -63,6 +68,11 @@ if (!parsed.success) {
 
 export const env = parsed.data;
 export const isProd = env.NODE_ENV === "production";
+
+// Hand the validated env to the services package (queues / redis / push / doc
+// links read it lazily via getEnv()). Done once here, at the single boot-time
+// entrypoint that owns env validation.
+configureServices(env);
 
 export const r2Enabled = Boolean(
   env.R2_ACCOUNT_ID && env.R2_ACCESS_KEY_ID && env.R2_SECRET_ACCESS_KEY && env.R2_BUCKET,

@@ -4,7 +4,7 @@ import { logger } from 'hono/logger';
 import { HTTPException } from 'hono/http-exception';
 import { env } from './config';
 import type { AppEnv } from './lib/context';
-import { getSystemSettings } from './lib/settings';
+import { getSystemSettings } from '@movesook/services/support';
 import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
 import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';

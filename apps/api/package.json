@@ -21,19 +21,16 @@
     "@hono/zod-validator": "^0.4.2",
     "@movesook/auth": "workspace:*",
     "@movesook/db": "workspace:*",
+    "@movesook/services": "workspace:*",
     "@movesook/shared": "workspace:*",
-    "bullmq": "^5.34.0",
     "dotenv": "^16.4.7",
     "hono": "^4.6.14",
-    "ioredis": "^5.4.2",
-    "pdfkit": "^0.15.1",
     "tsx": "^4.19.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@movesook/config": "workspace:*",
     "@types/node": "^22.10.2",
-    "@types/pdfkit": "^0.13.5",
     "typescript": "^5.7.2"
   }
 }

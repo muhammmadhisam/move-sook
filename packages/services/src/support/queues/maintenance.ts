@@ -1,7 +1,7 @@
 import { Queue, Worker, type Job } from 'bullmq';
-import { env } from '../config';
-import { bullConnection } from '../lib/redis';
-import { nudgeIdleDrivers, expirePendingPayment } from '../lib/cron-tasks';
+import { getEnv } from '../../runtime/env';
+import { bullConnection } from '../redis';
+import { nudgeIdleDrivers, expirePendingPayment } from '../cron-tasks';
 
 // Repeatable maintenance jobs (former scripts/cron + node-cron). BullMQ stores
 // the schedule in Redis and a single worker runs each occurrence, so registering
@@ -19,7 +19,7 @@ const TASKS: Record<string, () => Promise<{ [k: string]: unknown }>> = {
 
 let queue: Queue | null = null;
 function getQueue(): Queue {
-  if (!queue) queue = new Queue(MAINTENANCE_QUEUE, { connection: bullConnection });
+  if (!queue) queue = new Queue(MAINTENANCE_QUEUE, { connection: bullConnection() });
   return queue;
 }
 
@@ -27,10 +27,10 @@ function getQueue(): Queue {
 // boot just updates the pattern instead of stacking duplicates.
 export async function registerMaintenanceSchedules(): Promise<void> {
   const q = getQueue();
-  await q.upsertJobScheduler(NUDGE, { pattern: env.CRON_NUDGE_SCHEDULE }, { name: NUDGE });
-  await q.upsertJobScheduler(EXPIRE, { pattern: env.CRON_EXPIRE_SCHEDULE }, { name: EXPIRE });
+  await q.upsertJobScheduler(NUDGE, { pattern: getEnv().CRON_NUDGE_SCHEDULE }, { name: NUDGE });
+  await q.upsertJobScheduler(EXPIRE, { pattern: getEnv().CRON_EXPIRE_SCHEDULE }, { name: EXPIRE });
   console.info(
-    `[maintenance] schedules registered — ${NUDGE} (${env.CRON_NUDGE_SCHEDULE}), ${EXPIRE} (${env.CRON_EXPIRE_SCHEDULE})`,
+    `[maintenance] schedules registered — ${NUDGE} (${getEnv().CRON_NUDGE_SCHEDULE}), ${EXPIRE} (${getEnv().CRON_EXPIRE_SCHEDULE})`,
   );
 }
 
@@ -46,7 +46,7 @@ async function process(job: Job): Promise<void> {
 
 export function startMaintenanceWorker(): Worker {
   const worker = new Worker(MAINTENANCE_QUEUE, process, {
-    connection: bullConnection,
+    connection: bullConnection(),
     concurrency: 1, // maintenance tasks are cheap and don't need parallelism
   });
   worker.on('failed', (job, err) => {

@@ -1,7 +1,13 @@
 import { Queue, Worker, type Job } from 'bullmq';
-import { pushLineText, multicastLineText, type LinePushResult } from '@movesook/auth';
-import { env } from '../config';
-import { bullConnection } from '../lib/redis';
+import {
+  pushLineMessages,
+  multicastLineMessages,
+  textMessage,
+  type LineMessage,
+  type LinePushResult,
+} from '@movesook/auth';
+import { getEnv } from '../../runtime/env';
+import { bullConnection } from '../redis';
 
 // LINE push queue. The in-app Notification row is still written synchronously in
 // notify.ts (it's the source of truth); only the LINE Messaging API call — the
@@ -10,8 +16,10 @@ import { bullConnection } from '../lib/redis';
 
 export const NOTIFICATIONS_QUEUE = 'notifications';
 
-type PushJob = { to: string; text: string };
-type MulticastJob = { to: string[]; text: string };
+// Jobs carry fully-built LINE message objects (text or flex) so the worker can
+// hand them straight to the Messaging API without re-deciding the shape.
+type PushJob = { to: string; messages: LineMessage[] };
+type MulticastJob = { to: string[]; messages: LineMessage[] };
 
 const jobOpts = {
   attempts: 5,
@@ -23,23 +31,38 @@ const jobOpts = {
 // Producer. Lazily created so importing this module (e.g. from notify.ts) is cheap.
 let queue: Queue | null = null;
 function getQueue(): Queue {
-  if (!queue) queue = new Queue(NOTIFICATIONS_QUEUE, { connection: bullConnection });
+  if (!queue) queue = new Queue(NOTIFICATIONS_QUEUE, { connection: bullConnection() });
   return queue;
 }
 
 // Skip enqueuing entirely when push isn't configured — matches the old no-op
 // behaviour and avoids filling the queue with jobs the worker can't send.
-const pushConfigured = Boolean(env.LINE_CHANNEL_ACCESS_TOKEN);
+function pushConfigured(): boolean {
+  return Boolean(getEnv().LINE_CHANNEL_ACCESS_TOKEN);
+}
 
 export async function enqueuePush(to: string, text: string): Promise<void> {
-  if (!pushConfigured || !to) return;
-  await getQueue().add('push', { to, text } satisfies PushJob, jobOpts);
+  await enqueuePushMessages(to, [textMessage(text)]);
+}
+
+/** Enqueue arbitrary LINE message objects (e.g. a Flex card) to one recipient. */
+export async function enqueuePushMessages(to: string, messages: LineMessage[]): Promise<void> {
+  if (!pushConfigured() || !to || messages.length === 0) return;
+  await getQueue().add('push', { to, messages } satisfies PushJob, jobOpts);
 }
 
 export async function enqueueMulticast(to: string[], text: string): Promise<void> {
+  await enqueueMulticastMessages(to, [textMessage(text)]);
+}
+
+/** Enqueue arbitrary LINE message objects to many recipients (chunked at send). */
+export async function enqueueMulticastMessages(
+  to: string[],
+  messages: LineMessage[],
+): Promise<void> {
   const recipients = to.filter(Boolean);
-  if (!pushConfigured || recipients.length === 0) return;
-  await getQueue().add('multicast', { to: recipients, text } satisfies MulticastJob, jobOpts);
+  if (!pushConfigured() || recipients.length === 0 || messages.length === 0) return;
+  await getQueue().add('multicast', { to: recipients, messages } satisfies MulticastJob, jobOpts);
 }
 
 // A LINE failure is worth retrying only when it's transient (network / 429 /
@@ -56,15 +79,15 @@ function isTransient(result: Extract<LinePushResult, { ok: false }>): boolean {
 async function process(job: Job<PushJob | MulticastJob>): Promise<void> {
   const result =
     job.name === 'multicast'
-      ? await multicastLineText(
-          env.LINE_CHANNEL_ACCESS_TOKEN,
+      ? await multicastLineMessages(
+          getEnv().LINE_CHANNEL_ACCESS_TOKEN,
           (job.data as MulticastJob).to,
-          job.data.text,
+          job.data.messages,
         )
-      : await pushLineText(
-          env.LINE_CHANNEL_ACCESS_TOKEN,
+      : await pushLineMessages(
+          getEnv().LINE_CHANNEL_ACCESS_TOKEN,
           (job.data as PushJob).to,
-          job.data.text,
+          job.data.messages,
         );
 
   if (result.ok) return;
@@ -78,7 +101,7 @@ async function process(job: Job<PushJob | MulticastJob>): Promise<void> {
 
 export function startNotificationsWorker(): Worker {
   const worker = new Worker(NOTIFICATIONS_QUEUE, process, {
-    connection: bullConnection,
+    connection: bullConnection(),
     concurrency: 5,
     // Respect LINE's API rate limits — cap outbound calls per second.
     limiter: { max: 100, duration: 1_000 },

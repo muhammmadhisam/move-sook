@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -13,7 +14,7 @@ import {
   Label,
   PreviewableImage,
 } from '@movesook/ui';
-import type { JobDto } from '@movesook/shared';
+import type { DriverDto, JobDto } from '@movesook/shared';
 import { api } from '@/lib/api';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
@@ -44,6 +45,7 @@ export function PaymentReview({
   onChanged: () => void;
 }) {
   const [rejectOpen, setRejectOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
@@ -58,6 +60,40 @@ export function PaymentReview({
     },
     onSuccess: () => {
       setErr(null);
+      onChanged();
+    },
+    onError: (e: Error) => setErr(e.message),
+  });
+
+  // Available drivers for one-step assignment — only fetched while the picker is open.
+  const drivers = useQuery({
+    queryKey: ['admin', 'assignable-drivers', job.id],
+    enabled: assignOpen,
+    queryFn: async (): Promise<DriverDto[]> => {
+      const res = await api.admin.jobs[':id']['assignable-drivers'].$get({
+        param: { id: job.id },
+      });
+      if (!res.ok) throw new Error('โหลดรายชื่อคนขับไม่สำเร็จ');
+      const body = (await res.json()) as { items: DriverDto[] };
+      return body.items;
+    },
+  });
+
+  const approveAssign = useMutation({
+    mutationFn: async (driverId: string) => {
+      const res = await api.admin.jobs[':id'].payment['approve-assign'].$post({
+        param: { id: job.id },
+        json: { driverId },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'มอบหมายไม่สำเร็จ');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      setErr(null);
+      setAssignOpen(false);
       onChanged();
     },
     onError: (e: Error) => setErr(e.message),
@@ -135,21 +171,34 @@ export function PaymentReview({
       {err && <p className="text-xs text-destructive">{err}</p>}
 
       {pending && (
-        <div className="flex gap-2">
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            <Button
+              className="flex-1"
+              disabled={!job.paymentSlipUrl || approve.isPending}
+              onClick={() => approve.mutate()}
+            >
+              {approve.isPending ? 'กำลังอนุมัติ…' : 'อนุมัติ & เผยแพร่'}
+            </Button>
+            <Button
+              variant="outline"
+              className="text-destructive hover:text-destructive"
+              disabled={!job.paymentSlipUrl || reject.isPending}
+              onClick={() => setRejectOpen(true)}
+            >
+              ไม่อนุมัติ
+            </Button>
+          </div>
           <Button
-            className="flex-1"
-            disabled={!job.paymentSlipUrl || approve.isPending}
-            onClick={() => approve.mutate()}
+            variant="secondary"
+            className="w-full"
+            disabled={!job.paymentSlipUrl}
+            onClick={() => {
+              setErr(null);
+              setAssignOpen(true);
+            }}
           >
-            {approve.isPending ? 'กำลังอนุมัติ…' : 'อนุมัติ & เผยแพร่'}
-          </Button>
-          <Button
-            variant="outline"
-            className="text-destructive hover:text-destructive"
-            disabled={!job.paymentSlipUrl || reject.isPending}
-            onClick={() => setRejectOpen(true)}
-          >
-            ไม่อนุมัติ
+            อนุมัติ & มอบหมายคนขับ
           </Button>
         </div>
       )}
@@ -178,6 +227,67 @@ export function PaymentReview({
               onClick={() => reject.mutate()}
             >
               {reject.isPending ? 'กำลังส่ง…' : 'ยืนยันตีกลับ'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>อนุมัติ & มอบหมายคนขับ</DialogTitle>
+            <DialogDescription>
+              เลือกคนขับที่จะมอบหมายงานนี้ — แสดงเฉพาะคนขับที่ผ่านการอนุมัติและกำลังว่างรับงาน
+            </DialogDescription>
+          </DialogHeader>
+
+          {err && <p className="text-xs text-destructive">{err}</p>}
+
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {drivers.isLoading && (
+              <p className="py-6 text-center text-sm text-muted-foreground">กำลังโหลดคนขับ…</p>
+            )}
+            {drivers.isError && (
+              <p className="py-6 text-center text-sm text-destructive">โหลดรายชื่อคนขับไม่สำเร็จ</p>
+            )}
+            {!drivers.isLoading && !drivers.isError && (drivers.data?.length ?? 0) === 0 && (
+              <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
+                ไม่มีคนขับที่ว่างรับงานในขณะนี้
+              </p>
+            )}
+            {drivers.data?.map((d) => (
+              <button
+                key={d.id}
+                type="button"
+                disabled={approveAssign.isPending}
+                onClick={() => approveAssign.mutate(d.id)}
+                className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition hover:border-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {d.displayName ||
+                      [d.firstName, d.lastName].filter(Boolean).join(' ') ||
+                      'ไม่ระบุชื่อ'}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {d.serviceProvince ?? '—'}
+                    {d.plateNumber ? ` · ${d.plateNumber}` : ''}
+                    {' · ★ '}
+                    {d.ratingAvg.toFixed(1)} ({d.ratingCount})
+                  </p>
+                </div>
+                <span className="shrink-0 text-xs font-medium text-primary">
+                  {approveAssign.isPending && approveAssign.variables === d.id
+                    ? 'กำลังมอบหมาย…'
+                    : 'มอบหมาย'}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignOpen(false)}>
+              ยกเลิก
             </Button>
           </DialogFooter>
         </DialogContent>

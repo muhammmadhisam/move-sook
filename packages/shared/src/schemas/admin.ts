@@ -241,6 +241,13 @@ export const AdminRejectPaymentInput = z.object({
 });
 export type AdminRejectPaymentInput = z.infer<typeof AdminRejectPaymentInput>;
 
+// POST /admin/jobs/:id/payment/approve-assign — approve the slip AND hand the job
+// straight to a chosen driver (skips the open POSTED feed).
+export const AdminApproveAssignInput = z.object({
+  driverId: z.string().min(1),
+});
+export type AdminApproveAssignInput = z.infer<typeof AdminApproveAssignInput>;
+
 // POST /admin/jobs/:id/dest-change/reject and .../payment/reject — admin rejects
 // a destination-change request or bounces its fee slip back to the customer.
 export const AdminRejectDestChangeInput = z.object({

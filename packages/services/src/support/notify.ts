@@ -1,8 +1,13 @@
 import { prisma } from '@movesook/db';
 import type { NotificationType } from '@movesook/shared';
+import { flexCardMessage } from '@movesook/auth';
 // Import from the leaf queue module (not ../queues) to avoid an import cycle:
 // queues/index → maintenance → cron-tasks → notify.
-import { enqueuePush, enqueueMulticast } from '../queues/notifications';
+import {
+  enqueuePush,
+  enqueuePushMessages,
+  enqueueMulticastMessages,
+} from './queues/notifications';
 import { getAdminLineGroupId } from './settings';
 
 type NotifyInput = {
@@ -11,9 +16,11 @@ type NotifyInput = {
   title: string;
   body: string;
   jobId?: string | null;
+  /** Optional call-to-action button rendered on the LINE Flex card (e.g. a receipt link). */
+  cta?: { label: string; url: string };
 };
 
-/** Render an in-app notification as a single LINE text bubble. */
+/** Plain-text fallback (chat-list preview / push alert) for a Flex card. */
 function formatPush(title: string, body: string): string {
   return `${title}\n${body}`;
 }
@@ -47,7 +54,13 @@ export async function notify(input: NotifyInput): Promise<void> {
       select: { lineUserId: true },
     });
     if (user?.lineUserId) {
-      await enqueuePush(user.lineUserId, formatPush(input.title, input.body));
+      const card = flexCardMessage({
+        altText: formatPush(input.title, input.body),
+        title: input.title,
+        body: input.body,
+        button: input.cta,
+      });
+      await enqueuePushMessages(user.lineUserId, [card]);
     }
   } catch (err) {
     console.error('[notify] line push enqueue failed', input.type, err);
@@ -131,7 +144,13 @@ export async function notifyNewJobToArea(job: {
       .map((d) => d.user?.lineUserId)
       .filter((id): id is string => Boolean(id));
     if (lineIds.length > 0) {
-      await enqueueMulticast(lineIds, formatPush(title, body));
+      const card = flexCardMessage({
+        altText: formatPush(title, body),
+        title,
+        body: `${job.originProvince} → ${job.destProvince}`,
+        rows: [{ label: 'สินค้า', value: job.itemDescription }],
+      });
+      await enqueueMulticastMessages(lineIds, [card]);
     }
   } catch (err) {
     console.error('[notifyNewJobToArea] line multicast enqueue failed', err);

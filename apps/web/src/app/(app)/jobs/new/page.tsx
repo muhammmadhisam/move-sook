@@ -212,14 +212,19 @@ function SummaryStep({
     staleTime: 5 * 60 * 1000,
   });
 
-  // COD is available only when enabled AND the quoted price sits in [min, max]
-  // (0 = unbounded). Without a quote yet we can't know the price, so COD is hidden.
+  // COD is offered whenever ops enabled it AND the quoted price — once known — sits
+  // inside [min, max] (0 = unbounded). Before a price exists (no map pins yet) we
+  // still offer COD; the server requires both pins to compute the commission and
+  // returns a clear message, and we nudge the customer inline below.
   const quoted = estimate && estimate.total > 0 ? estimate.total : null;
   const codInRange =
-    quoted != null &&
-    (!sysConfig?.codMinPrice || quoted >= sysConfig.codMinPrice) &&
-    (!sysConfig?.codMaxPrice || quoted <= sysConfig.codMaxPrice);
+    quoted == null ||
+    ((!sysConfig?.codMinPrice || quoted >= sysConfig.codMinPrice) &&
+      (!sysConfig?.codMaxPrice || quoted <= sysConfig.codMaxPrice));
   const codAvailable = Boolean(sysConfig?.codEnabled) && codInRange;
+  // COD needs a computed price (for the commission); flag when the customer picked
+  // COD but hasn't pinned both locations yet.
+  const codNeedsPins = paymentMethod === 'COD' && quoted == null;
 
   // If COD becomes unavailable (price moved out of range, etc.), snap back to PREPAID.
   useEffect(() => {
@@ -400,6 +405,11 @@ function SummaryStep({
             * เก็บเงินปลายทางใช้ได้กับงานที่มีมูลค่า
             {sysConfig.codMinPrice ? ` ตั้งแต่ ฿${sysConfig.codMinPrice.toLocaleString()}` : ''}
             {sysConfig.codMaxPrice ? ` ไม่เกิน ฿${sysConfig.codMaxPrice.toLocaleString()}` : ''}
+          </p>
+        )}
+        {codNeedsPins && (
+          <p className="mt-2 text-[11px] leading-tight text-warning">
+            * กรุณาปักหมุดต้นทาง-ปลายทางบนแผนที่ เพื่อคำนวณราคาและค่าธรรมเนียมสำหรับ COD
           </p>
         )}
       </div>

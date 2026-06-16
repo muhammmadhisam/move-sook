@@ -50,7 +50,6 @@ export function ImageUpload({ value, onUploaded, label = 'อัปโหลด�
         ref={inputRef}
         type="file"
         accept="image/*"
-        capture="environment"
         className="hidden"
         onChange={onPick}
       />

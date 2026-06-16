@@ -76,9 +76,16 @@ function JobCard({
     <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
       {/* Header row */}
       <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-2">
-        <Badge variant={JOB_STATUS_VARIANT[job.status]} className="text-xs">
-          {JOB_STATUS_LABEL[job.status]}
-        </Badge>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant={JOB_STATUS_VARIANT[job.status]} className="text-xs">
+            {JOB_STATUS_LABEL[job.status]}
+          </Badge>
+          {job.paymentMethod === 'COD' && (
+            <Badge variant="outline" className="border-warning/50 text-warning text-xs">
+              เก็บเงินปลายทาง
+            </Badge>
+          )}
+        </div>
         <span className="text-xs text-muted-foreground">{createdAt}</span>
       </div>
 

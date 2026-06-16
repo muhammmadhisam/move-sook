@@ -1,4 +1,4 @@
-import type { JobStatus } from './enums';
+import type { JobStatus, PaymentMethod } from './enums';
 
 // Single source of truth for legal job status transitions.
 // The API enforces this on PATCH /jobs/:id/status; the client uses it to
@@ -43,19 +43,28 @@ export function isTerminalStatus(status: JobStatus): boolean {
 }
 
 /**
- * Statuses from which a CUSTOMER may cancel their own job. Narrower than "every
- * status that can transition to CANCELLED" — a customer may only bail out before
- * the goods are picked up; cancellations after that are admin-driven.
+ * Statuses from which a CUSTOMER may cancel their own job. The rule depends on the
+ * payment method, because "the customer is now financially committed" lands at a
+ * different point for each:
+ *
+ * - PREPAID: the customer transfers the full amount up-front, so once the slip is
+ *   approved and the job is POSTED the money is already in the platform's hands.
+ *   They may only bail out *before* paying — i.e. while still DRAFT / PENDING_PAYMENT.
+ *   A POSTED or driver-assigned (ACCEPTED) prepaid job is no longer self-cancellable.
+ * - COD: the customer never pays through the app (cash to the driver at the
+ *   destination), so there is nothing to lose by cancelling right up until the
+ *   goods are collected. They may cancel through POSTED and ACCEPTED, but not once
+ *   the driver has PICKED_UP.
+ *
+ * Cancellations past these points are admin-driven.
  */
-export const CUSTOMER_CANCELLABLE: readonly JobStatus[] = [
-  'DRAFT',
-  'PENDING_PAYMENT',
-  'POSTED',
-  'ACCEPTED',
-];
+export const CUSTOMER_CANCELLABLE_PREPAID: readonly JobStatus[] = ['DRAFT', 'PENDING_PAYMENT'];
+export const CUSTOMER_CANCELLABLE_COD: readonly JobStatus[] = ['DRAFT', 'POSTED', 'ACCEPTED'];
 
-export function isCustomerCancellable(status: JobStatus): boolean {
-  return CUSTOMER_CANCELLABLE.includes(status);
+export function isCustomerCancellable(status: JobStatus, paymentMethod: PaymentMethod): boolean {
+  const allowed =
+    paymentMethod === 'COD' ? CUSTOMER_CANCELLABLE_COD : CUSTOMER_CANCELLABLE_PREPAID;
+  return allowed.includes(status);
 }
 
 /**

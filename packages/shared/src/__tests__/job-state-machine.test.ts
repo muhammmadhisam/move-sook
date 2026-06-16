@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CUSTOMER_CANCELLABLE,
+  CUSTOMER_CANCELLABLE_COD,
+  CUSTOMER_CANCELLABLE_PREPAID,
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
   JOB_TRANSITIONS,
@@ -73,10 +74,22 @@ describe('driver permissions', () => {
 });
 
 describe('customer permissions', () => {
-  it('customer may cancel only before pickup', () => {
-    expect(CUSTOMER_CANCELLABLE).toEqual(['DRAFT', 'PENDING_PAYMENT', 'POSTED', 'ACCEPTED']);
-    expect(isCustomerCancellable('PICKED_UP')).toBe(false);
-    expect(isCustomerCancellable('DELIVERED')).toBe(false);
+  it('PREPAID customer may cancel only before paying (DRAFT/PENDING_PAYMENT)', () => {
+    expect(CUSTOMER_CANCELLABLE_PREPAID).toEqual(['DRAFT', 'PENDING_PAYMENT']);
+    expect(isCustomerCancellable('PENDING_PAYMENT', 'PREPAID')).toBe(true);
+    // Once paid (POSTED) or a driver is going to pick up (ACCEPTED), no self-cancel.
+    expect(isCustomerCancellable('POSTED', 'PREPAID')).toBe(false);
+    expect(isCustomerCancellable('ACCEPTED', 'PREPAID')).toBe(false);
+    expect(isCustomerCancellable('PICKED_UP', 'PREPAID')).toBe(false);
+  });
+
+  it('COD customer may cancel up until the goods are picked up', () => {
+    expect(CUSTOMER_CANCELLABLE_COD).toEqual(['DRAFT', 'POSTED', 'ACCEPTED']);
+    // No app payment, so cancel is free right up to pickup — incl. ACCEPTED.
+    expect(isCustomerCancellable('POSTED', 'COD')).toBe(true);
+    expect(isCustomerCancellable('ACCEPTED', 'COD')).toBe(true);
+    expect(isCustomerCancellable('PICKED_UP', 'COD')).toBe(false);
+    expect(isCustomerCancellable('DELIVERED', 'COD')).toBe(false);
   });
 
   it('customer may confirm receipt only while delivery is underway', () => {
@@ -87,7 +100,7 @@ describe('customer permissions', () => {
   });
 
   it('every customer-cancellable state can legally transition to CANCELLED', () => {
-    for (const from of CUSTOMER_CANCELLABLE) {
+    for (const from of [...CUSTOMER_CANCELLABLE_PREPAID, ...CUSTOMER_CANCELLABLE_COD]) {
       expect(canTransition(from, 'CANCELLED')).toBe(true);
     }
   });

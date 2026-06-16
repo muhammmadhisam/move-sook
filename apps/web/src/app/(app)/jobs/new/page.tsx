@@ -689,7 +689,7 @@ export default function NewJobPage() {
     } finally {
       setDraftReady(true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Intentionally runs only when the re-book source (?from=) changes.
   }, [fromId]);
 
   // Persist the draft on every change (after hydration). 1-day TTL via savedAt.

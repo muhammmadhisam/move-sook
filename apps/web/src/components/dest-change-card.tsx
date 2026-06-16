@@ -11,6 +11,7 @@ import {
   PreviewableImage,
   ProvinceSelect,
   Textarea,
+  useConfirm,
 } from '@movesook/ui';
 import type { JobDto, JobPricingResponse, PublicSystemConfig } from '@movesook/shared';
 import { ADDR_CHANGE_STATUS_LABEL, computeAddressChangeFee } from '@movesook/shared';
@@ -34,6 +35,7 @@ const ACTIVE = new Set(['REQUESTED', 'APPROVED_AWAITING_PAYMENT', 'PENDING_REVIE
  */
 export function DestChangeCard({ job, onChanged }: { job: JobDto; onChanged?: () => void }) {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const [address, setAddress] = useState('');
   const [province, setProvince] = useState('');
@@ -430,8 +432,15 @@ export function DestChangeCard({ job, onChanged }: { job: JobDto; onChanged?: ()
             variant="ghost"
             className="w-full text-destructive hover:text-destructive"
             disabled={cancelRequest.isPending}
-            onClick={() => {
-              if (window.confirm('ยืนยันยกเลิกคำขอเปลี่ยนที่อยู่?')) cancelRequest.mutate();
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'ยกเลิกคำขอ',
+                description: 'ยืนยันยกเลิกคำขอเปลี่ยนที่อยู่?',
+                confirmText: 'ยกเลิกคำขอ',
+                cancelText: 'ไม่',
+                destructive: true,
+              });
+              if (ok) cancelRequest.mutate();
             }}
           >
             ยกเลิกคำขอ

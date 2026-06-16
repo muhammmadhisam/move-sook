@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Check, Wallet } from 'lucide-react';
-import { Button, PreviewableImage } from '@movesook/ui';
+import { Button, PreviewableImage, useConfirm } from '@movesook/ui';
 import type { JobDto, PublicSystemConfig } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
@@ -22,6 +22,7 @@ export function PaymentSlipCard({
   onChanged?: () => void;
 }) {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   const [slipUrl, setSlipUrl] = useState<string | null>(null);
 
   // Company receiving account + QR to show the customer where to transfer.
@@ -219,10 +220,14 @@ export function PaymentSlipCard({
             variant="outline"
             className="w-full border-warning/50 text-warning hover:bg-warning/10 hover:text-warning"
             disabled={switchToCod.isPending}
-            onClick={() => {
-              if (window.confirm('เปลี่ยนเป็นเก็บเงินปลายทาง (COD)? งานจะถูกเผยแพร่ให้คนขับทันทีโดยไม่ต้องโอนก่อน')) {
-                switchToCod.mutate();
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: 'เปลี่ยนเป็นเก็บเงินปลายทาง (COD)',
+                description:
+                  'งานจะถูกเผยแพร่ให้คนขับทันทีโดยไม่ต้องโอนก่อน ยืนยันเปลี่ยนเป็น COD?',
+                confirmText: 'เปลี่ยนเป็น COD',
+              });
+              if (ok) switchToCod.mutate();
             }}
           >
             {switchToCod.isPending ? 'กำลังเปลี่ยน…' : 'เปลี่ยนเป็นเก็บเงินปลายทาง (COD)'}

@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
   cn,
+  useConfirm,
 } from '@movesook/ui';
 import type { JobDto, JobListResponse, JobStatus } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -64,6 +65,7 @@ function JobCard({
   cancelPending: boolean;
   onReviewDone: () => void;
 }) {
+  const confirm = useConfirm();
   const isActive = TAB_GROUPS.active.has(job.status);
   const currentStepIdx = STEP_ORDER.indexOf(job.status);
 
@@ -219,13 +221,19 @@ function JobCard({
             variant="ghost"
             className="px-3 text-destructive hover:text-destructive"
             disabled={cancelPending}
-            onClick={() => {
+            onClick={async () => {
               // After a driver has accepted, cancelling affects them too — confirm first.
-              const msg =
-                job.status === 'ACCEPTED'
-                  ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
-                  : 'ยืนยันยกเลิกงานนี้?';
-              if (window.confirm(msg)) onCancel(job.id);
+              const ok = await confirm({
+                title: 'ยกเลิกงาน',
+                description:
+                  job.status === 'ACCEPTED'
+                    ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
+                    : 'ยืนยันยกเลิกงานนี้?',
+                confirmText: 'ยกเลิกงาน',
+                cancelText: 'ไม่',
+                destructive: true,
+              });
+              if (ok) onCancel(job.id);
             }}
           >
             ยกเลิก

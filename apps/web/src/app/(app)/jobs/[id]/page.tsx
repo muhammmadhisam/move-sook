@@ -14,6 +14,7 @@ import {
   CardHeader,
   CardTitle,
   PreviewableImage,
+  useConfirm,
 } from '@movesook/ui';
 import type { JobDetailResponse } from '@movesook/shared';
 import { isCustomerCancellable } from '@movesook/shared';
@@ -47,6 +48,7 @@ export default function JobDetailPage() {
   const id = params.id;
   const queryClient = useQueryClient();
   const { me } = useAuth();
+  const confirmDialog = useConfirm();
 
   const job = useQuery({
     queryKey: ['job', id],
@@ -391,12 +393,18 @@ export default function JobDetailPage() {
               variant="ghost"
               className="w-full text-destructive hover:text-destructive"
               disabled={cancel.isPending}
-              onClick={() => {
-                const msg =
-                  job.data.status === 'ACCEPTED'
-                    ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
-                    : 'ยืนยันยกเลิกงานนี้?';
-                if (window.confirm(msg)) cancel.mutate();
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: 'ยกเลิกงาน',
+                  description:
+                    job.data.status === 'ACCEPTED'
+                      ? 'มีคนขับรับงานนี้แล้วและอาจกำลังเดินทาง — ยืนยันยกเลิกงาน? (อาจมีค่าธรรมเนียมหากเกินช่วงยกเลิกฟรี)'
+                      : 'ยืนยันยกเลิกงานนี้?',
+                  confirmText: 'ยกเลิกงาน',
+                  cancelText: 'ไม่',
+                  destructive: true,
+                });
+                if (ok) cancel.mutate();
               }}
             >
               ยกเลิกงาน

@@ -20,6 +20,7 @@ import {
   Input,
   Label,
   PreviewableImage,
+  useConfirm,
 } from '@movesook/ui';
 import { VehicleTypeSlugSchema, vehicleTypeLabel, type VehiclePricingDto } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -51,6 +52,7 @@ const EMPTY_DRAFT: Draft = {
 
 export function VehiclePricingCard() {
   const queryClient = useQueryClient();
+  const confirm = useConfirm();
   // editing holds the slug being edited; `isNew` flips the dialog into create mode
   // where the slug is typed instead of fixed.
   const [editing, setEditing] = useState<string | null>(null);
@@ -203,8 +205,14 @@ export function VehiclePricingCard() {
                   variant="ghost"
                   className="text-destructive hover:text-destructive"
                   disabled={remove.isPending}
-                  onClick={() => {
-                    if (confirm(`ลบประเภทรถ "${vehicleTypeLabel(c.vehicleType, c.label)}" ?`)) remove.mutate(c.vehicleType);
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'ลบประเภทรถ',
+                      description: `ลบประเภทรถ "${vehicleTypeLabel(c.vehicleType, c.label)}" ?`,
+                      confirmText: 'ลบ',
+                      destructive: true,
+                    });
+                    if (ok) remove.mutate(c.vehicleType);
                   }}
                 >
                   <Trash2 className="h-4 w-4" />

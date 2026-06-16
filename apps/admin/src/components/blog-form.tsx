@@ -29,6 +29,7 @@ import {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
+import { LexicalEditor } from '@/components/lexical-editor';
 
 /** Turn a title into a URL-safe slug (keeps Thai out — slugs are ASCII only). */
 function slugify(input: string): string {
@@ -177,14 +178,11 @@ export function BlogForm({ post }: { post?: BlogPostDto }) {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="body">เนื้อหา (Markdown) *</Label>
-                <Textarea
-                  id="body"
-                  rows={18}
+                <Label>เนื้อหา *</Label>
+                <LexicalEditor
                   value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="font-mono text-sm"
-                  placeholder={'## หัวข้อย่อย\n\nเขียนเนื้อหาด้วย Markdown ได้ เช่น **ตัวหนา**, *ตัวเอียง*, รายการ:\n\n- ข้อ 1\n- ข้อ 2'}
+                  onChange={setBody}
+                  placeholder="เขียนเนื้อหาบทความ… จัดรูปแบบด้วยแถบเครื่องมือ หรือพิมพ์แบบ Markdown (## หัวข้อ, **ตัวหนา**, - รายการ)"
                 />
               </div>
             </CardContent>

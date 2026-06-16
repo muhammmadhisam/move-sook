@@ -393,6 +393,59 @@ export const jobRoutes = new Hono<AppEnv>()
     return c.json(toJobDto(updated));
   })
 
+  // CUSTOMER switches a still-unpaid (PENDING_PAYMENT) job to COD instead of paying
+  // up-front. The job publishes to drivers immediately (the driver then settles the
+  // commission before pickup — the usual COD flow). One-way: COD jobs are public.
+  .post('/:id/switch-to-cod', authenticate('user'), requireRole('USER', 'DRIVER'), async (c) => {
+    const { sub } = c.get('claims');
+    const id = c.req.param('id');
+    const job = await prisma.job.findUnique({
+      where: { id },
+      include: { customer: { select: { userId: true } } },
+    });
+    if (!job) throw new HTTPException(404, { message: 'Job not found' });
+    if (job.customer.userId !== sub) throw new HTTPException(403, { message: 'Not your job' });
+    if (job.status !== 'PENDING_PAYMENT') {
+      throw new HTTPException(422, {
+        message: 'เปลี่ยนเป็นเก็บเงินปลายทางได้เฉพาะงานที่ยังไม่ได้ชำระเงิน',
+      });
+    }
+    if (job.paymentMethod === 'COD') {
+      throw new HTTPException(422, { message: 'งานนี้เป็นแบบเก็บเงินปลายทางอยู่แล้ว' });
+    }
+    const sys = await getSystemSettings();
+    if (!sys.codEnabled) {
+      throw new HTTPException(422, { message: 'ขณะนี้ยังไม่เปิดให้ใช้บริการเก็บเงินปลายทาง (COD)' });
+    }
+    if (job.priceQuoted == null) {
+      throw new HTTPException(422, { message: 'งานนี้ยังไม่มีราคา จึงเปลี่ยนเป็น COD ไม่ได้' });
+    }
+    if (sys.codMinPrice > 0 && job.priceQuoted < sys.codMinPrice) {
+      throw new HTTPException(422, {
+        message: `งานเก็บเงินปลายทางต้องมีมูลค่าอย่างน้อย ฿${sys.codMinPrice.toLocaleString('th-TH')}`,
+      });
+    }
+    if (sys.codMaxPrice > 0 && job.priceQuoted > sys.codMaxPrice) {
+      throw new HTTPException(422, {
+        message: `งานเก็บเงินปลายทางต้องมีมูลค่าไม่เกิน ฿${sys.codMaxPrice.toLocaleString('th-TH')}`,
+      });
+    }
+    const updated = await prisma.job.update({
+      where: { id },
+      data: {
+        paymentMethod: 'COD',
+        status: 'POSTED',
+        // Drop the up-front payment artefacts — the customer no longer prepays.
+        paymentSlipUrl: null,
+        paymentSlipUploadedAt: null,
+        paymentRejectedReason: null,
+      },
+    });
+    // Now public — fan out to available drivers in the origin province.
+    await notifyNewJobToArea(updated);
+    return c.json(toJobDto(updated));
+  })
+
   // CUSTOMER requests a destination change mid-delivery. The live destination is
   // untouched; the requested new address is parked on destChange* until an admin
   // approves the request AND the customer pays the change fee. The fee is snapshotted

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
+import { Check, Wallet } from 'lucide-react';
 import { Button, PreviewableImage } from '@movesook/ui';
 import type { JobDto, PublicSystemConfig } from '@movesook/shared';
 import { api } from '@/lib/api';
@@ -56,7 +56,33 @@ export function PaymentSlipCard({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  // Switch this still-unpaid job to COD (pay the driver at the destination) instead
+  // of transferring up-front. Publishes it to drivers immediately.
+  const switchToCod = useMutation({
+    mutationFn: async () => {
+      const res = await api.jobs[':id']['switch-to-cod'].$post({ param: { id: job.id } });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(body?.error ?? 'เปลี่ยนเป็น COD ไม่สำเร็จ');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast.success('เปลี่ยนเป็นเก็บเงินปลายทางแล้ว — เผยแพร่งานให้คนขับแล้ว');
+      queryClient.invalidateQueries({ queryKey: ['my-jobs'] });
+      onChanged?.();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   if (job.status !== 'PENDING_PAYMENT') return null;
+
+  // COD switch offered when ops enabled it and the price is within range (0 = unbounded).
+  const codAvailable =
+    Boolean(config?.codEnabled) &&
+    job.priceQuoted != null &&
+    (!config?.codMinPrice || job.priceQuoted >= config.codMinPrice) &&
+    (!config?.codMaxPrice || job.priceQuoted <= config.codMaxPrice);
 
   // Slip already submitted, waiting for admin review.
   const awaitingReview = Boolean(job.paymentSlipUrl);
@@ -152,6 +178,33 @@ export function PaymentSlipCard({
             onClick={() => slipUrl && submit.mutate(slipUrl)}
           >
             {submit.isPending ? 'กำลังส่ง…' : 'ส่งสลิปให้แอดมินตรวจสอบ'}
+          </Button>
+        </div>
+      )}
+
+      {/* Alternative: skip the up-front transfer and pay the driver at the destination. */}
+      {codAvailable && (
+        <div className="mt-3 border-t border-warning/30 pt-3">
+          <div className="mb-1 flex items-center gap-1.5">
+            <Wallet className="h-4 w-4 shrink-0 text-warning" />
+            <p className="text-sm font-semibold">ไม่อยากโอนก่อน?</p>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">
+            เปลี่ยนเป็น <span className="font-medium">เก็บเงินปลายทาง (COD)</span> —
+            จ่ายเงินสดให้คนขับเมื่อของถึงปลายทาง งานจะเปิดให้คนขับรับทันที
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full border-warning/50 text-warning hover:bg-warning/10 hover:text-warning"
+            disabled={switchToCod.isPending}
+            onClick={() => {
+              if (window.confirm('เปลี่ยนเป็นเก็บเงินปลายทาง (COD)? งานจะถูกเผยแพร่ให้คนขับทันทีโดยไม่ต้องโอนก่อน')) {
+                switchToCod.mutate();
+              }
+            }}
+          >
+            {switchToCod.isPending ? 'กำลังเปลี่ยน…' : 'เปลี่ยนเป็นเก็บเงินปลายทาง (COD)'}
           </Button>
         </div>
       )}

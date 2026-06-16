@@ -24,6 +24,8 @@ type PayJob = Pick<
   | 'id'
   | 'status'
   | 'priceQuoted'
+  | 'paymentMethod'
+  | 'codCommissionFee'
   | 'paymentSlipUrl'
   | 'paymentSlipUploadedAt'
   | 'paymentApprovedAt'
@@ -83,13 +85,24 @@ export function PaymentReview({
   });
 
   const pending = job.status === 'PENDING_PAYMENT';
+  const isCod = job.paymentMethod === 'COD';
+  // COD: the customer only transfers the commission ("ค่าธรรมเนียม"); the rest is cash to
+  // the driver at the destination. PREPAID: they transfer the full quoted amount.
+  const payAmount = isCod ? job.codCommissionFee : job.priceQuoted;
 
   return (
     <div className="space-y-3">
+      {isCod && (
+        <p className="rounded-md bg-warning/10 px-2 py-1.5 text-xs text-warning">
+          งานเก็บเงินปลายทาง (COD) — ลูกค้าโอนเฉพาะค่าธรรมเนียม ส่วนที่เหลือจ่ายเงินสดให้คนขับที่ปลายทาง
+        </p>
+      )}
       <div className="flex items-center justify-between text-sm">
-        <span className="text-muted-foreground">ยอดที่ต้องชำระ</span>
+        <span className="text-muted-foreground">
+          {isCod ? 'ค่าธรรมเนียม (ค่าคอม) ที่ลูกค้าโอน' : 'ยอดที่ต้องชำระ'}
+        </span>
         <span className="font-semibold">
-          {job.priceQuoted != null ? baht(job.priceQuoted) : 'ยังไม่กำหนดราคา'}
+          {payAmount != null ? baht(payAmount) : 'ยังไม่กำหนดราคา'}
         </span>
       </div>
 

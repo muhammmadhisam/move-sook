@@ -122,7 +122,7 @@ import {
 } from '../lib/settings';
 import { writeAudit } from '../lib/audit';
 import { notify, notifyAdmins, notifyNewJobToArea } from '../lib/notify';
-import { createCodCommissionTransaction, createDeliveryTransaction } from '../lib/transactions';
+import { createDeliveryTransaction } from '../lib/transactions';
 import { buildJobDocument, type DocType } from '../lib/pdf';
 import { maybeIssueReferralReward } from '../queues/side-effects';
 
@@ -1166,112 +1166,8 @@ export const adminRoutes = new Hono<AppEnv>()
     return c.json(toJobDto(updated));
   })
 
-  // ── COD commission ("ค่าธรรมเนียม") review ──
-  // Approve the driver's commission slip for a COD job: records the commission ledger
-  // row (PAID, no payout) and unlocks pickup. Requires a slip to have been uploaded.
-  .post('/jobs/:id/commission/approve', requireAdminRole('SUPER', 'OPS', 'FINANCE'), async (c) => {
-    const id = c.req.param('id');
-    const actorId = c.get('claims').sub;
-    const job = await prisma.job.findUnique({ where: { id } });
-    if (!job) throw new HTTPException(404, { message: 'Job not found' });
-    if (job.paymentMethod !== 'COD') {
-      throw new HTTPException(422, { message: 'งานนี้ไม่ใช่งานเก็บเงินปลายทาง' });
-    }
-    if (job.status !== 'ACCEPTED') {
-      throw new HTTPException(422, { message: 'อนุมัติค่าธรรมเนียมได้เฉพาะงานที่คนขับรับแล้วและยังไม่เริ่ม' });
-    }
-    if (!job.codCommissionSlipUrl) {
-      throw new HTTPException(422, { message: 'ยังไม่มีสลิปค่าธรรมเนียมให้อนุมัติ' });
-    }
-    if (job.codCommissionApprovedAt) {
-      throw new HTTPException(422, { message: 'ค่าธรรมเนียมงานนี้ได้รับการอนุมัติแล้ว' });
-    }
-    const updated = await prisma.$transaction(async (tx) => {
-      const u = await tx.job.update({
-        where: { id },
-        data: {
-          codCommissionApprovedAt: new Date(),
-          codCommissionApprovedById: actorId,
-          codCommissionRejectedReason: null,
-        },
-      });
-      // Record the commission as collected (PAID, COD — never paid out to the driver).
-      await createCodCommissionTransaction(tx, u, u.codCommissionSlipUrl);
-      return u;
-    });
-    await writeAudit({
-      actorId,
-      action: 'job.commission.approve',
-      targetType: 'job',
-      targetId: id,
-      metadata: { codCommissionFee: updated.codCommissionFee, slipUrl: updated.codCommissionSlipUrl },
-    });
-    // Tell the driver they're cleared to start the job.
-    if (updated.driverId) {
-      const drv = await prisma.driver.findUnique({
-        where: { id: updated.driverId },
-        select: { userId: true },
-      });
-      if (drv?.userId) {
-        await notify({
-          userId: drv.userId,
-          type: 'JOB_STATUS',
-          title: 'อนุมัติค่าธรรมเนียมแล้ว เริ่มงานได้เลย',
-          body: `งาน ${updated.originProvince} → ${updated.destProvince} — เริ่มรับของได้`,
-          jobId: updated.id,
-        });
-      }
-    }
-    return c.json(toJobDto(updated));
-  })
-
-  // Reject the driver's COD commission slip: bounce it back for re-upload. The job
-  // stays at ACCEPTED (pickup still blocked).
-  .post('/jobs/:id/commission/reject', requireAdminRole('SUPER', 'OPS', 'FINANCE'), zValidator('json', AdminRejectPaymentInput), async (c) => {
-    const id = c.req.param('id');
-    const actorId = c.get('claims').sub;
-    const { reason } = c.req.valid('json');
-    const job = await prisma.job.findUnique({ where: { id } });
-    if (!job) throw new HTTPException(404, { message: 'Job not found' });
-    if (job.paymentMethod !== 'COD') {
-      throw new HTTPException(422, { message: 'งานนี้ไม่ใช่งานเก็บเงินปลายทาง' });
-    }
-    if (job.codCommissionApprovedAt) {
-      throw new HTTPException(422, { message: 'ค่าธรรมเนียมงานนี้อนุมัติไปแล้ว' });
-    }
-    const updated = await prisma.job.update({
-      where: { id },
-      data: {
-        codCommissionSlipUrl: null,
-        codCommissionSlipUploadedAt: null,
-        codCommissionRejectedReason: reason ?? 'สลิปไม่ถูกต้อง กรุณาอัปโหลดใหม่',
-        codCommissionRejectedCount: { increment: 1 },
-      },
-    });
-    await writeAudit({
-      actorId,
-      action: 'job.commission.reject',
-      targetType: 'job',
-      targetId: id,
-      metadata: { reason: updated.codCommissionRejectedReason, rejectedCount: updated.codCommissionRejectedCount },
-    });
-    if (updated.driverId) {
-      const drv = await prisma.driver.findUnique({
-        where: { id: updated.driverId },
-        select: { userId: true },
-      });
-      if (drv?.userId) {
-        await notify({
-          userId: drv.userId,
-          type: 'JOB_STATUS',
-          title: 'สลิปค่าธรรมเนียมไม่ผ่าน',
-          body: updated.codCommissionRejectedReason ?? 'กรุณาอัปโหลดสลิปใหม่อีกครั้ง',
-          jobId: updated.id,
-        });
-      }
-    }
-    return c.json(toJobDto(updated));
-  })
+  // (COD commission is collected from the CUSTOMER up-front via the normal payment
+  // slip flow — POST /jobs/:id/payment/approve handles it. No separate endpoint.)
 
   // ── Destination-change request review ──
   // Approve the REQUEST itself: the customer may now transfer the change fee.

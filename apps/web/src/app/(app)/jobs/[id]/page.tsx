@@ -20,7 +20,6 @@ import { isCustomerCancellable } from '@movesook/shared';
 import { api, API_BASE_URL } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
-import { CommissionSlipCard } from '@/components/commission-slip-card';
 import { DestChangeCard } from '@/components/dest-change-card';
 import { DisputeDialog } from '@/components/dispute-dialog';
 import { ReviewDialog } from '@/components/review-dialog';
@@ -179,26 +178,22 @@ export default function JobDetailPage() {
             </Card>
           )}
 
-          {/* COD: the assigned driver pays the commission "fee" before they can start. */}
-          {me?.role === 'DRIVER' && (
-            <CommissionSlipCard
-              job={job.data}
-              onChanged={() => queryClient.invalidateQueries({ queryKey: ['job', id] })}
-            />
-          )}
-
-          {/* COD: driver already paid + got approved — confirm they're cleared to start. */}
+          {/* COD: tell the assigned driver how much cash to collect from the customer at
+              the destination (full price minus the commission the customer already paid). */}
           {me?.role === 'DRIVER' &&
             job.data.paymentMethod === 'COD' &&
-            job.data.codCommissionApprovedAt &&
-            job.data.status === 'ACCEPTED' && (
-              <Card className="border-successScale-500/40 bg-successScale-500/5">
+            job.data.priceQuoted != null &&
+            job.data.codCommissionFee != null && (
+              <Card className="border-warning/40 bg-warning/5">
                 <CardContent className="flex items-start gap-2 py-3 text-sm">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-successScale-600" />
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                   <div>
-                    <p className="font-medium">ชำระค่าธรรมเนียมแล้ว เริ่มงานได้เลย</p>
+                    <p className="font-medium">
+                      เก็บเงินสดปลายทาง ฿
+                      {(job.data.priceQuoted - job.data.codCommissionFee).toLocaleString()}
+                    </p>
                     <p className="text-muted-foreground">
-                      เก็บเงินค่างานเต็มจำนวนจากลูกค้าที่ปลายทาง
+                      ลูกค้าจ่ายค่าคอมให้แพลตฟอร์มแล้ว — เก็บส่วนที่เหลือเป็นเงินสดจากลูกค้าที่ปลายทาง
                     </p>
                   </div>
                 </CardContent>
@@ -387,9 +382,11 @@ export default function JobDetailPage() {
           {/* Report a problem — once a driver is involved through delivery */}
           {DISPUTABLE.has(job.data.status) && <DisputeDialog jobId={id} />}
 
-          {/* Customer cancellation — allowed until the goods are picked up (incl. after
-              admin approves payment -> POSTED, and after a driver accepts). */}
-          {me?.role === 'USER' && isCustomerCancellable(job.data.status) && (
+          {/* Customer cancellation — gated by payment method: PREPAID only before
+              the customer has paid (DRAFT/PENDING_PAYMENT); COD up until the driver
+              picks up the goods (POSTED/ACCEPTED). */}
+          {me?.role === 'USER' &&
+            isCustomerCancellable(job.data.status, job.data.paymentMethod) && (
             <Button
               variant="ghost"
               className="w-full text-destructive hover:text-destructive"

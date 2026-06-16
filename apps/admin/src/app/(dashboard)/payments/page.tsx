@@ -13,7 +13,6 @@ import {
 import { vehicleTypeLabel, type AdminJobListItem } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { PaymentReview } from '@/components/payment-review';
-import { CommissionReview } from '@/components/commission-review';
 
 type JobsResponse = {
   items: AdminJobListItem[];
@@ -37,23 +36,6 @@ export default function PaymentsQueuePage() {
     refetchInterval: 30_000,
   });
 
-  // COD commission queue: drivers who uploaded a commission slip awaiting approval.
-  const codJobs = useQuery({
-    queryKey: ['admin', 'cod-commission'],
-    queryFn: async (): Promise<JobsResponse> => {
-      const res = await api.admin.jobs.$get({
-        query: { status: 'ACCEPTED', pageSize: '100' },
-      });
-      if (!res.ok) throw new Error('โหลดรายการไม่สำเร็จ');
-      return (await res.json()) as JobsResponse;
-    },
-    refetchInterval: 30_000,
-  });
-
-  const codPending = (codJobs.data?.items ?? []).filter(
-    (j) => j.paymentMethod === 'COD' && j.codCommissionSlipUrl && !j.codCommissionApprovedAt,
-  );
-
   const items = jobs.data?.items ?? [];
   // Slips waiting for review first; jobs where the customer hasn't paid yet last.
   const sorted = [...items].sort(
@@ -64,9 +46,6 @@ export default function PaymentsQueuePage() {
 
   const refresh = () => {
     queryClient.invalidateQueries({ queryKey: ['admin', 'payments'] });
-  };
-  const refreshCod = () => {
-    queryClient.invalidateQueries({ queryKey: ['admin', 'cod-commission'] });
   };
 
   return (
@@ -139,53 +118,6 @@ export default function PaymentsQueuePage() {
             </CardContent>
           </Card>
         ))}
-      </div>
-
-      {/* COD commission queue: approve drivers' commission slips to unlock their jobs. */}
-      <div className="space-y-3 border-t pt-6">
-        <div>
-          <h2 className="text-xl font-bold">ค่าธรรมเนียม COD (คนขับ)</h2>
-          <p className="text-sm text-muted-foreground">
-            งานเก็บเงินปลายทาง — ตรวจสลิปค่าคอมจากคนขับเพื่อปลดล็อกให้เริ่มงาน ({codPending.length}{' '}
-            รอตรวจ)
-          </p>
-        </div>
-
-        {!codJobs.isLoading && codPending.length === 0 && (
-          <p className="rounded-lg border border-dashed py-12 text-center text-sm text-muted-foreground">
-            ไม่มีสลิปค่าธรรมเนียม COD รอตรวจ
-          </p>
-        )}
-
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {codPending.map((j) => (
-            <Card key={j.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-base">
-                      <Link href={`/jobs/${j.id}`} className="hover:underline">
-                        {j.itemDescription}
-                      </Link>
-                    </CardTitle>
-                    <CardDescription>
-                      {j.originProvince} → {j.destProvince} · {vehicleTypeLabel(j.vehicleType)}
-                    </CardDescription>
-                    {j.codCommissionFee != null && (
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        ค่าธรรมเนียม: ฿{j.codCommissionFee.toLocaleString()}
-                      </p>
-                    )}
-                  </div>
-                  <Badge className="border-warning/50 bg-warning/10 text-warning">เก็บปลายทาง</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <CommissionReview job={j} onChanged={refreshCod} />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
       </div>
     </div>
   );

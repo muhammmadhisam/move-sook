@@ -87,16 +87,34 @@ export function PaymentSlipCard({
   // Slip already submitted, waiting for admin review.
   const awaitingReview = Boolean(job.paymentSlipUrl);
 
+  // COD: the customer transfers only the commission ("ค่าธรรมเนียม") now and pays the
+  // rest in cash to the driver at the destination. PREPAID: transfer the full amount.
+  const isCod = job.paymentMethod === 'COD';
+  const payNow = isCod ? job.codCommissionFee : job.priceQuoted;
+  const cashRest =
+    isCod && job.priceQuoted != null && job.codCommissionFee != null
+      ? job.priceQuoted - job.codCommissionFee
+      : null;
+
   return (
     <div className="mx-4 mb-3 rounded-xl border border-warning/40 bg-warning/5 p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold">การชำระเงิน</p>
-        {job.priceQuoted ? (
-          <p className="text-base font-bold text-primary">฿{job.priceQuoted.toLocaleString()}</p>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold">
+          {isCod ? 'ชำระค่าธรรมเนียม (เก็บเงินปลายทาง)' : 'การชำระเงิน'}
+        </p>
+        {payNow != null ? (
+          <p className="text-base font-bold text-primary">฿{payNow.toLocaleString()}</p>
         ) : (
           <p className="text-xs italic text-muted-foreground">รอแอดมินกำหนดราคา</p>
         )}
       </div>
+      {isCod && cashRest != null && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          โอนเฉพาะค่าธรรมเนียม ฿{job.codCommissionFee?.toLocaleString()} ตอนนี้ ·
+          ส่วนที่เหลือ <span className="font-medium text-foreground">฿{cashRest.toLocaleString()}</span>{' '}
+          จ่ายเป็นเงินสดให้คนขับที่ปลายทาง
+        </p>
+      )}
 
       {awaitingReview ? (
         <div className="space-y-2">
@@ -120,7 +138,9 @@ export function PaymentSlipCard({
             </p>
           )}
           <p className="text-xs text-muted-foreground">
-            โอนเงินตามยอด แล้วอัปโหลดสลิปเพื่อยืนยันการชำระเงิน
+            {isCod
+              ? 'โอนค่าธรรมเนียมตามยอด แล้วอัปโหลดสลิปเพื่อยืนยัน'
+              : 'โอนเงินตามยอด แล้วอัปโหลดสลิปเพื่อยืนยันการชำระเงิน'}
           </p>
 
           {/* Company receiving account + QR */}
@@ -182,8 +202,9 @@ export function PaymentSlipCard({
         </div>
       )}
 
-      {/* Alternative: skip the up-front transfer and pay the driver at the destination. */}
-      {codAvailable && (
+      {/* Alternative: switch a prepaid job to COD (transfer only the commission, pay the
+          rest in cash to the driver at the destination). Hidden once it's already COD. */}
+      {!isCod && codAvailable && (
         <div className="mt-3 border-t border-warning/30 pt-3">
           <div className="mb-1 flex items-center gap-1.5">
             <Wallet className="h-4 w-4 shrink-0 text-warning" />

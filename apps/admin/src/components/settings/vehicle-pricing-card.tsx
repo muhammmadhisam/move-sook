@@ -33,6 +33,7 @@ type Draft = {
   requirements: string;
   maxWeightKg: string;
   pricePerKm: string;
+  pricePerKmShared: string;
   flatRate: string;
   perItemRate: string;
   isActive: boolean;
@@ -45,6 +46,7 @@ const EMPTY_DRAFT: Draft = {
   requirements: '',
   maxWeightKg: '',
   pricePerKm: '',
+  pricePerKmShared: '',
   flatRate: '',
   perItemRate: '',
   isActive: true,
@@ -91,6 +93,7 @@ export function VehiclePricingCard() {
           requirements: draft.requirements.trim() || null,
           maxWeightKg: draft.maxWeightKg.trim() ? Number(draft.maxWeightKg) : null,
           pricePerKm: draft.pricePerKm.trim() ? Number(draft.pricePerKm) : null,
+          pricePerKmShared: draft.pricePerKmShared.trim() ? Number(draft.pricePerKmShared) : null,
           flatRate: draft.flatRate.trim() ? Number(draft.flatRate) : null,
           perItemRate: draft.perItemRate.trim() ? Number(draft.perItemRate) : null,
           isActive: draft.isActive,
@@ -129,6 +132,7 @@ export function VehiclePricingCard() {
       requirements: c.requirements ?? '',
       maxWeightKg: c.maxWeightKg != null ? String(c.maxWeightKg) : '',
       pricePerKm: c.pricePerKm != null ? String(c.pricePerKm) : '',
+      pricePerKmShared: c.pricePerKmShared != null ? String(c.pricePerKmShared) : '',
       flatRate: c.flatRate != null ? String(c.flatRate) : '',
       perItemRate: c.perItemRate != null ? String(c.perItemRate) : '',
       isActive: c.isActive,
@@ -301,13 +305,25 @@ export function VehiclePricingCard() {
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="vprice">ราคา/กม. (เว้นว่าง = เรตกลาง)</Label>
+                <Label htmlFor="vprice">ราคา/กม. เหมาลำ (เว้นว่าง = เรตกลาง)</Label>
                 <Input
                   id="vprice"
                   type="number"
                   min={0}
                   value={draft.pricePerKm}
                   onChange={(e) => setDraft({ ...draft, pricePerKm: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="vpriceshared">ราคา/กม. ไม่เหมาลำ (เว้นว่าง = เรตกลาง)</Label>
+                <Input
+                  id="vpriceshared"
+                  type="number"
+                  min={0}
+                  value={draft.pricePerKmShared}
+                  onChange={(e) => setDraft({ ...draft, pricePerKmShared: e.target.value })}
                 />
               </div>
             </div>
@@ -334,7 +350,7 @@ export function VehiclePricingCard() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              เหมาลำ = ค่าเหมา + (ระยะ×เรต/กม.) · หลายสินค้า = (จำนวน×ค่าต่อชิ้น) + (ระยะ×เรต/กม.)
+              เหมาลำ = ค่าเหมา + (ระยะ×เรต/กม.เหมาลำ) · ไม่เหมาลำ = (จำนวน×ค่าต่อชิ้น) + (ระยะ×เรต/กม.ไม่เหมาลำ) — เรตไม่เหมาลำควรถูกกว่า
             </p>
             {save.isError && <p className="text-sm text-destructive">{(save.error as Error).message}</p>}
           </div>

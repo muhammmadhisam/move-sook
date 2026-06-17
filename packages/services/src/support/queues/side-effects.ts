@@ -2,6 +2,7 @@ import { Queue, Worker, type Job } from 'bullmq';
 import { prisma, type Prisma } from '@movesook/db';
 import { bullConnection } from '../redis';
 import { runReferralRewardGrant } from '../referral';
+import { getLogger, reportError } from '../../runtime/env';
 
 // Durable side-effects queue. These are post-commit side effects that used to run
 // inline as best-effort (try/catch + log): a transient failure silently lost the
@@ -47,7 +48,8 @@ export async function maybeIssueReferralReward(customerId: string): Promise<void
   try {
     await getQueue().add('referral-reward', { customerId } satisfies ReferralJobData, jobOpts);
   } catch (err) {
-    console.error('[side-effects] failed to enqueue referral reward', customerId, err);
+    getLogger().error({ err, customerId }, '[side-effects] failed to enqueue referral reward');
+    reportError(err, { scope: 'side-effects.enqueueReferralReward', customerId });
   }
 }
 
@@ -71,7 +73,7 @@ async function process(job: Job): Promise<void> {
       return;
     }
     default:
-      console.warn(`[side-effects] unknown job "${job.name}" — skipped`);
+      getLogger().warn({ jobName: job.name }, '[side-effects] unknown job — skipped');
   }
 }
 
@@ -82,7 +84,12 @@ export function startSideEffectsWorker(): Worker {
   });
   worker.on('failed', (job, err) => {
     if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-      console.error(`[side-effects] ${job.name} job ${job.id} failed permanently:`, err.message);
+      getLogger().error(
+        { err, jobName: job.name, jobId: job.id },
+        '[side-effects] job failed permanently',
+      );
+      // Durable write lost after all retries (audit row / referral grant) — page it.
+      reportError(err, { queue: SIDE_EFFECTS_QUEUE, jobName: job.name, jobId: job.id });
     }
   });
   return worker;

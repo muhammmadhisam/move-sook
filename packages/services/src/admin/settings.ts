@@ -4,6 +4,8 @@ import {
   setCommissionPct,
   getPricePerKm,
   setPricePerKm,
+  getPricePerKmShared,
+  setPricePerKmShared,
   getFloorSurcharge,
   setFloorSurcharge,
   getHelperSurcharge,
@@ -54,9 +56,10 @@ export async function updateCommission(
 
 /** Read delivery price per km + surcharges + surge. */
 export async function getPricing(): Promise<PricingSettingResponse> {
-  const [pricePerKm, floorSurcharge, helperSurcharge, surgeEnabled, surgeMultiplier] =
+  const [pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surgeEnabled, surgeMultiplier] =
     await Promise.all([
       getPricePerKm(),
+      getPricePerKmShared(),
       getFloorSurcharge(),
       getHelperSurcharge(),
       getSurgeEnabled(),
@@ -64,6 +67,7 @@ export async function getPricing(): Promise<PricingSettingResponse> {
     ]);
   return {
     pricePerKm,
+    pricePerKmShared,
     floorSurcharge,
     helperSurcharge,
     surgeEnabled,
@@ -76,18 +80,24 @@ export async function updatePricing(
   sub: string,
   input: UpdatePricingInput,
 ): Promise<PricingSettingResponse> {
-  const [prevPrice, prevFloor, prevHelper, prevSurgeOn, prevSurgeMult] = await Promise.all([
-    getPricePerKm(),
-    getFloorSurcharge(),
-    getHelperSurcharge(),
-    getSurgeEnabled(),
-    getSurgeMultiplier(),
-  ]);
+  const [prevPrice, prevPriceShared, prevFloor, prevHelper, prevSurgeOn, prevSurgeMult] =
+    await Promise.all([
+      getPricePerKm(),
+      getPricePerKmShared(),
+      getFloorSurcharge(),
+      getHelperSurcharge(),
+      getSurgeEnabled(),
+      getSurgeMultiplier(),
+    ]);
 
   const changes: Record<string, { from: number | boolean; to: number | boolean }> = {};
   if (input.pricePerKm !== undefined) {
     await setPricePerKm(input.pricePerKm);
     changes.price_per_km = { from: prevPrice, to: input.pricePerKm };
+  }
+  if (input.pricePerKmShared !== undefined) {
+    await setPricePerKmShared(input.pricePerKmShared);
+    changes.price_per_km_shared = { from: prevPriceShared, to: input.pricePerKmShared };
   }
   if (input.floorSurcharge !== undefined) {
     await setFloorSurcharge(input.floorSurcharge);
@@ -115,6 +125,7 @@ export async function updatePricing(
 
   return {
     pricePerKm: input.pricePerKm ?? prevPrice,
+    pricePerKmShared: input.pricePerKmShared ?? prevPriceShared,
     floorSurcharge: input.floorSurcharge ?? prevFloor,
     helperSurcharge: input.helperSurcharge ?? prevHelper,
     surgeEnabled: input.surgeEnabled ?? prevSurgeOn,

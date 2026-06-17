@@ -10,8 +10,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@movesook/ui';
-import { vehicleTypeLabel, type AdminJobListItem } from '@movesook/shared';
+import { type AdminJobListItem } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 import { PaymentReview } from '@/components/payment-review';
 
 type JobsResponse = {
@@ -23,6 +24,7 @@ type JobsResponse = {
 
 export default function PaymentsQueuePage() {
   const queryClient = useQueryClient();
+  const { vehicleLabelOf } = useVehicleLabels();
 
   const jobs = useQuery({
     queryKey: ['admin', 'payments'],
@@ -99,7 +101,7 @@ export default function PaymentsQueuePage() {
                     </Link>
                   </CardTitle>
                   <CardDescription>
-                    {j.originProvince} → {j.destProvince} · {vehicleTypeLabel(j.vehicleType)}
+                    {j.originProvince} → {j.destProvince} · {vehicleLabelOf(j.vehicleType)}
                   </CardDescription>
                   <p className="mt-1 text-xs text-muted-foreground">
                     ลูกค้า: {j.customerName ?? '—'}

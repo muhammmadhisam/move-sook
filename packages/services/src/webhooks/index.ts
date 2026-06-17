@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { prisma } from '@movesook/db';
 import { nudgeIdleDrivers, expirePendingPayment } from '../support';
-import { getEnv } from '../runtime/env';
+import { getEnv, getLogger } from '../runtime/env';
 
 // Webhook domain logic. HTTP concerns (reading the raw body, x-line-signature
 // header, and the requireSystem middleware) stay in apps/api/src/routes/webhooks.ts;
@@ -31,26 +32,65 @@ export function verifyLineSignature(rawBody: ArrayBuffer, signature: string): bo
   return timingSafeEqual(provided, expected);
 }
 
+type LineEventSource = { type?: string; userId?: string; groupId?: string; roomId?: string };
+type LineEvent = { type?: string; source?: LineEventSource };
+
 /**
  * Dispatch a parsed LINE webhook payload. The route parses JSON off the request
- * and hands the plain object here. Event dispatch is still a logged stub.
+ * and hands the plain object here.
  *
- * Surface each event's source IDs so an admin can copy the group/room ID to paste
- * into Settings → admin_line_group_id (the OA must be in that group).
+ * Currently handled:
+ *  - follow   → user added the OA: flag lineFollowing=true (now reachable by push)
+ *  - unfollow → user blocked/removed the OA: flag lineFollowing=false
+ * Other event types (message/postback/group) are logged for now — their source
+ * IDs are still surfaced so an admin can copy a group/room ID into Settings.
  */
 export async function handleLineWebhook(payload: unknown): Promise<{ ok: true }> {
-  // TODO(phase-later): dispatch LINE events (follow/message) to handlers.
-  const events: Array<{ type?: string; source?: Record<string, unknown> }> = Array.isArray(
-    (payload as { events?: unknown }).events,
-  )
-    ? (payload as { events: Array<{ type?: string; source?: Record<string, unknown> }> }).events
+  const events: LineEvent[] = Array.isArray((payload as { events?: unknown }).events)
+    ? (payload as { events: LineEvent[] }).events
     : [];
   for (const ev of events) {
-    console.info('[webhook] line event', ev.type, 'source=', JSON.stringify(ev.source ?? {}));
+    await dispatchLineEvent(ev);
   }
   if (events.length === 0)
-    console.info('[webhook] line event', JSON.stringify(payload).slice(0, 500));
+    getLogger().info(
+      { payload: JSON.stringify(payload).slice(0, 500) },
+      '[webhook] line event (no events)',
+    );
   return { ok: true };
+}
+
+async function dispatchLineEvent(ev: LineEvent): Promise<void> {
+  switch (ev.type) {
+    case 'follow':
+      await setFollowState(ev.source?.userId, true);
+      break;
+    case 'unfollow':
+      await setFollowState(ev.source?.userId, false);
+      break;
+    default:
+      getLogger().info(
+        { eventType: ev.type, source: ev.source ?? {} },
+        '[webhook] line event (unhandled)',
+      );
+  }
+}
+
+/**
+ * Persist the OA follow state onto the matching User. updateMany (not update) so a
+ * follow/unfollow from a LINE account that never logged in is a no-op (count 0)
+ * rather than throwing — we only track accounts we already know.
+ */
+async function setFollowState(lineUserId: string | undefined, following: boolean): Promise<void> {
+  if (!lineUserId) return;
+  const now = new Date();
+  const res = await prisma.user.updateMany({
+    where: { lineUserId },
+    data: following
+      ? { lineFollowing: true, lineFollowedAt: now }
+      : { lineFollowing: false, lineUnfollowedAt: now },
+  });
+  getLogger().info({ following, matched: res.count }, '[webhook] line follow state updated');
 }
 
 /**

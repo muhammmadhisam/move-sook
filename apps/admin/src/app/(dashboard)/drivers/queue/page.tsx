@@ -26,8 +26,9 @@ import {
   TableHeader,
   TableRow,
 } from '@movesook/ui';
-import { vehicleTypeLabel, type DriverQueueResponse, type DriverQueueItem } from '@movesook/shared';
+import { type DriverQueueResponse, type DriverQueueItem } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -51,6 +52,7 @@ function waitLabel(hours: number): string {
 
 export default function DriverQueuePage() {
   const queryClient = useQueryClient();
+  const { vehicleLabelOf } = useVehicleLabels();
   const [rejecting, setRejecting] = useState<DriverQueueItem | null>(null);
   const [reason, setReason] = useState('');
 
@@ -129,7 +131,7 @@ export default function DriverQueuePage() {
                   </Link>
                 </TableCell>
                 <TableCell>{d.phone ?? '—'}</TableCell>
-                <TableCell>{vehicleTypeLabel(d.vehicleType)}</TableCell>
+                <TableCell>{vehicleLabelOf(d.vehicleType)}</TableCell>
                 <TableCell>{d.serviceProvince ?? '—'}</TableCell>
                 <TableCell>
                   <Badge variant={d.slaBreached ? 'destructive' : 'secondary'}>

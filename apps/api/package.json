@@ -23,14 +23,17 @@
     "@movesook/db": "workspace:*",
     "@movesook/services": "workspace:*",
     "@movesook/shared": "workspace:*",
+    "@sentry/node": "^8.45.0",
     "dotenv": "^16.4.7",
     "hono": "^4.6.14",
+    "pino": "^9.5.0",
     "tsx": "^4.19.2",
     "zod": "^3.24.1"
   },
   "devDependencies": {
     "@movesook/config": "workspace:*",
     "@types/node": "^22.10.2",
+    "pino-pretty": "^13.0.0",
     "typescript": "^5.7.2"
   }
 }

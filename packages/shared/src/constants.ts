@@ -4,6 +4,7 @@
 export const APP_SETTING_KEYS = {
   COMMISSION_PCT: 'commission_pct',
   PRICE_PER_KM: 'price_per_km',
+  PRICE_PER_KM_SHARED: 'price_per_km_shared', // cheaper per-km rate for non-charter (PER_ITEM / ไม่เหมาลำ) jobs
   MAINTENANCE_MODE: 'maintenance_mode',
   MIN_JOB_PRICE: 'min_job_price',
   MAX_JOB_PRICE: 'max_job_price',
@@ -154,6 +155,13 @@ export const DEFAULT_COMMISSION_PCT = 12;
 /** Fallback delivery price per kilometre (THB) if AppSetting row is missing. */
 export const DEFAULT_PRICE_PER_KM = 20;
 
+/**
+ * Fallback per-km rate (THB) for non-charter (PER_ITEM / ไม่เหมาลำ) jobs if the
+ * AppSetting row is missing. Intentionally lower than DEFAULT_PRICE_PER_KM — a
+ * shared/per-item load costs the customer less per km than booking the whole vehicle.
+ */
+export const DEFAULT_PRICE_PER_KM_SHARED = 12;
+
 /** Fallback per-floor surcharge (THB) charged for each floor above ground with no elevator, per end. */
 export const DEFAULT_FLOOR_SURCHARGE = 40;
 
@@ -179,7 +187,8 @@ export const DEFAULT_PER_ITEM_RATE = 50;
 export type JobQuoteInput = {
   pricingMode?: 'CHARTER' | 'PER_ITEM'; // how to price (defaults to CHARTER)
   distanceKm: number;
-  pricePerKm: number;
+  pricePerKm: number; // charter per-km rate (used for CHARTER base)
+  pricePerKmShared?: number; // non-charter per-km rate (used for PER_ITEM base; defaults to pricePerKm)
   originFloor?: number | null;
   originHasElevator?: boolean | null;
   destFloor?: number | null;
@@ -227,7 +236,11 @@ export function computeJobQuote(input: JobQuoteInput): JobQuote {
   const perFloor = input.floorSurcharge ?? DEFAULT_FLOOR_SURCHARGE;
   const helperFee = input.helperSurcharge ?? DEFAULT_HELPER_SURCHARGE;
   const surge = input.surgeMultiplier && input.surgeMultiplier > 0 ? input.surgeMultiplier : 1;
-  const base = Math.round(estimateJobPrice(input.distanceKm, input.pricePerKm) * surge);
+  // Non-charter (PER_ITEM / ไม่เหมาลำ) jobs price distance at the cheaper shared rate
+  // when one is supplied; CHARTER always uses the full per-vehicle rate.
+  const effPerKm =
+    mode === 'PER_ITEM' ? (input.pricePerKmShared ?? input.pricePerKm) : input.pricePerKm;
+  const base = Math.round(estimateJobPrice(input.distanceKm, effPerKm) * surge);
 
   // Mode-specific charge (not surged):
   // CHARTER = flat per-vehicle booking fee; PER_ITEM = per-item rate × quantity.

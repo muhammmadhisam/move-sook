@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { prisma } from '@movesook/db';
 import { verifyDocToken } from '@movesook/auth';
-import { buildJobDocument, getSystemSettings } from '@movesook/services/support';
+import { buildJobDocument, getSystemSettings, getVehicleLabel } from '@movesook/services/support';
 import { getEnv } from '@movesook/services/runtime';
 
 // Per-job PDF document builders. Each returns the rendered PDF bytes + a filename;
@@ -35,6 +35,7 @@ export async function buildReceipt(sub: string, id: string): Promise<JobDocResul
     driver: job.driver,
     transaction: job.transaction,
     settings,
+    vehicleLabel: await getVehicleLabel(job.vehicleType),
   });
   return { pdf, filename: `receipt-${id}.pdf` };
 }
@@ -67,6 +68,7 @@ export async function buildReceiptByToken(id: string, token: string): Promise<Jo
     driver: job.driver,
     transaction: job.transaction,
     settings,
+    vehicleLabel: await getVehicleLabel(job.vehicleType),
   });
   return { pdf, filename: `receipt-${id}.pdf` };
 }
@@ -93,6 +95,7 @@ export async function buildWorksheet(sub: string, id: string): Promise<JobDocRes
     driver: job.driver,
     transaction: job.transaction,
     settings,
+    vehicleLabel: await getVehicleLabel(job.vehicleType),
   });
   return { pdf, filename: `worksheet-${id}.pdf` };
 }

@@ -1,5 +1,5 @@
 import { Queue, Worker, type Job } from 'bullmq';
-import { getEnv } from '../../runtime/env';
+import { getEnv, getLogger, reportError } from '../../runtime/env';
 import { bullConnection } from '../redis';
 import { nudgeIdleDrivers, expirePendingPayment } from '../cron-tasks';
 
@@ -29,19 +29,23 @@ export async function registerMaintenanceSchedules(): Promise<void> {
   const q = getQueue();
   await q.upsertJobScheduler(NUDGE, { pattern: getEnv().CRON_NUDGE_SCHEDULE }, { name: NUDGE });
   await q.upsertJobScheduler(EXPIRE, { pattern: getEnv().CRON_EXPIRE_SCHEDULE }, { name: EXPIRE });
-  console.info(
-    `[maintenance] schedules registered — ${NUDGE} (${getEnv().CRON_NUDGE_SCHEDULE}), ${EXPIRE} (${getEnv().CRON_EXPIRE_SCHEDULE})`,
+  getLogger().info(
+    {
+      nudge: getEnv().CRON_NUDGE_SCHEDULE,
+      expire: getEnv().CRON_EXPIRE_SCHEDULE,
+    },
+    '[maintenance] schedules registered',
   );
 }
 
 async function process(job: Job): Promise<void> {
   const task = TASKS[job.name];
   if (!task) {
-    console.warn(`[maintenance] unknown job "${job.name}" — skipped`);
+    getLogger().warn({ jobName: job.name }, '[maintenance] unknown job — skipped');
     return;
   }
   const result = await task();
-  console.info(`[maintenance] ${job.name} →`, JSON.stringify(result));
+  getLogger().info({ jobName: job.name, result }, '[maintenance] task completed');
 }
 
 export function startMaintenanceWorker(): Worker {
@@ -50,7 +54,8 @@ export function startMaintenanceWorker(): Worker {
     concurrency: 1, // maintenance tasks are cheap and don't need parallelism
   });
   worker.on('failed', (job, err) => {
-    console.error(`[maintenance] ${job?.name} failed:`, err.message);
+    getLogger().error({ err, jobName: job?.name }, '[maintenance] job failed');
+    reportError(err, { queue: MAINTENANCE_QUEUE, jobName: job?.name });
   });
   return worker;
 }

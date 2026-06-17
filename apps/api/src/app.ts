@@ -1,8 +1,10 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
+import { requestId } from 'hono/request-id';
 import { HTTPException } from 'hono/http-exception';
+import * as Sentry from '@sentry/node';
 import { env } from './config';
+import { logger as baseLogger } from './lib/logger';
 import type { AppEnv } from './lib/context';
 import { getSystemSettings } from '@movesook/services/support';
 import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
@@ -15,13 +17,31 @@ import { blogRoutes } from './routes/blog';
 import { uploadRoutes, serveUploads } from './routes/uploads';
 import { webhookRoutes } from './routes/webhooks';
 
-// Skip request logging for the health probe — load balancers / uptime monitors
-// hit GET /health constantly and would otherwise drown the logs.
-const httpLogger = logger();
-
 // One chain so hc<AppType>() sees every mounted route's literal types.
 const app = new Hono<AppEnv>()
-  .use('*', (c, next) => (c.req.path === '/health' ? next() : httpLogger(c, next)))
+  // Assign / reuse a correlation id, then bind a per-request child logger to it.
+  .use('*', requestId())
+  .use('*', async (c, next) => {
+    const reqId = c.get('requestId');
+    const log = baseLogger.child({ requestId: reqId });
+    c.set('log', log);
+    // Correlate Sentry events with log lines for the same request.
+    Sentry.getCurrentScope().setTag('requestId', reqId);
+    // Skip access logs for the health probe — load balancers / uptime monitors
+    // hit GET /health constantly and would otherwise drown the logs.
+    if (c.req.path === '/health') return next();
+    const start = Date.now();
+    await next();
+    log.info(
+      {
+        method: c.req.method,
+        path: c.req.path,
+        status: c.res.status,
+        durationMs: Date.now() - start,
+      },
+      'request',
+    );
+  })
   .use(
     '*',
     cors({
@@ -33,7 +53,9 @@ const app = new Hono<AppEnv>()
     if (err instanceof HTTPException) {
       return c.json({ error: err.message }, err.status);
     }
-    console.error('[unhandled]', err);
+    // Real fault (not a deliberate 4xx) — report it and log it.
+    Sentry.captureException(err);
+    (c.var.log ?? baseLogger).error({ err }, 'unhandled error');
     return c.json({ error: 'Internal Server Error' }, 500);
   })
   .get('/health', (c) => c.json({ ok: true, service: 'movesook-api' }))

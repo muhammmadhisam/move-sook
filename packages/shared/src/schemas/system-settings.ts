@@ -23,7 +23,8 @@ export const VehiclePricingDto = z.object({
   imageUrl: z.string().nullable(),
   requirements: z.string().nullable(),
   maxWeightKg: z.number().int().nullable(),
-  pricePerKm: z.number().int().nullable(),
+  pricePerKm: z.number().int().nullable(), // เหมาลำ per-km rate
+  pricePerKmShared: z.number().int().nullable(), // ไม่เหมาลำ (PER_ITEM) per-km rate
   flatRate: z.number().int().nullable(), // เหมาลำ per-vehicle fee
   perItemRate: z.number().int().nullable(), // หลายสินค้า per-item fee
   isActive: z.boolean(),
@@ -39,6 +40,7 @@ export const AdminUpsertVehiclePricingInput = z.object({
   requirements: z.string().max(500).nullable().optional(),
   maxWeightKg: z.number().int().min(0).max(100000).nullable().optional(),
   pricePerKm: z.number().int().min(0).max(100000).nullable().optional(),
+  pricePerKmShared: z.number().int().min(0).max(100000).nullable().optional(),
   flatRate: z.number().int().min(0).max(1000000).nullable().optional(),
   perItemRate: z.number().int().min(0).max(1000000).nullable().optional(),
   isActive: z.boolean(),

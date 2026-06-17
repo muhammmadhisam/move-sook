@@ -6,9 +6,10 @@ import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps';
 import { toast } from 'sonner';
 import { ArrowRight, MapPin, Navigation, Truck, Wallet, X } from 'lucide-react';
 import { Button, Badge, cn } from '@movesook/ui';
-import { vehicleTypeLabel, type JobListResponse } from '@movesook/shared';
+import { type JobListResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useGeolocation } from '@/hooks/use-geolocation';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 import { distanceKm, formatDistance, directionsUrl } from '@/lib/geo';
 import { DRIVER_ICON, PICKUP_ICON, DEST_ICON } from '@/lib/marker-icons';
 import type { LatLng } from '@/components/job-route-map';
@@ -39,6 +40,7 @@ function FitBounds({ points }: { points: LatLng[] }) {
 export function DriverJobsMap() {
   const queryClient = useQueryClient();
   const geo = useGeolocation();
+  const { vehicleLabelOf } = useVehicleLabels();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const jobs = useQuery({
@@ -167,7 +169,7 @@ export function DriverJobsMap() {
             )}
             <Badge variant="secondary" className="gap-1">
               <Truck className="h-3 w-3" />
-              {vehicleTypeLabel(selected.vehicleType)}
+              {vehicleLabelOf(selected.vehicleType)}
             </Badge>
             {selected.paymentMethod === 'COD' && (
               <Badge className="gap-1 border-warning/50 bg-warning/10 text-warning">

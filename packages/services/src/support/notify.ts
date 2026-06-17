@@ -9,6 +9,7 @@ import {
   enqueueMulticastMessages,
 } from './queues/notifications';
 import { getAdminLineGroupId } from './settings';
+import { getLogger } from '../runtime/env';
 
 type NotifyInput = {
   userId: string;
@@ -23,6 +24,15 @@ type NotifyInput = {
 /** Plain-text fallback (chat-list preview / push alert) for a Flex card. */
 function formatPush(title: string, body: string): string {
   return `${title}\n${body}`;
+}
+
+/**
+ * True only for users we have *explicitly* seen block/remove the OA (a webhook
+ * unfollow event). Users with no follow event yet (lineUnfollowedAt === null) stay
+ * pushable, so enabling this guard never silently stops existing notifications.
+ */
+function isOaBlocked(u: { lineFollowing: boolean; lineUnfollowedAt: Date | null }): boolean {
+  return !u.lineFollowing && u.lineUnfollowedAt !== null;
 }
 
 /**
@@ -44,16 +54,16 @@ export async function notify(input: NotifyInput): Promise<void> {
       },
     });
   } catch (err) {
-    console.error('[notify] failed', input.type, err);
+    getLogger().error({ err, type: input.type }, '[notify] failed');
   }
 
   // Side channel: enqueue a LINE push to the recipient's account if we know it.
   try {
     const user = await prisma.user.findUnique({
       where: { id: input.userId },
-      select: { lineUserId: true },
+      select: { lineUserId: true, lineFollowing: true, lineUnfollowedAt: true },
     });
-    if (user?.lineUserId) {
+    if (user?.lineUserId && !isOaBlocked(user)) {
       const card = flexCardMessage({
         altText: formatPush(input.title, input.body),
         title: input.title,
@@ -63,7 +73,7 @@ export async function notify(input: NotifyInput): Promise<void> {
       await enqueuePushMessages(user.lineUserId, [card]);
     }
   } catch (err) {
-    console.error('[notify] line push enqueue failed', input.type, err);
+    getLogger().error({ err, type: input.type }, '[notify] line push enqueue failed');
   }
 }
 
@@ -81,7 +91,7 @@ export async function notifyMany(inputs: NotifyInput[]): Promise<void> {
       })),
     });
   } catch (err) {
-    console.error('[notifyMany] failed', err);
+    getLogger().error({ err }, '[notifyMany] failed');
   }
 }
 
@@ -107,7 +117,7 @@ export async function pushAdminLineGroup(text: string): Promise<void> {
     if (!groupId) return;
     await enqueuePush(groupId, text);
   } catch (err) {
-    console.error('[pushAdminLineGroup] failed', err);
+    getLogger().error({ err }, '[pushAdminLineGroup] failed');
   }
 }
 
@@ -120,11 +130,16 @@ export async function notifyNewJobToArea(job: {
 }): Promise<void> {
   const drivers = await prisma.driver.findMany({
     where: { verifyStatus: 'APPROVED', isAvailable: true, serviceProvince: job.originProvince },
-    select: { userId: true, user: { select: { lineUserId: true } } },
+    select: {
+      userId: true,
+      user: { select: { lineUserId: true, lineFollowing: true, lineUnfollowedAt: true } },
+    },
   });
-  const linked = drivers.filter(
-    (d): d is { userId: string; user: { lineUserId: string | null } | null } => d.userId !== null,
-  );
+  type LinkedDriver = {
+    userId: string;
+    user: { lineUserId: string | null; lineFollowing: boolean; lineUnfollowedAt: Date | null } | null;
+  };
+  const linked = drivers.filter((d): d is LinkedDriver => d.userId !== null);
   const title = 'มีงานใหม่ในพื้นที่ของคุณ';
   const body = `${job.originProvince} → ${job.destProvince} · ${job.itemDescription}`;
 
@@ -141,6 +156,7 @@ export async function notifyNewJobToArea(job: {
   // Enqueue a LINE multicast to every matched driver with a linked account.
   try {
     const lineIds = linked
+      .filter((d) => d.user && !isOaBlocked(d.user))
       .map((d) => d.user?.lineUserId)
       .filter((id): id is string => Boolean(id));
     if (lineIds.length > 0) {
@@ -153,6 +169,6 @@ export async function notifyNewJobToArea(job: {
       await enqueueMulticastMessages(lineIds, [card]);
     }
   } catch (err) {
-    console.error('[notifyNewJobToArea] line multicast enqueue failed', err);
+    getLogger().error({ err }, '[notifyNewJobToArea] line multicast enqueue failed');
   }
 }

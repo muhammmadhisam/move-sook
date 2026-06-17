@@ -16,7 +16,7 @@ import {
   DialogTrigger,
   PreviewableImage,
 } from '@movesook/ui';
-import { vehicleTypeLabel, type JobDto, type JobListResponse } from '@movesook/shared';
+import { type JobDto, type JobListResponse } from '@movesook/shared';
 import {
   Navigation,
   MapPin,
@@ -33,6 +33,7 @@ import { api } from '@/lib/api';
 import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { useAuth } from '@/hooks/use-auth';
 import { useGeolocation } from '@/hooks/use-geolocation';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 import { distanceKm, formatDistance, directionsUrl } from '@/lib/geo';
 
 async function fetchJobs(): Promise<JobListResponse> {
@@ -59,6 +60,7 @@ function formatSchedule(iso: string | null): string | null {
 export default function JobsPage() {
   const queryClient = useQueryClient();
   const { me } = useAuth();
+  const { vehicleLabelOf } = useVehicleLabels();
 
   // The API enforces both gates at accept time (403 / 422) — mirroring them here
   // keeps unready drivers from hitting a confusing rejection after the tap.
@@ -209,7 +211,7 @@ export default function JobsPage() {
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
                     <Badge variant="secondary" className="gap-1">
                       <Truck className="h-3 w-3" />
-                      {vehicleTypeLabel(job.vehicleType)}
+                      {vehicleLabelOf(job.vehicleType)}
                     </Badge>
                     {job.paymentMethod === 'COD' && (
                       <Badge className="gap-1 border-warning/50 bg-warning/10 text-warning">

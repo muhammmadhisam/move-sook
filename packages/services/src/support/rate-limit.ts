@@ -1,5 +1,6 @@
 import { ADMIN_LOGIN_LOCKOUT_MS, ADMIN_LOGIN_MAX_ATTEMPTS } from '@movesook/shared';
 import { redis } from './redis';
+import { getLogger } from '../runtime/env';
 
 // Redis-backed fixed-window limiter for admin login brute-force defence. Shared
 // across instances (unlike the old in-memory Map). Two keys per principal:
@@ -23,7 +24,7 @@ export async function checkAdminLogin(key: string): Promise<RateResult> {
     if (pttl > 0) return { allowed: false, retryAfterSec: Math.ceil(pttl / 1000) };
     return { allowed: true, retryAfterSec: 0 };
   } catch (err) {
-    console.error('[rate-limit] checkAdminLogin failed (allowing)', err);
+    getLogger().error({ err }, '[rate-limit] checkAdminLogin failed (allowing)');
     return { allowed: true, retryAfterSec: 0 };
   }
 }
@@ -37,7 +38,7 @@ export async function recordFailure(key: string): Promise<void> {
       await redis().set(lockKey(key), '1', 'PX', ADMIN_LOGIN_LOCKOUT_MS);
     }
   } catch (err) {
-    console.error('[rate-limit] recordFailure failed', err);
+    getLogger().error({ err }, '[rate-limit] recordFailure failed');
   }
 }
 
@@ -46,6 +47,6 @@ export async function recordSuccess(key: string): Promise<void> {
   try {
     await redis().del(cntKey(key), lockKey(key));
   } catch (err) {
-    console.error('[rate-limit] recordSuccess failed', err);
+    getLogger().error({ err }, '[rate-limit] recordSuccess failed');
   }
 }

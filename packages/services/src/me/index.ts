@@ -2,10 +2,12 @@ import { HTTPException } from 'hono/http-exception';
 import { prisma } from '@movesook/db';
 import {
   REFERRAL_REWARD_THB,
+  type CustomerProfileDto,
   type ListNotificationsQuery,
   type MeResponse,
   type NotificationDto,
   type ReferralResponse,
+  type UpdateCustomerProfileInput,
 } from '@movesook/shared';
 import { ensureReferralCode } from '../support';
 
@@ -44,6 +46,91 @@ export async function getMe(sub: string): Promise<MeResponse> {
     verifyStatus: user.driver?.verifyStatus ?? null,
     rejectionReason: user.driver?.rejectionReason ?? null,
   };
+}
+
+/** Serialise a Customer row into the self-serve profile DTO. */
+function toCustomerProfileDto(c: {
+  firstName: string | null;
+  lastName: string | null;
+  gender: 'MALE' | 'FEMALE' | 'OTHER' | null;
+  birthDate: Date | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+}): CustomerProfileDto {
+  return {
+    firstName: c.firstName,
+    lastName: c.lastName,
+    gender: c.gender,
+    birthDate: c.birthDate ? c.birthDate.toISOString().slice(0, 10) : null,
+    email: c.email,
+    phone: c.phone,
+    address: c.address,
+  };
+}
+
+const CUSTOMER_PROFILE_SELECT = {
+  firstName: true,
+  lastName: true,
+  gender: true,
+  birthDate: true,
+  email: true,
+  phone: true,
+  address: true,
+} as const;
+
+/** The customer's own editable profile (Customer row created lazily on first read). */
+export async function getProfile(sub: string): Promise<CustomerProfileDto> {
+  const customer = await prisma.customer.upsert({
+    where: { userId: sub },
+    create: { userId: sub },
+    update: {},
+    select: CUSTOMER_PROFILE_SELECT,
+  });
+  return toCustomerProfileDto(customer);
+}
+
+/** Update the customer's own profile. Keys present in `input` are written
+ *  (null clears the value); omitted keys are left untouched. `name` is kept in
+ *  sync from first/last name so job + admin CRM display stays coherent. */
+export async function updateProfile(
+  sub: string,
+  input: UpdateCustomerProfileInput,
+): Promise<CustomerProfileDto> {
+  // Build the patch from only the keys the client actually sent.
+  const data: Record<string, unknown> = {};
+  if (input.firstName !== undefined) data.firstName = input.firstName;
+  if (input.lastName !== undefined) data.lastName = input.lastName;
+  if (input.gender !== undefined) data.gender = input.gender;
+  if (input.email !== undefined) data.email = input.email;
+  if (input.phone !== undefined) data.phone = input.phone;
+  if (input.address !== undefined) data.address = input.address;
+  if (input.birthDate !== undefined) {
+    data.birthDate = input.birthDate ? new Date(input.birthDate) : null;
+  }
+
+  // Ensure the Customer row exists, then patch it.
+  const existing = await prisma.customer.upsert({
+    where: { userId: sub },
+    create: { userId: sub },
+    update: {},
+    select: { id: true, firstName: true, lastName: true },
+  });
+
+  // Keep the display `name` in sync with first/last name when either changes.
+  const firstName = (data.firstName as string | null | undefined) ?? existing.firstName;
+  const lastName = (data.lastName as string | null | undefined) ?? existing.lastName;
+  if ('firstName' in data || 'lastName' in data) {
+    const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+    if (fullName) data.name = fullName;
+  }
+
+  const updated = await prisma.customer.update({
+    where: { id: existing.id },
+    data,
+    select: CUSTOMER_PROFILE_SELECT,
+  });
+  return toCustomerProfileDto(updated);
 }
 
 /** The customer's referral status + share code (generated lazily on first read). */

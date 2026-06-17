@@ -33,12 +33,12 @@ import {
   GENDER_LABEL,
   JOB_STATUS_LABEL,
   ROLE_LABEL,
-  vehicleTypeLabel,
   type AdminDriverDetailResponse,
   type AdminUserListItem,
   type DriverVerifyStatus,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 
 const STATUS_VARIANT: Record<
   DriverVerifyStatus,
@@ -67,6 +67,7 @@ export default function DriverDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const queryClient = useQueryClient();
+  const { vehicleLabelOf } = useVehicleLabels();
   const [reasonModal, setReasonModal] = useState<'REJECT' | 'SUSPEND' | null>(null);
   const [reason, setReason] = useState('');
   const [bankOpen, setBankOpen] = useState(false);
@@ -248,7 +249,7 @@ export default function DriverDetailPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p>ประเภทรถ: {vehicleTypeLabel(driver.vehicleType)}</p>
+            <p>ประเภทรถ: {vehicleLabelOf(driver.vehicleType)}</p>
             <p>ทะเบียน: {driver.plateNumber ?? '—'}</p>
             <p>จังหวัดบริการ: {driver.serviceProvince ?? '—'}</p>
             <p>ออนไลน์: {driver.isAvailable ? 'ใช่' : 'ไม่'}</p>

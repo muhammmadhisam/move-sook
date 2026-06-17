@@ -19,11 +19,11 @@ import {
   TableRow,
 } from '@movesook/ui';
 import {
-  vehicleTypeLabel,
   type ReportSummaryResponse,
   type ReportExportType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
@@ -39,6 +39,7 @@ function defaultRange() {
 }
 
 export default function ReportsPage() {
+  const { vehicleLabelOf } = useVehicleLabels();
   const initial = defaultRange();
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
@@ -181,7 +182,7 @@ export default function ReportsPage() {
               title="แยกตามประเภทรถ"
               keyHeader="ประเภทรถ"
               rows={data.byVehicleType}
-              labelOf={(k) => vehicleTypeLabel(k)}
+              labelOf={(k) => vehicleLabelOf(k)}
             />
           </div>
         </div>

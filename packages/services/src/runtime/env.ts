@@ -41,3 +41,58 @@ export function getEnv(): ServiceEnv {
   }
   return _env;
 }
+
+// ── Observability seam ──────────────────────────────────────────────────────
+// Same pattern as env: the package must NOT depend on the app's pino/Sentry, so
+// the app injects a structured logger + an error reporter at boot via
+// `configureObservability()`. Until then both default to console / no-op, so the
+// package works standalone (tests, scripts) without wiring.
+
+/** Minimal structured-logger shape — satisfied by pino's Logger and by console. */
+export interface LogFn {
+  (obj: Record<string, unknown>, msg?: string): void;
+  (msg: string): void;
+}
+export interface ServiceLogger {
+  info: LogFn;
+  warn: LogFn;
+  error: LogFn;
+}
+
+/** Report a fault to the app's error tracker (Sentry). No-op until configured. */
+export type ErrorReporter = (err: unknown, context?: Record<string, unknown>) => void;
+
+function makeConsoleFn(level: 'info' | 'warn' | 'error'): LogFn {
+  return ((obj: Record<string, unknown> | string, msg?: string) => {
+    if (typeof obj === 'string') console[level](obj);
+    else console[level](msg ?? '', obj);
+  }) as LogFn;
+}
+
+const consoleLogger: ServiceLogger = {
+  info: makeConsoleFn('info'),
+  warn: makeConsoleFn('warn'),
+  error: makeConsoleFn('error'),
+};
+
+let _logger: ServiceLogger = consoleLogger;
+let _reportError: ErrorReporter = () => {};
+
+/** Called once by the app at boot to inject pino + Sentry into the package. */
+export function configureObservability(o: {
+  logger?: ServiceLogger;
+  reportError?: ErrorReporter;
+}): void {
+  if (o.logger) _logger = o.logger;
+  if (o.reportError) _reportError = o.reportError;
+}
+
+/** The injected structured logger (console until `configureObservability`). */
+export function getLogger(): ServiceLogger {
+  return _logger;
+}
+
+/** Report a fault to the app's error tracker. No-op until configured. */
+export function reportError(err: unknown, context?: Record<string, unknown>): void {
+  _reportError(err, context);
+}

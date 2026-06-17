@@ -77,7 +77,7 @@ export const serveUploads = r2
         });
       } catch (err) {
         if ((err as { name?: string }).name === 'NoSuchKey') return next();
-        console.error('[uploads] R2 read failed', err);
+        c.var.log.error({ err }, '[uploads] R2 read failed');
         throw new HTTPException(502, { message: 'Upload storage unavailable' });
       }
     })

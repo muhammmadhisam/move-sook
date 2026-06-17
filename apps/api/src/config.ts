@@ -12,6 +12,14 @@ const EnvSchema = z.object({
     .enum(["development", "test", "production"])
     .default("development"),
   PORT: z.coerce.number().int().positive().default(8787),
+  // Pino log level. Lower = quieter; "debug"/"trace" for local digging.
+  LOG_LEVEL: z
+    .enum(["fatal", "error", "warn", "info", "debug", "trace"])
+    .default("info"),
+  // Sentry error tracking. Absent DSN = Sentry stays a no-op (dev default).
+  SENTRY_DSN: z.string().url().optional(),
+  // Performance-trace sampling (0 = errors only). Keep low in prod.
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
   JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 chars"),
   USER_COOKIE_NAME: z.string().default("ms_user_session"),

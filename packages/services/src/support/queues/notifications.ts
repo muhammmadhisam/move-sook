@@ -6,7 +6,7 @@ import {
   type LineMessage,
   type LinePushResult,
 } from '@movesook/auth';
-import { getEnv } from '../../runtime/env';
+import { getEnv, getLogger, reportError } from '../../runtime/env';
 import { bullConnection } from '../redis';
 
 // LINE push queue. The in-app Notification row is still written synchronously in
@@ -96,7 +96,10 @@ async function process(job: Job<PushJob | MulticastJob>): Promise<void> {
     throw new Error(`line push transient failure: ${result.reason}`);
   }
   // Permanent failure: log once and consider the job done.
-  console.warn(`[notifications] dropping ${job.name} job ${job.id}: ${result.reason}`);
+  getLogger().warn(
+    { jobName: job.name, jobId: job.id, reason: result.reason },
+    '[notifications] dropping job',
+  );
 }
 
 export function startNotificationsWorker(): Worker {
@@ -109,7 +112,11 @@ export function startNotificationsWorker(): Worker {
   worker.on('failed', (job, err) => {
     // Only the final attempt reaches here as truly failed.
     if (job && job.attemptsMade >= (job.opts.attempts ?? 1)) {
-      console.error(`[notifications] ${job.name} job ${job.id} failed permanently:`, err.message);
+      getLogger().error(
+        { err, jobName: job.name, jobId: job.id },
+        '[notifications] job failed permanently',
+      );
+      reportError(err, { queue: NOTIFICATIONS_QUEUE, jobName: job.name, jobId: job.id });
     }
   });
   return worker;

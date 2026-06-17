@@ -7,6 +7,7 @@ export * from './analytics';
 export * from './reports';
 export * from './drivers';
 export * from './users';
+export * from './line-followers';
 export * from './customers';
 export * from './jobs';
 export * from './transactions';

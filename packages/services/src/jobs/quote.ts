@@ -13,6 +13,7 @@ import {
   getEffectiveFlatRate,
   getEffectivePerItemRate,
   getEffectivePricePerKm,
+  getEffectivePricePerKmShared,
   getFloorSurcharge,
   getHelperSurcharge,
   getSurge,
@@ -57,9 +58,10 @@ export async function getServiceAreas(): Promise<JobServiceAreasResponse> {
  *  plus an optional promo-code preview. Mirrors what POST /jobs charges so the
  *  customer sees the real price before posting. */
 export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobResponse> {
-  const [pricePerKm, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate, sys] =
+  const [pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate, sys] =
     await Promise.all([
       getEffectivePricePerKm(input.vehicleType),
+      getEffectivePricePerKmShared(input.vehicleType),
       getFloorSurcharge(),
       getHelperSurcharge(),
       getSurge(input.originProvince),
@@ -72,6 +74,7 @@ export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobR
     pricingMode: input.pricingMode,
     distanceKm,
     pricePerKm,
+    pricePerKmShared,
     originFloor: input.originFloor,
     originHasElevator: input.originHasElevator,
     destFloor: input.destFloor,
@@ -92,7 +95,9 @@ export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobR
   return {
     pricingMode: quote.pricingMode,
     distanceKm: Number(distanceKm.toFixed(2)),
-    pricePerKm,
+    // Report the per-km rate actually applied to the base: the cheaper non-charter
+    // rate for PER_ITEM, the full charter rate otherwise.
+    pricePerKm: quote.pricingMode === 'PER_ITEM' ? pricePerKmShared : pricePerKm,
     base: quote.base,
     flatRate: quote.flatRate,
     itemsCharge: quote.itemsCharge,

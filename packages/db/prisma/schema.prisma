@@ -146,6 +146,13 @@ model User {
   phone           String?
   role            Role     @default(USER)
   isBanned        Boolean  @default(false)
+  // LINE OA follow state, maintained by the webhook follow/unfollow events.
+  // lineFollowing is the current "can receive push" flag; the timestamps keep an
+  // audit trail. A user we've never seen a follow/unfollow event for has
+  // lineFollowing=false + lineUnfollowedAt=null (still pushable — see notify.ts).
+  lineFollowing    Boolean   @default(false)
+  lineFollowedAt   DateTime?
+  lineUnfollowedAt DateTime?
   driver          Driver?
   adminCredential AdminCredential?
   customerProfile Customer?  @relation("UserCustomer") // this user's own customer record (self-serve)
@@ -172,6 +179,13 @@ model Customer {
   user        User?    @relation("UserCustomer", fields: [userId], references: [id], onDelete: SetNull)
   name        String? // contact / display name (required-ish for offline customers)
   phone       String?
+  // ── Self-serve profile (optional; the customer edits these via PATCH /me/profile) ──
+  firstName   String? // ชื่อจริง
+  lastName    String? // นามสกุล
+  gender      Gender? // เพศ
+  birthDate   DateTime? // วันเกิด
+  email       String? // อีเมลสำหรับติดต่อ
+  address     String? // ที่อยู่
   note        String? // free-form admin note (offline customers)
   tags        String[] // CRM segmentation tags
   referralCode String? @unique // this customer's own referral code
@@ -508,7 +522,8 @@ model VehiclePricing {
   imageUrl     String? // รูปตัวอย่างรถ (โชว์ให้ลูกค้าเห็นว่ารถที่จะได้หน้าตาประมาณนี้)
   requirements String? // ลักษณะ/สเปกรถที่รับเข้าร่วม (free text)
   maxWeightKg  Int? // น้ำหนักบรรทุกสูงสุด (กก.)
-  pricePerKm   Int? // null = ใช้เรตกลาง (price_per_km)
+  pricePerKm   Int? // เหมาลำ: เรตต่อกม. (null = ใช้เรตกลาง price_per_km)
+  pricePerKmShared Int? // ไม่เหมาลำ (PER_ITEM): เรตต่อกม. ที่ถูกกว่า (null = ใช้เรตกลาง price_per_km_shared)
   flatRate     Int? // เหมาลำ: ค่าเหมาเริ่มต้นต่อคัน (null = ใช้เรตกลาง flat_rate)
   perItemRate  Int? // หลายสินค้า: ค่าต่อชิ้น (null = ใช้เรตกลาง per_item_rate)
   isActive     Boolean     @default(true)

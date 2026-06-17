@@ -21,6 +21,7 @@ import {
 } from '@movesook/ui';
 import {
   estimateJobPrice,
+  vehicleTypeLabel,
   type CustomerDto,
   type DriverDto,
   type PricingSettingResponse,
@@ -288,7 +289,7 @@ export default function AdminNewJobPage() {
                 <SelectContent>
                   {activeVehicleTypes.map((v) => (
                     <SelectItem key={v} value={v}>
-                      {configByType.get(v)?.label || v}
+                      {vehicleTypeLabel(v, configByType.get(v)?.label)}
                     </SelectItem>
                   ))}
                 </SelectContent>

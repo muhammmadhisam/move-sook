@@ -17,6 +17,7 @@ export async function listVehiclePricing(): Promise<{ items: VehiclePricingDto[]
     requirements: r.requirements,
     maxWeightKg: r.maxWeightKg,
     pricePerKm: r.pricePerKm,
+    pricePerKmShared: r.pricePerKmShared,
     flatRate: r.flatRate,
     perItemRate: r.perItemRate,
     isActive: r.isActive,
@@ -29,7 +30,7 @@ export async function upsertVehiclePricing(
   sub: string,
   input: AdminUpsertVehiclePricingInput,
 ): Promise<VehiclePricingDto> {
-  const { vehicleType, label, description, imageUrl, requirements, maxWeightKg, pricePerKm, flatRate, perItemRate, isActive } =
+  const { vehicleType, label, description, imageUrl, requirements, maxWeightKg, pricePerKm, pricePerKmShared, flatRate, perItemRate, isActive } =
     input;
   const data = {
     ...(label !== undefined ? { label } : {}),
@@ -38,6 +39,7 @@ export async function upsertVehiclePricing(
     ...(requirements !== undefined ? { requirements } : {}),
     ...(maxWeightKg !== undefined ? { maxWeightKg } : {}),
     ...(pricePerKm !== undefined ? { pricePerKm } : {}),
+    ...(pricePerKmShared !== undefined ? { pricePerKmShared } : {}),
     ...(flatRate !== undefined ? { flatRate } : {}),
     ...(perItemRate !== undefined ? { perItemRate } : {}),
     isActive,
@@ -52,7 +54,7 @@ export async function upsertVehiclePricing(
     action: 'settings.vehicle_pricing',
     targetType: 'setting',
     targetId: vehicleType,
-    metadata: { isActive, pricePerKm: pricePerKm ?? null, flatRate: flatRate ?? null, perItemRate: perItemRate ?? null },
+    metadata: { isActive, pricePerKm: pricePerKm ?? null, pricePerKmShared: pricePerKmShared ?? null, flatRate: flatRate ?? null, perItemRate: perItemRate ?? null },
   });
   return {
     vehicleType: row.vehicleType,
@@ -62,6 +64,7 @@ export async function upsertVehiclePricing(
     requirements: row.requirements,
     maxWeightKg: row.maxWeightKg,
     pricePerKm: row.pricePerKm,
+    pricePerKmShared: row.pricePerKmShared,
     flatRate: row.flatRate,
     perItemRate: row.perItemRate,
     isActive: row.isActive,

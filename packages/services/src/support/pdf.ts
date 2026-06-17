@@ -3,7 +3,6 @@ import PDFDocument from 'pdfkit';
 import type { Job, Customer, Driver, User, Transaction } from '@movesook/db';
 import {
   JOB_STATUS_LABEL,
-  vehicleTypeLabel,
   PRICING_MODE_LABEL,
   type SystemSettingsResponse,
 } from '@movesook/shared';
@@ -27,6 +26,8 @@ export type JobDocData = {
   driver: (Driver & { user: Pick<User, 'displayName' | 'phone'> | null }) | null;
   transaction: Transaction | null;
   settings: SystemSettingsResponse;
+  // Resolved Thai vehicle-type label (custom catalog slugs have no built-in label).
+  vehicleLabel: string;
 };
 
 const money = (n: number | null | undefined) => `฿${(n ?? 0).toLocaleString('th-TH')}`;
@@ -133,11 +134,11 @@ function driverName(d: JobDocData) {
   return d.driver?.user?.displayName ?? d.driver?.name ?? '—';
 }
 
-function routeBlock(doc: Doc, job: Job) {
+function routeBlock(doc: Doc, job: Job, vehicleLabel: string) {
   sectionTitle(doc, 'เส้นทาง');
   kv(doc, 'ต้นทาง', `${job.originAddress} (${job.originProvince})`);
   kv(doc, 'ปลายทาง', `${job.destAddress} (${job.destProvince})`);
-  kv(doc, 'ประเภทรถ', vehicleTypeLabel(job.vehicleType));
+  kv(doc, 'ประเภทรถ', vehicleLabel);
 }
 
 // ── Document builders ─────────────────────────────────────────────────────────
@@ -148,7 +149,7 @@ async function buildReceipt(doc: Doc, d: JobDocData) {
   sectionTitle(doc, 'ข้อมูลลูกค้า');
   kv(doc, 'ชื่อลูกค้า', customerName(d));
   kv(doc, 'เบอร์โทร', customerPhone(d));
-  routeBlock(doc, job);
+  routeBlock(doc, job, d.vehicleLabel);
 
   sectionTitle(doc, 'รายละเอียดการชำระเงิน');
   doc.moveDown(0.2);
@@ -176,7 +177,7 @@ async function buildPayout(doc: Doc, d: JobDocData) {
   kv(doc, 'ชื่อคนขับ', driverName(d));
   kv(doc, 'เบอร์โทร', d.driver?.user?.phone ?? d.driver?.phone ?? '—');
   kv(doc, 'ทะเบียนรถ', d.driver?.plateNumber ?? '—');
-  routeBlock(doc, job);
+  routeBlock(doc, job, d.vehicleLabel);
 
   sectionTitle(doc, 'การคำนวณค่าตอบแทน');
   doc.moveDown(0.2);
@@ -205,7 +206,7 @@ async function buildWorksheet(doc: Doc, d: JobDocData) {
   kv(doc, 'คนขับ', driverName(d));
   kv(doc, 'สร้างเมื่อ', fmtDate(job.createdAt));
   if (job.scheduledAt) kv(doc, 'นัดหมาย', fmtDate(job.scheduledAt));
-  routeBlock(doc, job);
+  routeBlock(doc, job, d.vehicleLabel);
 
   sectionTitle(doc, 'รายการสิ่งของ');
   const items = (job.items as { name: string; quantity: number }[] | null) ?? [];
@@ -229,7 +230,7 @@ async function buildDelivery(doc: Doc, d: JobDocData) {
   const { job } = d;
   kv(doc, 'ลูกค้า', `${customerName(d)} · ${customerPhone(d)}`);
   kv(doc, 'คนขับ', driverName(d));
-  routeBlock(doc, job);
+  routeBlock(doc, job, d.vehicleLabel);
   kv(doc, 'ยืนยันรับของโดยลูกค้า', job.customerConfirmedAt ? `แล้ว · ${fmtDate(job.customerConfirmedAt)}` : 'ยังไม่ยืนยัน');
 
   // Embed up to 4 proof photos (pickup + delivery), best-effort.

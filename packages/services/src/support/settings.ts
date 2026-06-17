@@ -7,8 +7,10 @@ import {
   DEFAULT_HELPER_SURCHARGE,
   DEFAULT_PER_ITEM_RATE,
   DEFAULT_PRICE_PER_KM,
+  DEFAULT_PRICE_PER_KM_SHARED,
   DEFAULT_SURGE_MULTIPLIER,
   DEFAULT_SYSTEM_SETTINGS,
+  vehicleTypeLabel,
   type SystemSettingsResponse,
   type UpdateSystemSettingsInput,
   type VehicleType,
@@ -44,6 +46,24 @@ export async function setPricePerKm(value: number): Promise<void> {
   await prisma.appSetting.upsert({
     where: { key: APP_SETTING_KEYS.PRICE_PER_KM },
     create: { key: APP_SETTING_KEYS.PRICE_PER_KM, value: String(value) },
+    update: { value: String(value) },
+  });
+}
+
+/** Global per-km rate (THB) for non-charter (PER_ITEM / ไม่เหมาลำ) jobs. AppSetting-backed. */
+export async function getPricePerKmShared(): Promise<number> {
+  const row = await prisma.appSetting.findUnique({
+    where: { key: APP_SETTING_KEYS.PRICE_PER_KM_SHARED },
+  });
+  if (!row) return DEFAULT_PRICE_PER_KM_SHARED;
+  const parsed = Number(row.value);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_PRICE_PER_KM_SHARED;
+}
+
+export async function setPricePerKmShared(value: number): Promise<void> {
+  await prisma.appSetting.upsert({
+    where: { key: APP_SETTING_KEYS.PRICE_PER_KM_SHARED },
+    create: { key: APP_SETTING_KEYS.PRICE_PER_KM_SHARED, value: String(value) },
     update: { value: String(value) },
   });
 }
@@ -125,6 +145,13 @@ export async function getEffectivePricePerKm(vehicleType: VehicleType): Promise<
   return getPricePerKm();
 }
 
+/** Non-charter (PER_ITEM / ไม่เหมาลำ) per-km rate: per-vehicle override if set & active, else the global price_per_km_shared. */
+export async function getEffectivePricePerKmShared(vehicleType: VehicleType): Promise<number> {
+  const row = await prisma.vehiclePricing.findUnique({ where: { vehicleType } });
+  if (row && row.isActive && row.pricePerKmShared != null) return row.pricePerKmShared;
+  return getPricePerKmShared();
+}
+
 // ── เหมาลำ (flat charter) + หลายสินค้า (per-item) rates — configured per vehicle ──
 // Rates live entirely on VehiclePricing; the code constants are a safe fallback
 // only when a vehicle hasn't set its own (there is no central editable default).
@@ -139,6 +166,18 @@ export async function getEffectiveFlatRate(vehicleType: VehicleType): Promise<nu
 export async function getEffectivePerItemRate(vehicleType: VehicleType): Promise<number> {
   const row = await prisma.vehiclePricing.findUnique({ where: { vehicleType } });
   return row?.perItemRate ?? DEFAULT_PER_ITEM_RATE;
+}
+
+/**
+ * Thai display name for a vehicle type, resolving the admin-set VehiclePricing.label
+ * (custom slugs like "TRUCK_4W_JB" have no built-in label and would otherwise render raw).
+ */
+export async function getVehicleLabel(vehicleType: string): Promise<string> {
+  const row = await prisma.vehiclePricing.findUnique({
+    where: { vehicleType },
+    select: { label: true },
+  });
+  return vehicleTypeLabel(vehicleType, row?.label);
 }
 
 /** A vehicle type is allowed unless an admin has explicitly disabled it. */

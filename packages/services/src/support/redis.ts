@@ -1,5 +1,5 @@
 import { Redis } from 'ioredis';
-import { getEnv } from '../runtime/env';
+import { getEnv, getLogger } from '../runtime/env';
 
 // Two connections with different failure semantics:
 //
@@ -18,7 +18,7 @@ let _bull: Redis | null = null;
 let _redis: Redis | null = null;
 
 function attachErrorLogger(name: string, conn: Redis): Redis {
-  conn.on('error', (err) => console.error(`[redis:${name}] connection error`, err.message));
+  conn.on('error', (err) => getLogger().error({ err, name }, '[redis] connection error'));
   return conn;
 }
 

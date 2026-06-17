@@ -15,6 +15,7 @@ import {
   Phone,
   Shield,
   Truck,
+  UserCog,
 } from 'lucide-react';
 import {
   Badge,
@@ -205,7 +206,14 @@ export default function ProfilePage() {
       <Card className="overflow-hidden">
         <CardContent className="p-0">
           {!isDriver && (
-            <MenuRow href="/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
+            <>
+              <MenuRow
+                href="/profile/edit"
+                icon={<UserCog className="h-4 w-4" />}
+                label="ข้อมูลส่วนตัว"
+              />
+              <MenuRow href="/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
+            </>
           )}
           {isDriver && (
             <>

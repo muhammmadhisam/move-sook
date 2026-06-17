@@ -1,5 +1,5 @@
 import type { Worker } from 'bullmq';
-import { getEnv } from '../../runtime/env';
+import { getEnv, getLogger } from '../../runtime/env';
 import { closeRedis } from '../redis';
 import { startNotificationsWorker } from './notifications';
 import { startMaintenanceWorker, registerMaintenanceSchedules } from './maintenance';
@@ -15,12 +15,12 @@ let workers: Worker[] = [];
 // as a separate process).
 export async function startWorkers(): Promise<void> {
   if (!getEnv().WORKERS_ENABLED) {
-    console.info('[workers] disabled (WORKERS_ENABLED=false) — no queue processing in this process');
+    getLogger().info({}, '[workers] disabled (WORKERS_ENABLED=false) — no queue processing in this process');
     return;
   }
   workers = [startNotificationsWorker(), startMaintenanceWorker(), startSideEffectsWorker()];
   await registerMaintenanceSchedules();
-  console.info('[workers] notifications + maintenance + side-effects workers started');
+  getLogger().info({}, '[workers] notifications + maintenance + side-effects workers started');
 }
 
 // Drain in-flight jobs and release Redis connections.

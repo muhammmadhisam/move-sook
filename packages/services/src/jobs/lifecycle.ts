@@ -25,6 +25,7 @@ import {
   getEffectiveFlatRate,
   getEffectivePerItemRate,
   getEffectivePricePerKm,
+  getEffectivePricePerKmShared,
   getFloorSurcharge,
   getHelperSurcharge,
   getSurge,
@@ -80,14 +81,16 @@ export async function createJob(sub: string, input: CreateJobInput): Promise<Job
     input.destLat != null &&
     input.destLng != null
   ) {
-    const [rate, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate] = await Promise.all([
-      getEffectivePricePerKm(input.vehicleType),
-      getFloorSurcharge(),
-      getHelperSurcharge(),
-      getSurge(input.originProvince),
-      getEffectiveFlatRate(input.vehicleType),
-      getEffectivePerItemRate(input.vehicleType),
-    ]);
+    const [rate, sharedRate, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate] =
+      await Promise.all([
+        getEffectivePricePerKm(input.vehicleType),
+        getEffectivePricePerKmShared(input.vehicleType),
+        getFloorSurcharge(),
+        getHelperSurcharge(),
+        getSurge(input.originProvince),
+        getEffectiveFlatRate(input.vehicleType),
+        getEffectivePerItemRate(input.vehicleType),
+      ]);
     const distKm = haversineKm(input.originLat, input.originLng, input.destLat, input.destLng);
     // Distance bounds (0 = no limit).
     if (sys.minDistanceKm > 0 && distKm < sys.minDistanceKm) {
@@ -102,6 +105,7 @@ export async function createJob(sub: string, input: CreateJobInput): Promise<Job
       pricingMode: input.pricingMode,
       distanceKm: distKm,
       pricePerKm: rate,
+      pricePerKmShared: sharedRate,
       originFloor: input.originFloor,
       originHasElevator: input.originHasElevator,
       destFloor: input.destFloor,

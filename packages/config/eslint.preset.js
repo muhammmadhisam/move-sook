@@ -19,6 +19,19 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // Build/config files (next.config.mjs, *.config.js) execute in Node, so
+    // expose its globals — otherwise no-undef flags process/__dirname there.
+    files: ["**/*.config.{js,cjs,mjs}"],
+    languageOptions: {
+      globals: {
+        process: "readonly",
+        __dirname: "readonly",
+        module: "readonly",
+        require: "readonly",
+      },
+    },
+  },
+  {
     rules: {
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/no-unused-vars": [

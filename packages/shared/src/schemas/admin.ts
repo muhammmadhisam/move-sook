@@ -66,10 +66,34 @@ export const AdminUserListItem = z.object({
 });
 export type AdminUserListItem = z.infer<typeof AdminUserListItem>;
 
+// GET /admin/line-followers — LINE OA follow state of LINE-linked accounts.
+export const AdminListLineFollowersQuery = PageQuery.extend({
+  following: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(), // filter by current follow state
+  search: z.string().trim().min(1).max(100).optional(), // matches displayName (contains, case-insensitive)
+});
+export type AdminListLineFollowersQuery = z.infer<typeof AdminListLineFollowersQuery>;
+
+export const AdminLineFollowerListItem = z.object({
+  id: z.string(),
+  displayName: z.string().nullable(),
+  role: RoleSchema,
+  lineFollowing: z.boolean(),
+  lineFollowedAt: z.string().datetime().nullable(),
+  lineUnfollowedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+});
+export type AdminLineFollowerListItem = z.infer<typeof AdminLineFollowerListItem>;
+
 // GET /admin/jobs
 export const AdminListJobsQuery = PageQuery.extend({
   status: JobStatusSchema.optional(),
   province: z.string().optional(), // matches origin OR dest
+  originProvince: z.string().optional(),
+  destProvince: z.string().optional(),
+  paymentMethod: PaymentMethodSchema.optional(),
 });
 export type AdminListJobsQuery = z.infer<typeof AdminListJobsQuery>;
 
@@ -100,7 +124,8 @@ export type UpdateCommissionInput = z.infer<typeof UpdateCommissionInput>;
 
 // GET / PUT /admin/settings/pricing — delivery rate + job surcharges + demand surge.
 export const PricingSettingResponse = z.object({
-  pricePerKm: z.number().min(0),
+  pricePerKm: z.number().min(0), // charter (เหมาลำ) per-km rate
+  pricePerKmShared: z.number().min(0), // non-charter (PER_ITEM / ไม่เหมาลำ) per-km rate
   floorSurcharge: z.number().min(0), // per floor above ground with no lift, per end
   helperSurcharge: z.number().min(0), // flat fee when the customer wants movers to help carry
   surgeEnabled: z.boolean(), // demand-based price multiplier on/off
@@ -112,6 +137,7 @@ export type PricingSettingResponse = z.infer<typeof PricingSettingResponse>;
 export const UpdatePricingInput = z
   .object({
     pricePerKm: z.number().min(0).max(100000).optional(),
+    pricePerKmShared: z.number().min(0).max(100000).optional(),
     floorSurcharge: z.number().min(0).max(100000).optional(),
     helperSurcharge: z.number().min(0).max(100000).optional(),
     surgeEnabled: z.boolean().optional(),

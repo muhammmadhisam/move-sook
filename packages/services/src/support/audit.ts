@@ -1,5 +1,6 @@
 import type { Prisma } from '@movesook/db';
 import { enqueueAudit } from './queues/side-effects';
+import { getLogger, reportError } from '../runtime/env';
 
 export type AuditTargetType = 'user' | 'driver' | 'job' | 'transaction' | 'setting';
 
@@ -21,6 +22,9 @@ export async function writeAudit(input: AuditInput): Promise<void> {
   try {
     await enqueueAudit(input);
   } catch (err) {
-    console.error('[audit] failed to enqueue log', input.action, err);
+    // Redis unreachable — the audit row never even got queued. Log + report:
+    // a missing admin-action trail is a compliance gap, not just noise.
+    getLogger().error({ err, action: input.action }, '[audit] failed to enqueue log');
+    reportError(err, { scope: 'audit.enqueue', action: input.action });
   }
 }

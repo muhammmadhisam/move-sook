@@ -1,5 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -18,4 +19,13 @@ const nextConfig = {
   ],
 };
 
-export default nextConfig;
+// Inert at build time unless SENTRY_AUTH_TOKEN + org/project are set (source-map
+// upload runs in CI — Phase 5). Runtime SDK is gated on NEXT_PUBLIC_SENTRY_DSN.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  disableLogger: true,
+});

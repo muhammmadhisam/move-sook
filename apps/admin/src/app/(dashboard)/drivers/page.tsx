@@ -30,15 +30,14 @@ import {
 import {
   DriverVerifyStatusSchema,
   DRIVER_VERIFY_STATUS_LABEL,
-  vehicleTypeLabel,
   type DriverDto,
   type DriverVerifyStatus,
-  type JobPricingResponse,
   type Paged,
   type VehicleType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 
 type DriversResponse = Paged<DriverDto>;
 
@@ -90,17 +89,8 @@ export default function DriversPage() {
   });
 
   // Vehicle types come from the admin catalog (VehiclePricing via the pricing API).
-  const pricing = useQuery({
-    queryKey: ['jobs', 'pricing'],
-    queryFn: async (): Promise<JobPricingResponse> => {
-      const res = await api.jobs.pricing.$get();
-      if (!res.ok) throw new Error('โหลดประเภทรถไม่สำเร็จ');
-      return (await res.json()) as JobPricingResponse;
-    },
-  });
+  const { pricing, vehicleLabelOf } = useVehicleLabels();
   const activeVehicleTypes = pricing.data?.rates.filter((r) => r.isActive).map((r) => r.vehicleType) ?? [];
-  const vehicleLabelOf = (vt: string) =>
-    vehicleTypeLabel(vt, pricing.data?.rates.find((r) => r.vehicleType === vt)?.label);
 
   const verify = useMutation({
     mutationFn: async (args: { id: string; decision: Decision; reason?: string }) => {

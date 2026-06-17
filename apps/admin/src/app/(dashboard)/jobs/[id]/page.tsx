@@ -19,10 +19,10 @@ import {
 import {
   JOB_STATUS_LABEL,
   PAYMENT_METHOD_LABEL,
-  vehicleTypeLabel,
   type AdminJobDetailResponse,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 import { PaymentReview } from '@/components/payment-review';
 import { DestChangeReview } from '@/components/dest-change-review';
 
@@ -93,6 +93,7 @@ export default function AdminJobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
   const queryClient = useQueryClient();
+  const { vehicleLabelOf } = useVehicleLabels();
 
   const detail = useQuery({
     queryKey: ['admin', 'job', id],
@@ -132,7 +133,7 @@ export default function AdminJobDetailPage() {
             <CardTitle>รายละเอียดงาน</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            <p>ประเภทรถ: {vehicleTypeLabel(j.vehicleType)}</p>
+            <p>ประเภทรถ: {vehicleLabelOf(j.vehicleType)}</p>
             <p>
               ต้นทาง: {j.originAddress} ({j.originProvince})
             </p>

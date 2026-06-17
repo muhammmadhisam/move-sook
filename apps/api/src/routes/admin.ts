@@ -5,6 +5,7 @@ import {
   AdminListDriversQuery,
   AdminListJobsQuery,
   AdminListUsersQuery,
+  AdminListLineFollowersQuery,
   AdminListAuditLogsQuery,
   AdminListAdminsQuery,
   AdminListCustomersQuery,
@@ -67,6 +68,7 @@ import {
   updateDriverKyc,
   // users
   listUsers,
+  listLineFollowers,
   getUserDetail,
   banUser,
   // customers
@@ -209,6 +211,14 @@ export const adminRoutes = new Hono<AppEnv>()
   // Full user profile: driver record (if any), posted jobs, authored reviews.
   .get('/users/:id', async (c) =>
     c.json(await getUserDetail(c.get('claims').sub, c.req.param('id'))),
+  )
+
+  // LINE OA follow state of LINE-linked accounts (who can receive push).
+  .get(
+    '/line-followers',
+    requireAdminRole('SUPER', 'OPS'),
+    zValidator('query', AdminListLineFollowersQuery),
+    async (c) => c.json(await listLineFollowers(c.req.valid('query'))),
   )
 
   // List jobs (province matches origin OR dest).

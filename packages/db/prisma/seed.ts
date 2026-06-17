@@ -57,6 +57,7 @@ async function main() {
     data: [
       { key: 'commission_pct', value: String(COMMISSION_PCT) },
       { key: 'price_per_km', value: '20' },
+      { key: 'price_per_km_shared', value: '12' }, // non-charter (ไม่เหมาลำ) rate — cheaper per km
       { key: 'min_job_price', value: '300' },
       { key: 'surge_multiplier', value: '1.0' },
       { key: 'support_phone', value: '074-000-000' },
@@ -86,6 +87,7 @@ async function main() {
         requirements: 'มอเตอร์ไซค์สภาพดี มีกล่อง/ตะกร้าท้าย',
         maxWeightKg: 30,
         pricePerKm: 10,
+        pricePerKmShared: 6,
         isActive: true,
       },
       {
@@ -95,6 +97,7 @@ async function main() {
         requirements: 'กระบะสภาพดี มีผ้าใบ/สายรัดของ',
         maxWeightKg: 1000,
         pricePerKm: 20,
+        pricePerKmShared: 12,
         isActive: true,
       },
       {
@@ -104,6 +107,7 @@ async function main() {
         requirements: 'รถ 4 ล้อตู้ทึบ/คอก พร้อมอุปกรณ์ยึดของ',
         maxWeightKg: 2000,
         pricePerKm: 28,
+        pricePerKmShared: 18,
         isActive: true,
       },
       {
@@ -113,6 +117,7 @@ async function main() {
         requirements: 'รถ 6 ล้อ พร้อมคนช่วยยก',
         maxWeightKg: 6000,
         pricePerKm: 40,
+        pricePerKmShared: 26,
         isActive: false,
       },
     ],

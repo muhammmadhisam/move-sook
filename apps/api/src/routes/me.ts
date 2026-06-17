@@ -1,14 +1,20 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
-import { ApplyReferralInput, ListNotificationsQuery } from '@movesook/shared';
+import {
+  ApplyReferralInput,
+  ListNotificationsQuery,
+  UpdateCustomerProfileInput,
+} from '@movesook/shared';
 import {
   applyReferral,
   countUnreadNotifications,
   getMe,
+  getProfile,
   getReferral,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  updateProfile,
 } from '@movesook/services/me';
 import type { AppEnv } from '../lib/context';
 import { authenticate } from '../middleware/auth';
@@ -17,6 +23,14 @@ import { authenticate } from '../middleware/auth';
 export const meRoutes = new Hono<AppEnv>()
   // GET /me — current user + role. Reads the USER cookie (LIFF audience).
   .get('/', authenticate('user'), async (c) => c.json(await getMe(c.get('claims').sub)))
+
+  // GET /me/profile — the customer's own editable profile (name, gender, address, …).
+  .get('/profile', authenticate('user'), async (c) => c.json(await getProfile(c.get('claims').sub)))
+
+  // PATCH /me/profile — the customer updates their own profile. All fields optional.
+  .patch('/profile', authenticate('user'), zValidator('json', UpdateCustomerProfileInput), async (c) =>
+    c.json(await updateProfile(c.get('claims').sub, c.req.valid('json'))),
+  )
 
   // The customer's referral status + share code (generated lazily on first read).
   .get('/referral', authenticate('user'), async (c) => c.json(await getReferral(c.get('claims').sub)))

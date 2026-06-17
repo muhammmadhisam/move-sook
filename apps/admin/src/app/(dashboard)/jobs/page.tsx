@@ -14,6 +14,7 @@ import {
   DialogTitle,
   Input,
   Label,
+  ProvinceSelect,
   Table,
   TableBody,
   TableCell,
@@ -29,14 +30,17 @@ import {
 import {
   JobStatusSchema,
   JOB_STATUS_LABEL,
-  vehicleTypeLabel,
+  PaymentMethodSchema,
+  PAYMENT_METHOD_SHORT_LABEL,
   type AdminJobListItem,
   type DriverDto,
   type JobDto,
   type JobStatus,
+  type PaymentMethod,
   type Paged,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
 
 const ALL = 'ALL';
@@ -53,8 +57,12 @@ function driverLabel(d: DriverDto): string {
 
 export default function JobsMonitorPage() {
   const queryClient = useQueryClient();
+  const { vehicleLabelOf } = useVehicleLabels();
   const t = useTableState('createdAt');
   const [status, setStatus] = useState<JobStatus | typeof ALL>(ALL);
+  const [originProvince, setOriginProvince] = useState('');
+  const [destProvince, setDestProvince] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | typeof ALL>(ALL);
   const [editing, setEditing] = useState<JobDto | null>(null);
   const [nextStatus, setNextStatus] = useState<JobStatus>('POSTED');
   const [price, setPrice] = useState('');
@@ -88,13 +96,26 @@ export default function JobsMonitorPage() {
   })();
 
   const jobs = useQuery({
-    queryKey: ['admin', 'jobs', status, t.page, t.sortBy, t.sortDir],
+    queryKey: [
+      'admin',
+      'jobs',
+      status,
+      originProvince,
+      destProvince,
+      paymentMethod,
+      t.page,
+      t.sortBy,
+      t.sortDir,
+    ],
     queryFn: async (): Promise<JobsResponse> => {
       const query = {
         page: String(t.page),
         sortBy: t.sortBy,
         sortDir: t.sortDir,
         ...(status === ALL ? {} : { status }),
+        ...(originProvince ? { originProvince } : {}),
+        ...(destProvince ? { destProvince } : {}),
+        ...(paymentMethod === ALL ? {} : { paymentMethod }),
       };
       const res = await api.admin.jobs.$get({ query });
       if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
@@ -170,32 +191,96 @@ export default function JobsMonitorPage() {
     <div>
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold">ติดตามงาน</h1>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="w-full sm:w-48">
-            <Select
-              value={status}
-              onValueChange={(v) => {
-                setStatus(v as JobStatus | typeof ALL);
-                t.resetPage();
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL}>ทุกสถานะ</SelectItem>
-                {JobStatusSchema.options.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {JOB_STATUS_LABEL[s]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button asChild>
-            <Link href="/jobs/new">+ สร้างงาน</Link>
-          </Button>
+        <Button asChild>
+          <Link href="/jobs/new">+ สร้างงาน</Link>
+        </Button>
+      </div>
+
+      {/* Filters: status + origin/dest province + payment method. */}
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="w-full sm:w-44">
+          <Label className="mb-1 block text-xs text-muted-foreground">สถานะ</Label>
+          <Select
+            value={status}
+            onValueChange={(v) => {
+              setStatus(v as JobStatus | typeof ALL);
+              t.resetPage();
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>ทุกสถานะ</SelectItem>
+              {JobStatusSchema.options.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {JOB_STATUS_LABEL[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+        <div className="w-full sm:w-44">
+          <Label className="mb-1 block text-xs text-muted-foreground">ต้นทาง</Label>
+          <ProvinceSelect
+            value={originProvince}
+            onChange={(v) => {
+              setOriginProvince(v);
+              t.resetPage();
+            }}
+            placeholder="ทุกจังหวัด"
+          />
+        </div>
+        <div className="w-full sm:w-44">
+          <Label className="mb-1 block text-xs text-muted-foreground">ปลายทาง</Label>
+          <ProvinceSelect
+            value={destProvince}
+            onChange={(v) => {
+              setDestProvince(v);
+              t.resetPage();
+            }}
+            placeholder="ทุกจังหวัด"
+          />
+        </div>
+        <div className="w-full sm:w-44">
+          <Label className="mb-1 block text-xs text-muted-foreground">การชำระเงิน</Label>
+          <Select
+            value={paymentMethod}
+            onValueChange={(v) => {
+              setPaymentMethod(v as PaymentMethod | typeof ALL);
+              t.resetPage();
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>ทุกวิธี</SelectItem>
+              {PaymentMethodSchema.options.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {PAYMENT_METHOD_SHORT_LABEL[m]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        {(status !== ALL ||
+          originProvince ||
+          destProvince ||
+          paymentMethod !== ALL) && (
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setStatus(ALL);
+              setOriginProvince('');
+              setDestProvince('');
+              setPaymentMethod(ALL);
+              t.resetPage();
+            }}
+          >
+            ล้างตัวกรอง
+          </Button>
+        )}
       </div>
 
       {/* Surfaces row-action errors (e.g. confirm blocked: no price/driver) when no dialog is open. */}
@@ -206,7 +291,14 @@ export default function JobsMonitorPage() {
           <TableRow>
             <TableHead>รายการ</TableHead>
             <TableHead>ลูกค้า</TableHead>
-            <TableHead>เส้นทาง</TableHead>
+            <SortHead
+              label="ต้นทาง"
+              col="originProvince"
+              sortBy={t.sortBy}
+              sortDir={t.sortDir}
+              onSort={t.toggleSort}
+            />
+            <TableHead>ปลายทาง</TableHead>
             <TableHead>รถ</TableHead>
             <SortHead label="ราคา" col="priceQuoted" sortBy={t.sortBy} sortDir={t.sortDir} onSort={t.toggleSort} />
             <TableHead>คนขับ</TableHead>
@@ -230,10 +322,9 @@ export default function JobsMonitorPage() {
                   </Badge>
                 )}
               </TableCell>
-              <TableCell>
-                {j.originProvince} → {j.destProvince}
-              </TableCell>
-              <TableCell>{vehicleTypeLabel(j.vehicleType)}</TableCell>
+              <TableCell>{j.originProvince}</TableCell>
+              <TableCell>{j.destProvince}</TableCell>
+              <TableCell>{vehicleLabelOf(j.vehicleType)}</TableCell>
               <TableCell>{j.priceQuoted ? `฿${j.priceQuoted.toLocaleString()}` : '—'}</TableCell>
               <TableCell>
                 {j.driverId ? (
@@ -296,7 +387,7 @@ export default function JobsMonitorPage() {
           ))}
           {jobs.data?.items.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 {jobs.isLoading ? 'กำลังโหลด…' : 'ไม่พบงาน'}
               </TableCell>
             </TableRow>
@@ -366,7 +457,7 @@ export default function JobsMonitorPage() {
                     <SelectItem key={d.id} value={d.id}>
                       {driverLabel(d)}
                       {d.serviceProvince ? ` · ${d.serviceProvince}` : ''}
-                      {` · ${vehicleTypeLabel(d.vehicleType)}`}
+                      {` · ${vehicleLabelOf(d.vehicleType)}`}
                     </SelectItem>
                   ))}
                 </SelectContent>

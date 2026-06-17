@@ -30,6 +30,7 @@ import {
   buildReceiptLink,
   getCommissionPct,
   getSystemSettings,
+  getVehicleLabel,
   isVehicleTypeActive,
   createCodCommissionTransaction,
   createDeliveryTransaction,
@@ -53,6 +54,9 @@ export async function listJobs(q: AdminListJobsQuery): Promise<JobListResponse> 
     ...(q.province
       ? { OR: [{ originProvince: q.province }, { destProvince: q.province }] }
       : {}),
+    ...(q.originProvince ? { originProvince: q.originProvince } : {}),
+    ...(q.destProvince ? { destProvince: q.destProvince } : {}),
+    ...(q.paymentMethod ? { paymentMethod: q.paymentMethod } : {}),
   };
   const [rows, total] = await Promise.all([
     prisma.job.findMany({
@@ -373,6 +377,7 @@ export async function buildJobDoc(
     driver: job.driver,
     transaction: job.transaction,
     settings,
+    vehicleLabel: await getVehicleLabel(job.vehicleType),
   });
   await writeAudit({
     actorId: sub,

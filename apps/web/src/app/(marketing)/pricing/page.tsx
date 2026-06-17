@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { Check } from 'lucide-react';
 import { PageHeader, Section, CtaBand } from '@/components/marketing/sections';
-import { SITE } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'ค่าบริการ',
@@ -58,16 +57,6 @@ export default function PricingPage() {
                   </li>
                 ))}
               </ul>
-            </div>
-
-            <div className="mt-6 rounded-2xl border border-navy-800 bg-navy-900 p-6 text-white shadow-sm">
-              <h2 className="text-lg font-semibold">สำหรับคนขับ</h2>
-              <p className="mt-3 text-sm leading-relaxed text-navy-200">
-                แพลตฟอร์มหักค่าบริการเพียง{' '}
-                <span className="font-bold text-primary">{SITE.commissionPct}%</span> ต่องาน
-                ส่วนที่เหลือเป็นรายได้ของคนขับทั้งหมด อัตราค่าคอมมิชชันจะถูกบันทึก ณ
-                ตอนรับงาน เพื่อความเป็นธรรมและโปร่งใส
-              </p>
             </div>
           </div>
         </div>

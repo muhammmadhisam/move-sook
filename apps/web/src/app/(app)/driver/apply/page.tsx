@@ -198,7 +198,7 @@ export default function DriverApplyPage() {
           {/* ── Step 0: ข้อมูลส่วนตัว ── */}
           {step === 0 && (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="grid gap-2">
                   <Label htmlFor="firstName">
                     ชื่อจริง <span className="text-destructive">*</span>
@@ -221,7 +221,7 @@ export default function DriverApplyPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="grid gap-2">
                   <Label htmlFor="birthDate">วันเกิด</Label>
                   <Input
@@ -304,7 +304,7 @@ export default function DriverApplyPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="grid gap-2">
                   <Label htmlFor="emName">ผู้ติดต่อฉุกเฉิน</Label>
                   <Input
@@ -379,7 +379,7 @@ export default function DriverApplyPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
                 <div className="grid gap-2">
                   <Label htmlFor="licenseNo">เลขใบขับขี่</Label>
                   <Input

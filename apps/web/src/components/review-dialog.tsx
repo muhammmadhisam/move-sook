@@ -18,7 +18,15 @@ import {
 import { api } from '@/lib/api';
 
 // One review per delivered job, by the job's customer (enforced by the API).
-export function ReviewDialog({ jobId, onDone }: { jobId: string; onDone: () => void }) {
+export function ReviewDialog({
+  jobId,
+  onDone,
+  className,
+}: {
+  jobId: string;
+  onDone: () => void;
+  className?: string;
+}) {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [open, setOpen] = useState(false);
@@ -43,7 +51,7 @@ export function ReviewDialog({ jobId, onDone }: { jobId: string; onDone: () => v
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="w-full">
+        <Button size="sm" className={cn(className ?? 'w-full')}>
           <Star className="mr-1.5 h-4 w-4" />
           ให้คะแนนคนขับ
         </Button>

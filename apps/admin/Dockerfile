@@ -15,7 +15,11 @@ RUN pnpm --filter @movesook/db exec prisma generate
 
 # NEXT_PUBLIC_* are inlined at build time; override with --build-arg.
 ARG NEXT_PUBLIC_API_URL=http://localhost:8787
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ARG NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=
+ARG NEXT_PUBLIC_SENTRY_DSN=
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=$NEXT_PUBLIC_GOOGLE_MAPS_API_KEY \
+    NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 RUN pnpm --filter @movesook/admin build
 
 # ─────────────── runtime: standalone server only ───────────────

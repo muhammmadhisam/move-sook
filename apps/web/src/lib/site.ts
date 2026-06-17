@@ -12,7 +12,7 @@ export const SITE = {
     .replace(/\/$/, "")
     .replace(/^(?!https?:\/\/)/, "https://"),
   email: "support@movesook.com",
-  phone: "+66-2-000-0000",
+  phone: "+66090-224-4336",
   lineOaUrl: "https://line.me/R/ti/p/@013ogbsz",
   commissionPct: 12,
 } as const;

@@ -170,7 +170,7 @@ function JobCard({
       <div className="mx-4 border-t" />
 
       {/* Actions */}
-      <div className="flex gap-2 p-3">
+      <div className="flex flex-wrap gap-2 p-3">
         <Button asChild size="sm" variant="outline" className="flex-1">
           <Link href={`/jobs/${job.id}`}>ดูรายละเอียด</Link>
         </Button>
@@ -206,7 +206,7 @@ function JobCard({
         )}
 
         {job.status === 'DELIVERED' && (
-          <ReviewDialog jobId={job.id} onDone={onReviewDone} />
+          <ReviewDialog jobId={job.id} onDone={onReviewDone} className="flex-1 min-w-[8rem]" />
         )}
 
         {(job.status === 'DELIVERED' || job.status === 'CANCELLED') && (

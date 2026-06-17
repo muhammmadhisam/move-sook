@@ -17,7 +17,8 @@ import { SITE } from '@/lib/site';
 import { getServiceAreaProvinces } from '@/lib/provinces';
 
 export const metadata: Metadata = {
-  title: `${SITE.name} — ${SITE.tagline}`,
+  // Keyword-led, brand-suffixed title (absolute = skip the "%s | MoveSook" template).
+  title: { absolute: 'รถรับจ้าง ขนของ ย้ายบ้าน เรียกคนขับขนย้ายใกล้คุณ | MoveSook' },
   description: SITE.description,
   alternates: { canonical: '/' },
 };
@@ -121,15 +122,17 @@ export default async function HomePage() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-20 lg:grid-cols-2 lg:py-28">
           <div>
             <span className="inline-flex items-center gap-2 rounded-full bg-navy-800 px-3 py-1 text-xs font-medium text-navy-100">
-              <span className="h-2 w-2 rounded-full bg-primary" /> เรียกคนขับขนย้าย
+              <span className="h-2 w-2 rounded-full bg-primary" /> รถรับจ้าง ขนของ ย้ายบ้าน ทั่วไทย
             </span>
             <h1 className="mt-5 text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-              เรียกคนขับขนย้าย
+              เรียกรถรับจ้าง ขนของ ย้ายบ้าน
               <br />
               <span className="text-primary">ใกล้คุณ</span> ได้ทันที
             </h1>
             <p className="mt-5 max-w-lg text-lg leading-relaxed text-navy-200">
-              {SITE.description}
+              เรียกรถกระบะรับจ้างและคนขับขนย้ายที่อยู่ใกล้คุณ สำหรับย้ายบ้าน ย้ายหอพัก
+              ย้ายคอนโด และขนของทั่วไทย โพสต์งานแล้วให้คนขับที่ว่างรับงานทันที
+              ราคาโปร่งใส รู้ก่อนจ่าย ติดตามสถานะได้แบบเรียลไทม์
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link

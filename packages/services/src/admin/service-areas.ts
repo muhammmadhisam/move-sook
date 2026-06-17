@@ -12,6 +12,16 @@ export async function listServiceAreas(): Promise<{ items: ServiceAreaDto[] }> {
   return { items };
 }
 
+/** Active service-area province names only — for the public marketing site (no auth). */
+export async function listPublicServiceAreas(): Promise<{ provinces: string[] }> {
+  const rows = await prisma.serviceArea.findMany({
+    where: { isActive: true },
+    orderBy: { province: 'asc' },
+    select: { province: true },
+  });
+  return { provinces: rows.map((r) => r.province) };
+}
+
 /** Toggle a province's service area. */
 export async function setServiceArea(
   sub: string,

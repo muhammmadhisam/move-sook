@@ -14,13 +14,16 @@ import {
 import { Section, CtaBand } from '@/components/marketing/sections';
 import { JsonLd } from '@/components/marketing/json-ld';
 import { SITE } from '@/lib/site';
-import { POPULAR_PROVINCES } from '@/lib/provinces';
+import { getServiceAreaProvinces } from '@/lib/provinces';
 
 export const metadata: Metadata = {
   title: `${SITE.name} — ${SITE.tagline}`,
   description: SITE.description,
   alternates: { canonical: '/' },
 };
+
+// Re-render periodically so service-area changes made in admin show up.
+export const revalidate = 300;
 
 const FAQ = [
   {
@@ -86,7 +89,9 @@ const STEPS = [
   },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const serviceAreas = await getServiceAreaProvinces();
+
   return (
     <>
       <JsonLd
@@ -237,7 +242,7 @@ export default function HomePage() {
             </p>
           </div>
           <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {POPULAR_PROVINCES.map((p) => (
+            {serviceAreas.map((p) => (
               <Link
                 key={p.slug}
                 href={`/move/${p.slug}`}

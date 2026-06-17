@@ -3,6 +3,7 @@
 // all on-page copy + metadata. Source list is the same `@movesook/thailand-provinces`
 // data used for address pickers and origin/serviceProvince matching.
 import { getProvinces } from '@movesook/thailand-provinces';
+import { api } from './api';
 
 export type ProvinceEntry = { slug: string; nameTh: string; nameEn: string };
 
@@ -14,9 +15,32 @@ export const PROVINCES: ProvinceEntry[] = getProvinces().map((p) => ({
 }));
 
 const bySlug = new Map(PROVINCES.map((p) => [p.slug, p]));
+const byNameTh = new Map(PROVINCES.map((p) => [p.nameTh, p]));
 
 export function getProvinceBySlug(slug: string): ProvinceEntry | undefined {
   return bySlug.get(slug);
+}
+
+/** Resolve Thai province names (e.g. from admin service areas) to slug entries. */
+export function provincesByNameTh(names: string[]): ProvinceEntry[] {
+  return names.map((n) => byNameTh.get(n)).filter((p): p is ProvinceEntry => Boolean(p));
+}
+
+/**
+ * Active service areas configured in admin (admin.movesook.com/settings),
+ * resolved to slug entries for the homepage grid. Falls back to a sensible
+ * popular-province list when none are configured or the API is unreachable.
+ */
+export async function getServiceAreaProvinces(): Promise<ProvinceEntry[]> {
+  try {
+    const res = await api.system['service-areas'].$get();
+    if (!res.ok) return POPULAR_PROVINCES;
+    const data = (await res.json()) as { provinces: string[] };
+    const mapped = provincesByNameTh(data.provinces);
+    return mapped.length ? mapped : POPULAR_PROVINCES;
+  } catch {
+    return POPULAR_PROVINCES;
+  }
 }
 
 // High-demand provinces surfaced on the homepage as internal links into the

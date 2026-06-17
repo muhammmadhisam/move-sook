@@ -11,6 +11,7 @@ import {
   isInHand,
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
+  JOB_STATUS_LABEL,
   type CreateJobInput,
   type JobDetailResponse,
   type JobDto,
@@ -637,7 +638,7 @@ export async function updateJobStatus(
       userId: customer.userId,
       type: 'JOB_STATUS',
       title: 'สถานะงานอัปเดต',
-      body: `งานของคุณเปลี่ยนเป็น ${next}`,
+      body: `งานของคุณเปลี่ยนเป็น ${JOB_STATUS_LABEL[next]}`,
       jobId: updated.id,
     });
   }

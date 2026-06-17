@@ -16,6 +16,7 @@ import {
 } from '@movesook/ui';
 import type { DriverDto, JobDto } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 
@@ -48,6 +49,7 @@ export function PaymentReview({
   const [assignOpen, setAssignOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [err, setErr] = useState<string | null>(null);
+  const { vehicleLabelOf } = useVehicleLabels();
 
   const approve = useMutation({
     mutationFn: async () => {
@@ -237,7 +239,8 @@ export function PaymentReview({
           <DialogHeader>
             <DialogTitle>อนุมัติ & มอบหมายคนขับ</DialogTitle>
             <DialogDescription>
-              เลือกคนขับที่จะมอบหมายงานนี้ — แสดงเฉพาะคนขับที่ผ่านการอนุมัติและกำลังว่างรับงาน
+              เลือกคนขับที่จะมอบหมายงานนี้ — คนขับที่อนุมัติแล้วทั้งหมด
+              (คนที่ตรงประเภทรถ ว่างรับงาน และตรงจังหวัดต้นทางจะอยู่ด้านบน)
             </DialogDescription>
           </DialogHeader>
 
@@ -252,7 +255,7 @@ export function PaymentReview({
             )}
             {!drivers.isLoading && !drivers.isError && (drivers.data?.length ?? 0) === 0 && (
               <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-                ไม่มีคนขับที่ว่างรับงานในขณะนี้
+                ยังไม่มีคนขับที่อนุมัติแล้วในระบบ
               </p>
             )}
             {drivers.data?.map((d) => (
@@ -264,13 +267,23 @@ export function PaymentReview({
                 className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition hover:border-primary hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">
+                  <p className="flex items-center gap-2 truncate text-sm font-medium">
                     {d.displayName ||
                       [d.firstName, d.lastName].filter(Boolean).join(' ') ||
                       'ไม่ระบุชื่อ'}
+                    <span
+                      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        d.isAvailable
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {d.isAvailable ? 'ว่างรับงาน' : 'ไม่ว่าง'}
+                    </span>
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
                     {d.serviceProvince ?? '—'}
+                    {` · ${vehicleLabelOf(d.vehicleType)}`}
                     {d.plateNumber ? ` · ${d.plateNumber}` : ''}
                     {' · ★ '}
                     {d.ratingAvg.toFixed(1)} ({d.ratingCount})

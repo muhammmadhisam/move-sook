@@ -58,12 +58,13 @@ type NavGroup = {
 const NAV: NavGroup[] = [
   {
     title: 'ภาพรวม',
+    // Overview/analytics is for the top-tier admin only; OPS/FINANCE don't see it.
     items: [
-      { href: '/', label: 'แดชบอร์ด', icon: LayoutDashboard },
-      { href: '/analytics', label: 'วิเคราะห์', icon: LineChart },
-      { href: '/reports', label: 'รายงาน', icon: FileText },
-      { href: '/supply-demand', label: 'Supply/Demand', icon: Scale },
-      { href: '/retention', label: 'Retention', icon: Repeat },
+      { href: '/', label: 'แดชบอร์ด', icon: LayoutDashboard, roles: ['SUPER'] },
+      { href: '/analytics', label: 'วิเคราะห์', icon: LineChart, roles: ['SUPER'] },
+      { href: '/reports', label: 'รายงาน', icon: FileText, roles: ['SUPER'] },
+      { href: '/supply-demand', label: 'Supply/Demand', icon: Scale, roles: ['SUPER'] },
+      { href: '/retention', label: 'Retention', icon: Repeat, roles: ['SUPER'] },
     ],
   },
   {
@@ -219,6 +220,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  // Role-gate the route itself, not just the nav. The landing page (/) is the
+  // overview dashboard, which is now SUPER-only — so an OPS/FINANCE admin who
+  // lands there (or types a restricted URL) is bounced to their first allowed
+  // page. The API still enforces RBAC server-side regardless.
+  useEffect(() => {
+    if (!me) return;
+    const allowed = NAV.flatMap((g) => g.items).filter(
+      (n) => !n.roles || n.roles.includes(me.adminRole),
+    );
+    const onAllowed = allowed.some((n) =>
+      n.href === '/' ? pathname === '/' : pathname.startsWith(n.href),
+    );
+    if (!onAllowed && allowed[0]) router.replace(allowed[0].href);
+  }, [me, pathname, router]);
 
   const logout = async () => {
     await api.auth.logout.$post();

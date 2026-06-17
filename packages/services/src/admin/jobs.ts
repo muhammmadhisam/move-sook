@@ -4,6 +4,7 @@ import {
   computeDiscount,
   canTransition,
   computeCommission,
+  JOB_STATUS_LABEL,
 } from '@movesook/shared';
 import type {
   AdminListJobsQuery,
@@ -272,6 +273,7 @@ export async function patchJob(
 
   // Admin-confirmed delivery: write the commission ledger + credit the driver atomically.
   const confirmingDelivery = patch.status === 'DELIVERED' && job.status !== 'DELIVERED';
+  const statusChanged = !!patch.status && patch.status !== job.status;
 
   // Guard: a delivery confirmation MUST be able to produce the driver's commission
   // transaction. Block (don't silently skip) if the effective job has no driver or
@@ -331,6 +333,24 @@ export async function patchJob(
     // Two-sided referral reward (best-effort, idempotent) on the customer's
     // first confirmed delivery — runs post-commit so it never blocks delivery.
     await maybeIssueReferralReward(updated.customerId);
+  }
+
+  // Keep the customer informed when an admin changes the job status (mirrors the
+  // normal lifecycle notification) — send the Thai label, not the raw enum.
+  if (statusChanged) {
+    const customer = await prisma.customer.findUnique({
+      where: { id: updated.customerId },
+      select: { userId: true },
+    });
+    if (customer?.userId) {
+      await notify({
+        userId: customer.userId,
+        type: 'JOB_STATUS',
+        title: 'สถานะงานอัปเดต',
+        body: `งานของคุณเปลี่ยนเป็น ${JOB_STATUS_LABEL[updated.status]}`,
+        jobId: updated.id,
+      });
+    }
   }
 
   await writeAudit({
@@ -451,8 +471,11 @@ export async function approvePayment(sub: string, id: string): Promise<JobDto> {
 }
 
 /**
- * Drivers an admin can hand THIS job to right now: approved, currently available,
- * and driving the matching vehicle type.
+ * Drivers an admin can hand THIS job to. Returns every APPROVED driver (the admin
+ * is overriding the on-demand flow, so we never empty the list), with the best fits
+ * sorted to the top: matching vehicle type, then currently available, then matching
+ * origin province, then rating. Availability/vehicle are ranking signals, not hard
+ * filters — verification is the only hard gate (enforced again in approveAssign).
  */
 export async function listAssignableDrivers(
   id: string,
@@ -460,21 +483,21 @@ export async function listAssignableDrivers(
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) throw new HTTPException(404, { message: 'Job not found' });
   const rows = await prisma.driver.findMany({
-    where: {
-      verifyStatus: 'APPROVED',
-      isAvailable: true,
-      vehicleType: job.vehicleType,
-    },
+    where: { verifyStatus: 'APPROVED' },
     include: { user: { select: { displayName: true } } },
   });
+  const score = (d: DriverDto, available: boolean) =>
+    (d.vehicleType === job.vehicleType ? 4 : 0) +
+    (available ? 2 : 0) +
+    (d.serviceProvince === job.originProvince ? 1 : 0);
   const items = rows
-    .map((d) => toDriverDto(d, d.user?.displayName ?? null))
+    .map((d) => ({ dto: toDriverDto(d, d.user?.displayName ?? null), available: d.isAvailable }))
     .sort((a, b) => {
-      const aMatch = a.serviceProvince === job.originProvince ? 1 : 0;
-      const bMatch = b.serviceProvince === job.originProvince ? 1 : 0;
-      if (aMatch !== bMatch) return bMatch - aMatch;
-      return b.ratingAvg - a.ratingAvg;
-    });
+      const diff = score(b.dto, b.available) - score(a.dto, a.available);
+      if (diff !== 0) return diff;
+      return b.dto.ratingAvg - a.dto.ratingAvg;
+    })
+    .map((r) => r.dto);
   return { items };
 }
 
@@ -505,9 +528,8 @@ export async function approveAssign(
   if (driver.verifyStatus !== 'APPROVED') {
     throw new HTTPException(422, { message: 'คนขับยังไม่ผ่านการอนุมัติ' });
   }
-  if (!driver.isAvailable) {
-    throw new HTTPException(422, { message: 'คนขับไม่ว่างรับงานในขณะนี้' });
-  }
+  // Availability is a ranking hint in the picker, not a hard gate — an admin
+  // explicitly assigning here is overriding the on-demand flow on purpose.
 
   const commissionPct = await getCommissionPct();
   const updated = await prisma.$transaction(async (tx) => {

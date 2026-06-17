@@ -27,6 +27,10 @@ export const metadata: Metadata = {
   authors: [{ name: SITE.name }],
   creator: SITE.name,
   publisher: SITE.name,
+  // Google Search Console ownership (URL-prefix property, HTML-tag method).
+  // Paste the code from Search Console into NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION;
+  // leave unset and no tag is rendered.
+  verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION },
   alternates: { canonical: '/' },
   openGraph: {
     type: 'website',

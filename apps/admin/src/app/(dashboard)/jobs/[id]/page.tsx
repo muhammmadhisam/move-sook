@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Printer, ChevronDown } from 'lucide-react';
+import { Printer, ChevronDown, MapPin } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -23,11 +23,30 @@ import {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
+import { useJobTrack } from '@/hooks/use-job-track';
+import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { PaymentReview } from '@/components/payment-review';
 import { DestChangeReview } from '@/components/dest-change-review';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8787';
+
+// Statuses where the driver is en route and broadcasting GPS — only then is the
+// live SSE stream worth opening.
+const TRACKING_STATUSES = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT']);
+
+function toLatLng(lat: number | null | undefined, lng: number | null | undefined): LatLng | null {
+  return lat != null && lng != null ? { lat, lng } : null;
+}
+
+function agoLabel(iso: string | null): string | null {
+  if (!iso) return null;
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'เมื่อสักครู่';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins} นาทีที่แล้ว`;
+  return `${Math.round(mins / 60)} ชม.ที่แล้ว`;
+}
 
 const JOB_DOCS = [
   { type: 'receipt', label: 'ใบเสร็จรับเงิน (ลูกค้า)' },
@@ -94,6 +113,7 @@ export default function AdminJobDetailPage() {
   const id = params.id;
   const queryClient = useQueryClient();
   const { vehicleLabelOf } = useVehicleLabels();
+  const [showMap, setShowMap] = useState(false);
 
   const detail = useQuery({
     queryKey: ['admin', 'job', id],
@@ -104,10 +124,20 @@ export default function AdminJobDetailPage() {
     },
   });
 
+  // Only stream while the panel is open AND the driver is actively en route.
+  const trackable = !!detail.data?.driverId && TRACKING_STATUSES.has(detail.data.status);
+  const trackingActive = showMap && trackable;
+  const track = useJobTrack(id, trackingActive);
+
   if (detail.isLoading) return <p className="text-sm text-muted-foreground">กำลังโหลด…</p>;
   if (!detail.data) return <p className="text-sm text-destructive">ไม่พบงาน</p>;
 
   const j = detail.data;
+
+  // Live driver fix (SSE) falls back to the last-known fix seeded in the job detail.
+  const driverLoc =
+    toLatLng(track?.lat, track?.lng) ?? toLatLng(j.driverLat, j.driverLng);
+  const driverAgo = agoLabel(track?.locationAt ?? j.driverLocationAt);
 
   return (
     <div className="space-y-6">
@@ -120,12 +150,52 @@ export default function AdminJobDetailPage() {
           <p className="font-mono text-xs text-muted-foreground">{j.id}</p>
         </div>
         <div className="flex items-center gap-3">
+          {j.driverId && (
+            <Button
+              variant={showMap ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowMap((v) => !v)}
+            >
+              <MapPin className="h-4 w-4" />
+              {showMap ? 'ซ่อนแผนที่' : 'ติดตามคนขับ'}
+            </Button>
+          )}
           <PrintDocsMenu jobId={j.id} />
           <Badge variant={j.status === 'CANCELLED' ? 'destructive' : 'secondary'}>
             {JOB_STATUS_LABEL[j.status]}
           </Badge>
         </div>
       </div>
+
+      {/* Live driver tracking — route map + the assigned driver's GPS pin. */}
+      {showMap && j.driverId && (
+        <Card>
+          <CardHeader>
+            <CardTitle>ติดตามคนขับ</CardTitle>
+            <CardDescription>
+              {j.driverName ? `${j.driverName} · ` : ''}
+              {trackable ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+                  {driverLoc
+                    ? `ติดตามแบบเรียลไทม์${driverAgo ? ` · อัปเดต${driverAgo}` : ''}`
+                    : 'กำลังรอตำแหน่งคนขับ…'}
+                </span>
+              ) : (
+                'งานนี้ไม่ได้อยู่ระหว่างเดินทาง — แสดงตำแหน่งล่าสุดที่บันทึกไว้'
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <JobRouteMap
+              origin={toLatLng(j.originLat, j.originLng)}
+              dest={toLatLng(j.destLat, j.destLng)}
+              driver={driverLoc}
+              className="h-80 w-full overflow-hidden rounded-lg border"
+            />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>

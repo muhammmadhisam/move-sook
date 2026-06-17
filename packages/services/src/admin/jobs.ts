@@ -98,6 +98,9 @@ export async function getJobDetail(id: string): Promise<AdminJobDetailResponse> 
     customerName: job.customer.name ?? job.customer.user?.displayName ?? null,
     customerPhone: job.customer.phone ?? job.customer.user?.phone ?? null,
     driverName: job.driver ? (job.driver.user?.displayName ?? job.driver.name) : null,
+    driverLat: job.driver?.lastLat ?? null,
+    driverLng: job.driver?.lastLng ?? null,
+    driverLocationAt: job.driver?.locationAt ? job.driver.locationAt.toISOString() : null,
   };
 }
 

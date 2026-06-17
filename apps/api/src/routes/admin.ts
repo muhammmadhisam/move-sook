@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
+import { streamSSE } from 'hono/streaming';
+import { isTerminalStatus } from '@movesook/shared';
 import {
   AdminBanUserInput,
   AdminListDriversQuery,
@@ -155,6 +157,8 @@ import {
   updateLedger,
   deleteLedger,
 } from '@movesook/services/admin';
+// Reuse the customer/driver tracking snapshot for the admin live-tracking SSE stream.
+import { getTrackSnapshot } from '@movesook/services/jobs';
 
 // Every route in this group requires a valid ADMIN session (admin cookie).
 // Handlers are thin wrappers over @movesook/services/admin.
@@ -228,6 +232,29 @@ export const adminRoutes = new Hono<AppEnv>()
 
   // Single job detail (admin).
   .get('/jobs/:id', async (c) => c.json(await getJobDetail(c.req.param('id'))))
+
+  // SSE live-tracking stream for the admin job page: pushes the assigned driver's
+  // location + job status every few seconds until the job reaches a terminal state.
+  // Admin auth is already enforced by the router-level .use('*') guard, so there is
+  // no per-job ownership check — admins may watch any job. Reuses getTrackSnapshot().
+  .get('/jobs/:id/track', async (c) => {
+    const id = c.req.param('id');
+    return streamSSE(c, async (stream) => {
+      let aborted = false;
+      stream.onAbort(() => {
+        aborted = true;
+      });
+      // Cap the stream (~1h at 5s) so a forgotten tab can't poll forever.
+      for (let i = 0; i < 720 && !aborted; i++) {
+        const event = await getTrackSnapshot(id);
+        if (!event) break;
+        await stream.writeSSE({ event: 'track', data: JSON.stringify(event) });
+        // Stop once the job is finished — nothing left to track.
+        if (isTerminalStatus(event.status)) break;
+        await stream.sleep(5000);
+      }
+    });
+  })
 
   // Admin creates a job on behalf of a customer (assign a driver now, or post open).
   .post('/jobs', requireAdminRole('SUPER', 'OPS'), zValidator('json', AdminCreateJobInput), async (c) =>

@@ -68,6 +68,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.62.7
         version: 5.100.14(react@19.2.6)
+      '@vis.gl/react-google-maps':
+        specifier: ^1.4.2
+        version: 1.8.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       lexical:
         specifier: ^0.45.0
         version: 0.45.0
@@ -102,6 +105,9 @@ importers:
       '@movesook/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@types/google.maps':
+        specifier: ^3.58.1
+        version: 3.65.0
       '@types/node':
         specifier: ^22.10.2
         version: 22.19.19

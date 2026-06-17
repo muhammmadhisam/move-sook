@@ -291,6 +291,11 @@ export type AdminJobListItem = z.infer<typeof AdminJobListItem>;
 // GET /admin/jobs/:id — single job detail for the admin.
 export const AdminJobDetailResponse = AdminJobListItem.extend({
   driverName: z.string().nullable(),
+  // Assigned driver's last broadcast GPS — seeds the live-tracking map before the
+  // SSE stream (GET /admin/jobs/:id/track) starts pushing fresher fixes.
+  driverLat: z.number().nullable(),
+  driverLng: z.number().nullable(),
+  driverLocationAt: z.string().datetime().nullable(),
 });
 export type AdminJobDetailResponse = z.infer<typeof AdminJobDetailResponse>;
 

@@ -476,17 +476,39 @@ export async function acceptJob(sub: string, jobId: string): Promise<JobDto> {
     throw new HTTPException(422, { message: 'กรุณาเปิดรับงานก่อน (สถานะพักงานอยู่)' });
   }
 
+  // What the driver currently holds (in-hand) and what they're trying to claim —
+  // both inform the concurrency + charter-exclusivity gates below.
+  const inHandJobs = await prisma.job.findMany({
+    where: { driverId: driver.id, status: { in: [...DRIVER_IN_HAND] } },
+    select: { pricingMode: true },
+  });
+  const target = await prisma.job.findUnique({
+    where: { id: jobId },
+    select: { pricingMode: true },
+  });
+  if (!target) throw new HTTPException(404, { message: 'ไม่พบงานนี้' });
+
+  // CHARTER (เหมาลำ) dedicates the whole vehicle to one job, so it's mutually
+  // exclusive with any other in-hand work — both directions:
+  //  - holding an active charter blocks claiming anything else, and
+  //  - claiming a charter requires zero in-hand jobs (even PER_ITEM loads).
+  if (inHandJobs.some((j) => j.pricingMode === 'CHARTER')) {
+    throw new HTTPException(422, {
+      message: 'คุณมีงานเหมาลำที่กำลังทำอยู่ — ส่งงานนั้นให้เสร็จก่อนจึงจะรับงานใหม่ได้',
+    });
+  }
+  if (target.pricingMode === 'CHARTER' && inHandJobs.length > 0) {
+    throw new HTTPException(422, {
+      message: 'งานเหมาลำต้องใช้รถทั้งคัน — ส่งงานที่ค้างอยู่ให้เสร็จก่อนจึงจะรับงานเหมาลำได้',
+    });
+  }
+
   // Cap concurrent in-hand jobs per driver (0 = unlimited).
   const sys = await getSystemSettings();
-  if (sys.maxActiveJobsPerDriver > 0) {
-    const inHand = await prisma.job.count({
-      where: { driverId: driver.id, status: { in: [...DRIVER_IN_HAND] } },
+  if (sys.maxActiveJobsPerDriver > 0 && inHandJobs.length >= sys.maxActiveJobsPerDriver) {
+    throw new HTTPException(422, {
+      message: `รับงานพร้อมกันได้สูงสุด ${sys.maxActiveJobsPerDriver} งาน — ส่งงานเดิมให้เสร็จก่อน`,
     });
-    if (inHand >= sys.maxActiveJobsPerDriver) {
-      throw new HTTPException(422, {
-        message: `รับงานพร้อมกันได้สูงสุด ${sys.maxActiveJobsPerDriver} งาน — ส่งงานเดิมให้เสร็จก่อน`,
-      });
-    }
   }
 
   // Conditional update guards against a race: only an unassigned POSTED job is claimable.

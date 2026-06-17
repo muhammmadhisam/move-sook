@@ -16,7 +16,7 @@ import {
   DialogTrigger,
   PreviewableImage,
 } from '@movesook/ui';
-import { type JobDto, type JobListResponse } from '@movesook/shared';
+import { type JobDto, type JobListResponse, DRIVER_IN_HAND } from '@movesook/shared';
 import {
   Navigation,
   MapPin,
@@ -70,6 +70,28 @@ export default function JobsPage() {
 
   // Don't even fetch the feed for a not-yet-approved driver — they can't take work.
   const jobs = useQuery({ queryKey: ['jobs', 'available'], queryFn: fetchJobs, enabled: !notApproved });
+
+  // The driver's own in-hand jobs decide charter exclusivity (mirrors acceptJob):
+  // a CHARTER (เหมาลำ) ties up the whole vehicle, so holding one blocks all new work,
+  // and taking one requires having nothing in hand. PER_ITEM loads still stack freely.
+  const mine = useQuery({
+    queryKey: ['jobs', 'mine'],
+    queryFn: async (): Promise<JobListResponse> => {
+      const res = await api.jobs.$get({ query: { mine: 'true' } });
+      if (!res.ok) throw new Error('โหลดงานที่รับไว้ไม่สำเร็จ');
+      return (await res.json()) as JobListResponse;
+    },
+    enabled: !notApproved,
+  });
+  const inHand = useMemo(
+    () => (mine.data?.items ?? []).filter((j) => DRIVER_IN_HAND.includes(j.status)),
+    [mine.data?.items],
+  );
+  const hasActiveCharter = inHand.some((j) => j.pricingMode === 'CHARTER');
+  // True when this specific job can't be claimed because of the charter rule.
+  const charterBlocked = (job: JobDto) =>
+    hasActiveCharter || (job.pricingMode === 'CHARTER' && inHand.length > 0);
+
   const geo = useGeolocation();
 
   // Closest pickup first; jobs without coords (or before location is granted) sink to the bottom.
@@ -159,6 +181,11 @@ export default function JobsPage() {
       {offDuty && (
         <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
           คุณปิดรับงานอยู่ — เปิดสถานะออนไลน์ที่หน้าโปรไฟล์ก่อนจึงจะรับงานได้
+        </p>
+      )}
+      {hasActiveCharter && (
+        <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
+          คุณมีงานเหมาลำที่กำลังทำอยู่ — ส่งงานนั้นให้เสร็จก่อนจึงจะรับงานใหม่ได้
         </p>
       )}
       {(geo.status === 'denied' || geo.status === 'unsupported') && (
@@ -252,6 +279,12 @@ export default function JobsPage() {
                 </div>
               </div>
 
+              {!hasActiveCharter && job.pricingMode === 'CHARTER' && inHand.length > 0 && (
+                <p className="px-4 pb-2 text-xs text-warning">
+                  งานเหมาลำต้องใช้รถทั้งคัน — ส่งงานที่ค้างอยู่ให้เสร็จก่อนจึงจะรับได้
+                </p>
+              )}
+
               <CardContent className="flex gap-2 p-4 pt-0">
                 <Dialog>
                   <DialogTrigger asChild>
@@ -321,7 +354,7 @@ export default function JobsPage() {
 
                     <Button
                       className="w-full"
-                      disabled={accept.isPending || !canAccept}
+                      disabled={accept.isPending || !canAccept || charterBlocked(job)}
                       onClick={() => accept.mutate(job.id)}
                     >
                       รับงานนี้
@@ -331,7 +364,7 @@ export default function JobsPage() {
 
                 <Button
                   className="flex-1"
-                  disabled={accept.isPending || !canAccept}
+                  disabled={accept.isPending || !canAccept || charterBlocked(job)}
                   onClick={() => accept.mutate(job.id)}
                 >
                   รับงานนี้

@@ -14,9 +14,17 @@ import type { AppEnv } from '../lib/context';
 // Accept either a user (USER/DRIVER) or an admin session — both audiences upload
 // images (item/proof photos vs payout slips), and they use different cookies.
 const authAny = createMiddleware<AppEnv>(async (c, next) => {
-  const token = getCookie(c, env.USER_COOKIE_NAME) ?? getCookie(c, env.ADMIN_COOKIE_NAME);
-  if (!token) throw new HTTPException(401, { message: 'Not authenticated' });
-  const result = await verifyJwt(token, env.JWT_SECRET);
+  // Resolve which cookie is present and verify the token against its matching
+  // audience (a user token can't satisfy the admin audience and vice-versa).
+  const userToken = getCookie(c, env.USER_COOKIE_NAME);
+  const adminToken = getCookie(c, env.ADMIN_COOKIE_NAME);
+  const candidate = userToken
+    ? ({ token: userToken, aud: 'user' as const })
+    : adminToken
+      ? ({ token: adminToken, aud: 'admin' as const })
+      : null;
+  if (!candidate) throw new HTTPException(401, { message: 'Not authenticated' });
+  const result = await verifyJwt(candidate.token, env.JWT_SECRET, candidate.aud);
   if (!result.ok) throw new HTTPException(401, { message: 'Invalid session' });
   c.set('claims', result.claims);
   await next();

@@ -43,6 +43,7 @@ export async function lineLogin(input: LineLoginInput): Promise<Session> {
   const token = await signJwt({
     sub: user.id,
     role: user.role,
+    aud: 'user',
     secret: env.JWT_SECRET,
     ttlSec: USER_JWT_TTL_SEC,
   });
@@ -88,6 +89,7 @@ export async function adminLogin(input: AdminLoginInput, rlKey: string): Promise
   const token = await signJwt({
     sub: cred.user.id,
     role: 'ADMIN',
+    aud: 'admin',
     secret: env.JWT_SECRET,
     ttlSec: ADMIN_JWT_TTL_SEC,
   });
@@ -130,6 +132,7 @@ export async function devLogin(input: DevLoginInput): Promise<Session> {
   const token = await signJwt({
     sub: user.id,
     role: user.role,
+    aud: 'user',
     secret: env.JWT_SECRET,
     ttlSec: USER_JWT_TTL_SEC,
   });

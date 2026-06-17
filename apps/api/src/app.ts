@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
 import { requestId } from 'hono/request-id';
 import { HTTPException } from 'hono/http-exception';
 import * as Sentry from '@sentry/node';
@@ -43,6 +44,16 @@ const app = new Hono<AppEnv>()
       'request',
     );
   })
+  // Security headers (HSTS, X-Frame-Options, nosniff, no-referrer, etc.). CORP is
+  // relaxed to cross-origin so the GET /uploads/* image proxy can still be
+  // embedded from the app./admin. subdomains; COEP stays off for the same reason.
+  .use(
+    '*',
+    secureHeaders({
+      crossOriginResourcePolicy: 'cross-origin',
+      crossOriginEmbedderPolicy: false,
+    }),
+  )
   .use(
     '*',
     cors({

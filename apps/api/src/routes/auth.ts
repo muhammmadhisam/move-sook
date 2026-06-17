@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { HTTPException } from 'hono/http-exception';
+import { getConnInfo } from '@hono/node-server/conninfo';
 import {
   AdminLoginInput,
   DevLoginInput,
@@ -35,7 +36,13 @@ export const authRoutes = new Hono<AppEnv>()
   // ADMIN login via email + password (separate cookie, rate-limited).
   .post('/admin/login', zValidator('json', AdminLoginInput), async (c) => {
     const input = c.req.valid('json');
-    const rlKey = `${c.req.header('x-forwarded-for') ?? 'local'}:${input.email.toLowerCase()}`;
+    // Key the lockout on the email (the meaningful per-account brute-force bound)
+    // plus the TCP peer address from the socket. The peer is the immediate client
+    // (or the trusted reverse proxy) and cannot be spoofed by an attacker-supplied
+    // `x-forwarded-for` header — which the old key trusted, letting an attacker
+    // mint a fresh bucket per request and bypass the IP side of the limiter.
+    const peer = getConnInfo(c).remote.address ?? 'unknown';
+    const rlKey = `${peer}:${input.email.toLowerCase()}`;
     try {
       const { token, user } = await adminLogin(input, rlKey);
       setSessionCookie(c, env.ADMIN_COOKIE_NAME, token, ADMIN_JWT_TTL_SEC);

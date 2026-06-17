@@ -44,6 +44,7 @@ export type MeResponse = z.infer<typeof MeResponse>;
 export const JwtClaims = z.object({
   sub: z.string(), // User.id
   role: RoleSchema,
+  aud: z.union([z.string(), z.array(z.string())]).optional(), // session audience ('user' | 'admin')
   iat: z.number().optional(),
   exp: z.number().optional(),
 });

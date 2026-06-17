@@ -1,5 +1,7 @@
 import { fileURLToPath } from 'node:url';
+import { isIP } from 'node:net';
 import PDFDocument from 'pdfkit';
+import { getEnv } from '../runtime/env';
 import type { Job, Customer, Driver, User, Transaction } from '@movesook/db';
 import {
   JOB_STATUS_LABEL,
@@ -40,12 +42,73 @@ const fmtDate = (d: Date | string | null | undefined) =>
       })
     : '—';
 
+const MAX_IMAGE_FETCH_BYTES = 8 * 1024 * 1024; // 8 MB — covers any legit slip/proof
+
+/** Hosts we serve uploads from (R2 public URL + this API's own origin). When a
+ *  URL points at one of these we trust it outright; anything else must clear the
+ *  private-range check below. */
+function uploadOriginHosts(): string[] {
+  const env = getEnv();
+  const hosts: string[] = [];
+  for (const u of [env.R2_PUBLIC_URL, env.PUBLIC_API_URL]) {
+    if (!u) continue;
+    try {
+      hosts.push(new URL(u).hostname.toLowerCase());
+    } catch {
+      /* ignore malformed config */
+    }
+  }
+  return hosts;
+}
+
+/** True for IP literals in private / loopback / link-local / ULA ranges — the
+ *  classic SSRF targets (cloud metadata at 169.254.169.254, 10/172.16/192.168
+ *  internals, ::1, etc.). Hostnames that aren't IP literals pass; we don't do DNS
+ *  resolution here, the env allow-list covers the legitimate hosts. */
+function isPrivateIpLiteral(host: string): boolean {
+  const v = isIP(host);
+  if (v === 4) {
+    const p = host.split('.').map(Number);
+    const [a = 0, b = 0] = p;
+    if (a === 10 || a === 127 || a === 0) return true;
+    if (a === 169 && b === 254) return true; // link-local incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT
+    return false;
+  }
+  if (v === 6) {
+    const h = host.toLowerCase();
+    if (h === '::1' || h === '::') return true;
+    if (h.startsWith('fc') || h.startsWith('fd')) return true; // ULA fc00::/7
+    if (/^fe[89ab]/.test(h)) return true; // link-local fe80::/10
+    return false;
+  }
+  return false;
+}
+
 async function fetchImage(url: string | null | undefined): Promise<Buffer | null> {
   if (!url) return null;
+  let parsed: URL;
   try {
-    const res = await fetch(url);
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null;
+  // SSRF guard: a known upload origin is always fine; otherwise refuse internal
+  // hosts so an attacker-supplied slip/proof/logo URL can't make the server fetch
+  // private infrastructure or a cloud metadata endpoint.
+  const host = parsed.hostname.toLowerCase();
+  if (!uploadOriginHosts().includes(host) && isPrivateIpLiteral(host)) return null;
+  try {
+    // No automatic redirect-following — a 30x to an internal host would otherwise
+    // re-open the SSRF hole the host check just closed.
+    const res = await fetch(parsed, { redirect: 'manual' });
     if (!res.ok) return null;
-    return Buffer.from(await res.arrayBuffer());
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > MAX_IMAGE_FETCH_BYTES) return null;
+    return buf;
   } catch {
     return null;
   }

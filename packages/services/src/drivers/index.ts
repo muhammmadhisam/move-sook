@@ -83,6 +83,7 @@ export async function applyAsDriver(
   const token = await signJwt({
     sub,
     role: 'DRIVER',
+    aud: 'user',
     secret: getEnv().JWT_SECRET,
     ttlSec: USER_JWT_TTL_SEC,
   });
@@ -132,6 +133,7 @@ export async function claimDriver(
   const token = await signJwt({
     sub,
     role: 'DRIVER',
+    aud: 'user',
     secret: getEnv().JWT_SECRET,
     ttlSec: USER_JWT_TTL_SEC,
   });

@@ -3,6 +3,16 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
+// Seed admin password. Dev convenience default, overridable via env. Hard-refuse
+// the well-known default in production so a prod seed can never ship a guessable
+// admin login — set SEED_ADMIN_PASSWORD to seed against a production-like DB.
+const SEED_ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? 'changeme123';
+if (process.env.NODE_ENV === 'production' && SEED_ADMIN_PASSWORD === 'changeme123') {
+  throw new Error(
+    'Refusing to seed the default admin password in production. Set SEED_ADMIN_PASSWORD.',
+  );
+}
+
 // ───────────────────────── helpers ─────────────────────────
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -168,8 +178,8 @@ async function main() {
     ],
   });
 
-  // ── Admins (RBAC tiers; password = changeme123) ───────────────────────────
-  const passwordHash = await bcrypt.hash('changeme123', 12);
+  // ── Admins (RBAC tiers; password = SEED_ADMIN_PASSWORD, default changeme123) ─
+  const passwordHash = await bcrypt.hash(SEED_ADMIN_PASSWORD, 12);
   const adminSeeds = [
     { lineUserId: 'seed-admin-super', displayName: 'ผู้ดูแลระบบ (Super)', email: 'admin@movesook.local', adminRole: 'SUPER' as const },
     { lineUserId: 'seed-admin-ops', displayName: 'ฝ่ายปฏิบัติการ', email: 'ops@movesook.local', adminRole: 'OPS' as const },
@@ -708,7 +718,7 @@ async function main() {
     promos: await prisma.promoCode.count(),
   };
   console.info('✅ Seed complete (fresh reset)');
-  console.info('   Admin logins (password = changeme123):');
+  console.info(`   Admin logins (password = ${SEED_ADMIN_PASSWORD}):`);
   console.info('     admin@movesook.local   (SUPER)');
   console.info('     ops@movesook.local      (OPS)');
   console.info('     finance@movesook.local  (FINANCE)');

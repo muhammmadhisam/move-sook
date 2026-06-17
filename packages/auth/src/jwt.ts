@@ -3,6 +3,12 @@ import { JwtClaims, type Role } from '@movesook/shared';
 
 const ALG = 'HS256';
 
+/** Session audience. USER/DRIVER and ADMIN tokens are signed for distinct
+ *  audiences so an admin-cookie token can never be a user token (or vice-versa),
+ *  even though both share one secret. The cookie name alone no longer separates
+ *  them — `aud` is cryptographically bound and verified. */
+export type JwtAudience = 'user' | 'admin';
+
 function key(secret: string): Uint8Array {
   if (!secret) throw new Error('JWT secret is empty');
   return new TextEncoder().encode(secret);
@@ -11,16 +17,19 @@ function key(secret: string): Uint8Array {
 export interface SignJwtArgs {
   sub: string;
   role: Role;
+  /** Which session audience this token is minted for. */
+  aud: JwtAudience;
   secret: string;
   /** Time-to-live in seconds. */
   ttlSec: number;
 }
 
-export async function signJwt({ sub, role, secret, ttlSec }: SignJwtArgs): Promise<string> {
+export async function signJwt({ sub, role, aud, secret, ttlSec }: SignJwtArgs): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({ role })
     .setProtectedHeader({ alg: ALG })
     .setSubject(sub)
+    .setAudience(aud)
     .setIssuedAt(now)
     .setExpirationTime(now + ttlSec)
     .sign(key(secret));
@@ -79,9 +88,16 @@ export type VerifyJwtResult =
   | { ok: true; claims: JwtClaims }
   | { ok: false; reason: 'expired' | 'invalid' };
 
-export async function verifyJwt(token: string, secret: string): Promise<VerifyJwtResult> {
+export async function verifyJwt(
+  token: string,
+  secret: string,
+  audience: JwtAudience,
+): Promise<VerifyJwtResult> {
   try {
-    const { payload } = await jwtVerify(token, key(secret), { algorithms: [ALG] });
+    // `audience` makes jose reject a token minted for the other audience (a user
+    // token presented in the admin cookie, or vice-versa) — defence in depth on
+    // top of the separate cookie names.
+    const { payload } = await jwtVerify(token, key(secret), { algorithms: [ALG], audience });
     const parsed = JwtClaims.safeParse(payload);
     if (!parsed.success) return { ok: false, reason: 'invalid' };
     return { ok: true, claims: parsed.data };

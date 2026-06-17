@@ -35,7 +35,7 @@ export function authenticate(kind: CookieKind) {
     const token = getCookie(c, cookieName);
     if (!token) throw new HTTPException(401, { message: 'Not authenticated' });
 
-    const result = await verifyJwt(token, env.JWT_SECRET);
+    const result = await verifyJwt(token, env.JWT_SECRET, kind);
     if (!result.ok) {
       throw new HTTPException(401, {
         message: result.reason === 'expired' ? 'Session expired' : 'Invalid session',
@@ -43,12 +43,26 @@ export function authenticate(kind: CookieKind) {
     }
     const { claims } = result;
 
+    // Re-check the live account on every request so a ban / role change takes
+    // effect immediately — the JWT is long-lived and rolls forward (below), so
+    // trusting its embedded role/ban flag would let a revoked session linger for
+    // a full TTL. One indexed PK lookup; cheap relative to the route's own work.
+    const account = await prisma.user.findUnique({
+      where: { id: claims.sub },
+      select: { isBanned: true, role: true },
+    });
+    if (!account) throw new HTTPException(401, { message: 'Invalid session' });
+    if (account.isBanned) throw new HTTPException(403, { message: 'Account banned' });
+    // Trust the DB role over the (possibly stale) token role.
+    claims.role = account.role;
+
     // Roll the session forward once it has aged past a quarter of its lifetime.
     const now = Math.floor(Date.now() / 1000);
     if (claims.exp !== undefined && claims.exp - now < (ttlSec * 3) / 4) {
       const fresh = await signJwt({
         sub: claims.sub,
         role: claims.role,
+        aud: kind,
         secret: env.JWT_SECRET,
         ttlSec,
       });

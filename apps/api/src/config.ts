@@ -21,7 +21,9 @@ const EnvSchema = z.object({
   // Performance-trace sampling (0 = errors only). Keep low in prod.
   SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 chars"),
+  // HS256 signs with the raw secret bytes; ≥32 chars keeps the key at/above the
+  // 256-bit security level of the HMAC so it can't be the weak link.
+  JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 chars"),
   USER_COOKIE_NAME: z.string().default("ms_user_session"),
   ADMIN_COOKIE_NAME: z.string().default("ms_admin_session"),
   LINE_CHANNEL_ID: z.string().min(1, "LINE_CHANNEL_ID is required"),
@@ -87,4 +89,12 @@ export const r2Enabled = Boolean(
 );
 if (isProd && !r2Enabled) {
   console.warn("⚠️ R2 is not configured — uploads will be stored on local disk.");
+}
+// Without the channel secret, POST /webhooks/line silently falls back to the
+// static x-system-key gate instead of verifying LINE's HMAC signature. Fine in
+// dev; in production it means anyone with the system key can forge LINE events.
+if (isProd && !env.LINE_CHANNEL_SECRET) {
+  console.warn(
+    "⚠️ LINE_CHANNEL_SECRET is not set — /webhooks/line cannot verify the LINE signature and falls back to the static system key.",
+  );
 }

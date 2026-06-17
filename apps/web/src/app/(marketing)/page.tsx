@@ -14,12 +14,36 @@ import {
 import { Section, CtaBand } from '@/components/marketing/sections';
 import { JsonLd } from '@/components/marketing/json-ld';
 import { SITE } from '@/lib/site';
+import { POPULAR_PROVINCES } from '@/lib/provinces';
 
 export const metadata: Metadata = {
   title: `${SITE.name} — ${SITE.tagline}`,
   description: SITE.description,
   alternates: { canonical: '/' },
 };
+
+const FAQ = [
+  {
+    q: 'MoveSook คือบริการอะไร?',
+    a: 'MoveSook (มูฟสุข) คือแพลตฟอร์มเรียกรถขนย้ายแบบ on-demand คุณโพสต์งานขนย้าย แล้วคนขับที่อยู่ใกล้และว่างจะรับงานให้ทันที ใช้ได้ทั้งย้ายบ้าน ย้ายหอพัก ย้ายคอนโด หรือขนของชิ้นใหญ่',
+  },
+  {
+    q: 'ค่าบริการขนย้ายคิดยังไง?',
+    a: 'ค่าบริการคำนวณอัตโนมัติจากระยะทาง ประเภทรถ และปริมาณของ คุณเห็นราคาประมาณการก่อนยืนยันงานทุกครั้ง ไม่มีค่าใช้จ่ายแอบแฝง',
+  },
+  {
+    q: 'มีรถประเภทไหนให้เลือกบ้าง?',
+    a: 'มีทั้งรถกระบะ รถตู้ และรถบรรทุกขนาดต่างๆ เลือกได้ตามปริมาณและขนาดของที่จะขนย้าย',
+  },
+  {
+    q: 'ให้บริการพื้นที่ไหนบ้าง?',
+    a: 'ให้บริการครอบคลุมทุกจังหวัดทั่วประเทศไทย คนขับที่อยู่ใกล้พื้นที่รับ–ส่งของคุณจะรับงานให้',
+  },
+  {
+    q: 'คนขับน่าเชื่อถือไหม?',
+    a: 'คนขับทุกคนต้องยืนยันตัวตนและผ่านการตรวจสอบอนุมัติก่อนรับงาน และคุณติดตามตำแหน่งคนขับได้แบบเรียลไทม์ตลอดเส้นทาง',
+  },
+];
 
 const FEATURES = [
   {
@@ -73,6 +97,17 @@ export default function HomePage() {
           provider: { '@type': 'Organization', name: SITE.name, url: SITE.url },
           areaServed: { '@type': 'Country', name: 'Thailand' },
           description: SITE.description,
+        }}
+      />
+      <JsonLd
+        data={{
+          '@context': 'https://schema.org',
+          '@type': 'FAQPage',
+          mainEntity: FAQ.map((f) => ({
+            '@type': 'Question',
+            name: f.q,
+            acceptedAnswer: { '@type': 'Answer', text: f.a },
+          })),
         }}
       />
 
@@ -188,6 +223,47 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+      </Section>
+
+      {/* Service areas — internal links into the per-province SEO pages */}
+      <section className="bg-muted/40">
+        <Section>
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              พื้นที่ให้บริการขนย้าย
+            </h2>
+            <p className="mt-3 text-muted-foreground">
+              เรียกรถขนย้ายได้ครอบคลุมทุกจังหวัดทั่วไทย เลือกพื้นที่ของคุณ
+            </p>
+          </div>
+          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {POPULAR_PROVINCES.map((p) => (
+              <Link
+                key={p.slug}
+                href={`/move/${p.slug}`}
+                className="flex items-center gap-2 rounded-xl border bg-card px-4 py-3 text-sm font-medium shadow-sm transition-colors hover:border-primary hover:text-primary"
+              >
+                <MapPin className="h-4 w-4 text-primary" />
+                ขนย้าย{p.nameTh}
+              </Link>
+            ))}
+          </div>
+        </Section>
+      </section>
+
+      {/* FAQ */}
+      <Section>
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">คำถามที่พบบ่อย</h2>
+        </div>
+        <ul className="mx-auto mt-10 max-w-3xl space-y-4">
+          {FAQ.map((f) => (
+            <li key={f.q} className="rounded-xl border bg-card p-5 shadow-sm">
+              <h3 className="font-semibold">{f.q}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.a}</p>
+            </li>
+          ))}
+        </ul>
       </Section>
 
       <CtaBand />

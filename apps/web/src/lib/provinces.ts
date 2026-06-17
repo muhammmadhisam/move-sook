@@ -18,3 +18,24 @@ const bySlug = new Map(PROVINCES.map((p) => [p.slug, p]));
 export function getProvinceBySlug(slug: string): ProvinceEntry | undefined {
   return bySlug.get(slug);
 }
+
+// High-demand provinces surfaced on the homepage as internal links into the
+// programmatic `/move/[province]` pages (helps crawl + ranks the area pages).
+const POPULAR_NAMES_TH = [
+  'กรุงเทพมหานคร',
+  'นนทบุรี',
+  'สมุทรปราการ',
+  'ปทุมธานี',
+  'เชียงใหม่',
+  'ชลบุรี',
+  'ภูเก็ต',
+  'นครราชสีมา',
+  'ขอนแก่น',
+  'สงขลา',
+  'สุราษฎร์ธานี',
+  'เชียงราย',
+];
+
+export const POPULAR_PROVINCES: ProvinceEntry[] = POPULAR_NAMES_TH.map((th) =>
+  PROVINCES.find((p) => p.nameTh === th),
+).filter((p): p is ProvinceEntry => Boolean(p));

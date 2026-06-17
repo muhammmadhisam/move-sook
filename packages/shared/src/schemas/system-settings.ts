@@ -143,5 +143,6 @@ export const PublicSystemConfig = z.object({
   codEnabled: z.boolean(),
   codMinPrice: z.number().int().min(0),
   codMaxPrice: z.number().int().min(0),
+  commissionPct: z.number().min(0).max(100), // current platform commission rate (display on marketing pages)
 });
 export type PublicSystemConfig = z.infer<typeof PublicSystemConfig>;

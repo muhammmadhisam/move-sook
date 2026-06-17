@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { PageHeader, Prose } from '@/components/marketing/sections';
 import { SITE } from '@/lib/site';
+import { getCommissionPct } from '@/lib/system';
 
 export const metadata: Metadata = {
   title: 'ข้อกำหนดการใช้งาน',
@@ -8,7 +9,12 @@ export const metadata: Metadata = {
   alternates: { canonical: '/terms' },
 };
 
-export default function TermsPage() {
+// Re-render periodically so commission-rate changes in admin show up.
+export const revalidate = 300;
+
+export default async function TermsPage() {
+  const commissionPct = await getCommissionPct();
+
   return (
     <>
       <PageHeader title="ข้อกำหนดการใช้งาน" description="ปรับปรุงล่าสุด: 8 มิถุนายน 2569" />
@@ -111,7 +117,7 @@ export default function TermsPage() {
         <h2>8. ค่าบริการและค่าคอมมิชชัน</h2>
         <p>
           ค่าบริการจะแสดงให้เห็นก่อนยืนยันงาน แพลตฟอร์มหักค่าคอมมิชชันในอัตราที่กำหนด (ปัจจุบัน{' '}
-          {SITE.commissionPct}%) จากค่าบริการของแต่ละงาน <strong>อัตราค่าคอมมิชชันจะถูกบันทึก ณ เวลาที่รับงาน</strong>{' '}
+          {commissionPct}%) จากค่าบริการของแต่ละงาน <strong>อัตราค่าคอมมิชชันจะถูกบันทึก ณ เวลาที่รับงาน</strong>{' '}
           การปรับอัตราในภายหลังจะไม่ย้อนหลังกับงานที่รับไปแล้ว ค่าบริการอาจมีค่าธรรมเนียมเพิ่มเติมตามระยะทาง ปริมาณ
           ช่วงเวลาที่มีความต้องการสูง หรือบริการเสริม ซึ่งจะแสดงให้ทราบก่อนยืนยัน
         </p>

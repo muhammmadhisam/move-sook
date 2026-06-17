@@ -6,7 +6,7 @@ import * as Sentry from '@sentry/node';
 import { env } from './config';
 import { logger as baseLogger } from './lib/logger';
 import type { AppEnv } from './lib/context';
-import { getSystemSettings } from '@movesook/services/support';
+import { getSystemSettings, getCommissionPct } from '@movesook/services/support';
 import { listPublicServiceAreas } from '@movesook/services/admin';
 import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
 import { authRoutes } from './routes/auth';
@@ -62,7 +62,7 @@ const app = new Hono<AppEnv>()
   .get('/health', (c) => c.json({ ok: true, service: 'movesook-api' }))
   // Public app config: maintenance banner + support contact (no auth).
   .get('/system/public', async (c) => {
-    const s = await getSystemSettings();
+    const [s, commissionPct] = await Promise.all([getSystemSettings(), getCommissionPct()]);
     const body: PublicSystemConfig = {
       maintenanceMode: s.maintenanceMode,
       maintenanceMessage: s.maintenanceMessage,
@@ -78,6 +78,7 @@ const app = new Hono<AppEnv>()
       codEnabled: s.codEnabled,
       codMinPrice: s.codMinPrice,
       codMaxPrice: s.codMaxPrice,
+      commissionPct,
     };
     return c.json(body);
   })

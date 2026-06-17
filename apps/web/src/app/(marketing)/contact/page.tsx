@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { MessageCircle, Clock, ArrowRight } from "lucide-react";
+import { MessageCircle, Clock, ArrowRight, Mail, Phone } from "lucide-react";
 import { PageHeader, Section } from "@/components/marketing/sections";
 import { JsonLd } from "@/components/marketing/json-ld";
 import { SITE } from "@/lib/site";
@@ -19,20 +19,20 @@ const CHANNELS = [
     href: SITE.lineOaUrl,
     cta: "แชทกับเรา",
   },
-  // {
-  //   icon: Mail,
-  //   title: "อีเมล",
-  //   value: SITE.email,
-  //   href: `mailto:${SITE.email}`,
-  //   cta: "ส่งอีเมล",
-  // },
-  // {
-  //   icon: Phone,
-  //   title: "โทรศัพท์",
-  //   value: SITE.phone,
-  //   href: `tel:${SITE.phone.replace(/[^+\d]/g, "")}`,
-  //   cta: "โทรหาเรา",
-  // },
+  {
+    icon: Mail,
+    title: "อีเมล",
+    value: SITE.email,
+    href: `mailto:${SITE.email}`,
+    cta: "ส่งอีเมล",
+  },
+  {
+    icon: Phone,
+    title: "โทรศัพท์",
+    value: SITE.phone,
+    href: `tel:${SITE.phone.replace(/[^+\d]/g, "")}`,
+    cta: "โทรหาเรา",
+  },
 ];
 
 export default function ContactPage() {

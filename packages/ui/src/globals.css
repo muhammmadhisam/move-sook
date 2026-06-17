@@ -1,5 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap');
-
+/* Fonts are self-hosted per-app via next/font (see each app's root layout),
+   wired through the --font-inter / --font-noto-thai CSS variables. No external
+   @import here — that was render-blocking and hurt mobile FCP/LCP. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

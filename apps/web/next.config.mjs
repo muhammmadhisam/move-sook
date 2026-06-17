@@ -16,6 +16,8 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Tree-shake icon/util barrels to per-icon imports — smaller client JS, lower TBT.
+  experimental: { optimizePackageImports: ['lucide-react'] },
   transpilePackages: [
     '@movesook/ui',
     '@movesook/shared',

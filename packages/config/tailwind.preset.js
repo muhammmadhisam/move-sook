@@ -15,7 +15,15 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['Inter', 'Noto Sans Thai', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: [
+          'var(--font-inter)',
+          'var(--font-noto-thai)',
+          'Inter',
+          'Noto Sans Thai',
+          'ui-sans-serif',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       colors: {
         // ── Semantic tokens (themeable, light/dark) ──────────────────────────

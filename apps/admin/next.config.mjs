@@ -18,6 +18,8 @@ const securityHeaders = [
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Tree-shake icon/util barrels to per-icon imports — smaller client JS, lower TBT.
+  experimental: { optimizePackageImports: ["lucide-react"] },
   // Emit a self-contained server (only the traced deps) for a slim Docker image.
   output: "standalone",
   // Trace from the monorepo root so pnpm workspace packages are bundled into standalone.

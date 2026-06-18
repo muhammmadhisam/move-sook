@@ -1,0 +1,108 @@
+# Production compose for MoveSook (deployed at /root/movesook/compose.yaml on the VPS).
+# Usage:
+#   docker compose pull && docker compose up -d
+# Build locally instead of pulling:
+#   docker compose build && docker compose up -d
+#
+# SECURITY: db/redis intentionally have NO published ports — they are reached only
+# over the internal ky-networks docker network. Never re-add a `ports:` mapping for
+# them (that would expose Postgres/Redis to the public internet).
+#
+# Requires an external docker network `ky-networks` and a sibling `.env` file
+# (holds R2_*, LINE_*, DATABASE_URL, etc). POSTGRES_PASSWORD overridable via env.
+
+name: movesook
+
+services:
+    db:
+        image: postgres:16-alpine
+        container_name: movesook-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: movesook
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-movesook}
+            POSTGRES_DB: movesook
+        volumes:
+            - ./movesook_pgdata:/var/lib/postgresql/data
+        healthcheck:
+            test: ["CMD-SHELL", "pg_isready -U movesook -d movesook"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+        networks:
+            - ky-networks
+    api:
+        image: devpala/move-sook-api:${IMAGE_TAG:-latest}
+        container_name: movesook-api
+        platform: linux/amd64
+        restart: unless-stopped
+        environment:
+            - LINE_CHANNEL_ID=${LINE_CHANNEL_ID}
+        ports:
+            - "8787"
+        env_file:
+            - ./.env
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "node",
+                    "-e",
+                    "require('http').get('http://localhost:8787/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+                ]
+            interval: 15s
+            timeout: 5s
+            retries: 5
+            start_period: 10s
+        networks:
+            - ky-networks
+    admin:
+        image: devpala/move-sook-admin:${IMAGE_TAG:-latest}
+        container_name: movesook-admin
+        restart: unless-stopped
+        ports:
+            - "3001"
+        environment:
+            NODE_ENV: production
+        depends_on:
+            api:
+                condition: service_healthy
+        networks:
+            - ky-networks
+    redis:
+        image: redis:7-alpine
+        container_name: movesook-redis
+        restart: unless-stopped
+        command: ["redis-server", "--appendonly", "yes"]
+        volumes:
+            - ./movesook_redisdata:/data
+        networks:
+            - ky-networks
+        healthcheck:
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
+            timeout: 5s
+            retries: 5
+    # Nightly Postgres -> Cloudflare R2 backup (offsite). Cron 03:00 Asia/Bangkok.
+    backup:
+        build: ./backup
+        container_name: movesook-backup
+        restart: unless-stopped
+        depends_on:
+            db:
+                condition: service_healthy
+        environment:
+            PGHOST: db
+            POSTGRES_USER: movesook
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-movesook}
+            POSTGRES_DB: movesook
+        env_file:
+            - ./.env
+        volumes:
+            - ./db-backups:/backups
+        networks:
+            - ky-networks
+
+networks:
+    ky-networks:
+        external: true

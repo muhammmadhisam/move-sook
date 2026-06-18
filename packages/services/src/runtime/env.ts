@@ -98,3 +98,31 @@ export function getLogger(): ServiceLogger {
 export function reportError(err: unknown, context?: Record<string, unknown>): void {
   _reportError(err, context);
 }
+
+// ── Generated-document cache seam ─────────────────────────────────────────────
+// PDF rendering (pdf.ts) is slow: it fetches remote images + runs pdfkit. To cache
+// the rendered bytes we need blob storage, but the storage boundary (R2/disk)
+// deliberately lives in the app (apps/api/src/routes/uploads.ts), and this package
+// has neither the S3 client nor the R2 credentials. So the app injects a store
+// here at boot, same pattern as env/observability. Until then it's null and
+// rendering stays inline (no cache) — fine for tests/standalone.
+
+/** Blob store for cached generated documents (content-addressed keys). */
+export interface DocStore {
+  /** Return the cached bytes for `key`, or null on a miss. */
+  get(key: string): Promise<Buffer | null>;
+  /** Persist `bytes` under `key`. */
+  put(key: string, bytes: Buffer, contentType: string): Promise<void>;
+}
+
+let _docStore: DocStore | null = null;
+
+/** Called once by the app at boot to back the document cache with R2/disk. */
+export function configureDocStore(store: DocStore): void {
+  _docStore = store;
+}
+
+/** The injected document cache, or null when none is configured (caching off). */
+export function getDocStore(): DocStore | null {
+  return _docStore;
+}

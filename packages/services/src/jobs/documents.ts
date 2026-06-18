@@ -1,7 +1,7 @@
 import { HTTPException } from 'hono/http-exception';
 import { prisma } from '@movesook/db';
 import { verifyDocToken } from '@movesook/auth';
-import { buildJobDocument, getSystemSettings, getVehicleLabel } from '@movesook/services/support';
+import { renderJobDocument, getSystemSettings, getVehicleLabel } from '@movesook/services/support';
 import { getEnv } from '@movesook/services/runtime';
 
 // Per-job PDF document builders. Each returns the rendered PDF bytes + a filename;
@@ -29,7 +29,7 @@ export async function buildReceipt(sub: string, id: string): Promise<JobDocResul
     throw new HTTPException(422, { message: 'ใบเสร็จจะออกได้หลังยืนยันการชำระเงิน' });
   }
   const settings = await getSystemSettings();
-  const pdf = await buildJobDocument('receipt', {
+  const pdf = await renderJobDocument('receipt', {
     job,
     customer: job.customer,
     driver: job.driver,
@@ -62,7 +62,7 @@ export async function buildReceiptByToken(id: string, token: string): Promise<Jo
     throw new HTTPException(422, { message: 'ใบเสร็จจะออกได้หลังยืนยันการชำระเงิน' });
   }
   const settings = await getSystemSettings();
-  const pdf = await buildJobDocument('receipt', {
+  const pdf = await renderJobDocument('receipt', {
     job,
     customer: job.customer,
     driver: job.driver,
@@ -89,7 +89,7 @@ export async function buildWorksheet(sub: string, id: string): Promise<JobDocRes
     throw new HTTPException(403, { message: 'Not your job' });
   }
   const settings = await getSystemSettings();
-  const pdf = await buildJobDocument('worksheet', {
+  const pdf = await renderJobDocument('worksheet', {
     job,
     customer: job.customer,
     driver: job.driver,

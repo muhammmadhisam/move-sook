@@ -1,4 +1,5 @@
 import { prisma } from '@movesook/db';
+import { cached, CACHE_TTL } from '@movesook/services/support';
 import type {
   AdminReportQuery,
   AdminReportExportQuery,
@@ -40,9 +41,15 @@ function toCsv(rows: string[][]): string {
  * Period business report. Financials come from the Transaction ledger; job counts
  * and growth come from createdAt within the range. Defaults to a trailing 30 days.
  */
-export async function getReportSummary(
-  q: AdminReportQuery,
-): Promise<ReportSummaryResponse> {
+export function getReportSummary(q: AdminReportQuery): Promise<ReportSummaryResponse> {
+  // Key by the resolved day bounds so each distinct range caches independently.
+  const { from, to } = resolveReportRange(q);
+  return cached(`report:${from.label}:${to.label}`, CACHE_TTL.reports, () =>
+    computeReportSummary(q),
+  );
+}
+
+async function computeReportSummary(q: AdminReportQuery): Promise<ReportSummaryResponse> {
   const { from, to } = resolveReportRange(q);
 
   const txnWhere = { createdAt: { gte: from.start, lte: to.end } };

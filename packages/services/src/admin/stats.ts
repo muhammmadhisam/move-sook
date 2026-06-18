@@ -1,6 +1,8 @@
 import { prisma } from '@movesook/db';
 import {
   getSystemSettings,
+  cached,
+  CACHE_TTL,
 } from '@movesook/services/support';
 import type {
   AdminStatsResponse,
@@ -18,8 +20,12 @@ const JOB_STATUSES: JobStatus[] = [
   'CANCELLED',
 ];
 
-/** Dashboard numbers. */
-export async function getStats(): Promise<AdminStatsResponse> {
+/** Dashboard numbers. Cached briefly so the dashboard load doesn't re-aggregate. */
+export function getStats(): Promise<AdminStatsResponse> {
+  return cached('stats', CACHE_TTL.stats, computeStats);
+}
+
+async function computeStats(): Promise<AdminStatsResponse> {
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 

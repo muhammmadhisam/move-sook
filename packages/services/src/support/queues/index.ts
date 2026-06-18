@@ -6,7 +6,12 @@ import { startMaintenanceWorker, registerMaintenanceSchedules } from './maintena
 import { startSideEffectsWorker } from './side-effects';
 
 export { enqueuePush, enqueueMulticast } from './notifications';
-export { enqueueAudit, maybeIssueReferralReward } from './side-effects';
+export {
+  enqueueAudit,
+  maybeIssueReferralReward,
+  enqueueJobBroadcast,
+  enqueueAdminAlert,
+} from './side-effects';
 
 let workers: Worker[] = [];
 

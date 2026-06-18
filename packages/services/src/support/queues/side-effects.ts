@@ -1,7 +1,9 @@
 import { Queue, Worker, type Job } from 'bullmq';
 import { prisma, type Prisma } from '@movesook/db';
+import type { NotificationType } from '@movesook/shared';
 import { bullConnection } from '../redis';
 import { runReferralRewardGrant } from '../referral';
+import { notifyNewJobToArea, notifyAdmins, pushAdminLineGroup } from '../notify';
 import { getLogger, reportError } from '../../runtime/env';
 
 // Durable side-effects queue. These are post-commit side effects that used to run
@@ -9,6 +11,13 @@ import { getLogger, reportError } from '../../runtime/env';
 // write. Moving them here gives at-least-once delivery with retry/backoff.
 //   - audit            → append an AuditLog row (admin action already happened)
 //   - referral-reward  → idempotent two-sided referral grant (see referral.ts)
+//   - job-broadcast    → fan a freshly-published job out to drivers in its area
+//   - admin-alert      → fan an ops alert (in-app + LINE group) out to all admins
+//
+// job-broadcast / admin-alert were inline fan-outs (an unbounded driver/admin
+// query + createMany + LINE enqueue) that ran in the customer/admin request path.
+// Their handlers are intentionally best-effort (they never throw — see notify.ts),
+// so the value here is getting the work *off the request path*, not retry.
 
 export const SIDE_EFFECTS_QUEUE = 'side-effects';
 
@@ -20,6 +29,15 @@ export type AuditJobData = {
   metadata?: Prisma.InputJsonValue;
 };
 type ReferralJobData = { customerId: string };
+type JobBroadcastData = { jobId: string };
+type AdminAlertData = {
+  title: string;
+  body: string;
+  jobId?: string | null;
+  type?: NotificationType;
+  /** Also push a text alert to the configured admin LINE group. */
+  lineGroup?: boolean;
+};
 
 const jobOpts = {
   attempts: 5,
@@ -53,6 +71,34 @@ export async function maybeIssueReferralReward(customerId: string): Promise<void
   }
 }
 
+/**
+ * Enqueue the new-job-in-area fan-out (driver match query + in-app rows + LINE
+ * multicast). Best-effort to enqueue (never throws) so a Redis blip can't 500 the
+ * publish/approve action that triggered it.
+ */
+export async function enqueueJobBroadcast(jobId: string): Promise<void> {
+  try {
+    await getQueue().add('job-broadcast', { jobId } satisfies JobBroadcastData, jobOpts);
+  } catch (err) {
+    getLogger().error({ err, jobId }, '[side-effects] failed to enqueue job broadcast');
+    reportError(err, { scope: 'side-effects.enqueueJobBroadcast', jobId });
+  }
+}
+
+/**
+ * Enqueue an ops alert fanned out to every admin (in-app, and optionally the
+ * admin LINE group). Best-effort to enqueue (never throws) so it can't break the
+ * customer action — e.g. a payment-slip upload — that triggered it.
+ */
+export async function enqueueAdminAlert(data: AdminAlertData): Promise<void> {
+  try {
+    await getQueue().add('admin-alert', data, jobOpts);
+  } catch (err) {
+    getLogger().error({ err }, '[side-effects] failed to enqueue admin alert');
+    reportError(err, { scope: 'side-effects.enqueueAdminAlert' });
+  }
+}
+
 async function process(job: Job): Promise<void> {
   switch (job.name) {
     case 'audit': {
@@ -70,6 +116,28 @@ async function process(job: Job): Promise<void> {
     }
     case 'referral-reward': {
       await runReferralRewardGrant((job.data as ReferralJobData).customerId);
+      return;
+    }
+    case 'job-broadcast': {
+      const { jobId } = job.data as JobBroadcastData;
+      // Refetch so the fan-out reflects the job's current state, not a stale
+      // snapshot from enqueue time. A deleted/missing job is a no-op.
+      const j = await prisma.job.findUnique({
+        where: { id: jobId },
+        select: { id: true, originProvince: true, destProvince: true, itemDescription: true },
+      });
+      if (j) await notifyNewJobToArea(j);
+      return;
+    }
+    case 'admin-alert': {
+      const d = job.data as AdminAlertData;
+      await notifyAdmins({
+        type: d.type ?? 'GENERIC',
+        title: d.title,
+        body: d.body,
+        jobId: d.jobId ?? null,
+      });
+      if (d.lineGroup) await pushAdminLineGroup(`${d.title}\n${d.body}`);
       return;
     }
     default:

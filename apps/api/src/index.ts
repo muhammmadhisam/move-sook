@@ -3,8 +3,9 @@ import { serve } from '@hono/node-server';
 import { app } from './app';
 import { env } from './config';
 import { logger } from './lib/logger';
-import { configureObservability } from '@movesook/services/runtime';
+import { configureObservability, configureDocStore } from '@movesook/services/runtime';
 import { startWorkers, stopWorkers } from '@movesook/services/support';
+import { docStore } from './routes/uploads';
 
 // Inject pino + Sentry into @movesook/services (queues/notify/audit/etc.) before
 // workers start, so their logs are structured and permanent failures get reported.
@@ -13,6 +14,10 @@ configureObservability({
   reportError: (err, ctx) =>
     Sentry.captureException(err, ctx ? { extra: ctx } : undefined),
 });
+
+// Back the generated-document (PDF) cache with the app's R2/disk store so the
+// builders can serve a cache hit instead of re-fetching images + re-rendering.
+configureDocStore(docStore);
 
 const server = serve({ fetch: app.fetch, port: env.PORT }, (info) => {
   logger.info({ port: info.port }, '🚚 MoveSook API listening');

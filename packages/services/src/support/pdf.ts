@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url';
 import { isIP } from 'node:net';
+import { createHash } from 'node:crypto';
 import PDFDocument from 'pdfkit';
-import { getEnv } from '../runtime/env';
+import { getEnv, getDocStore, getLogger } from '../runtime/env';
 import type { Job, Customer, Driver, User, Transaction } from '@movesook/db';
 import {
   JOB_STATUS_LABEL,
@@ -326,6 +327,46 @@ const BUILDERS: Record<DocType, (doc: Doc, d: JobDocData) => Promise<void>> = {
   worksheet: buildWorksheet,
   delivery: buildDelivery,
 };
+
+/**
+ * Content-addressed cache key for a rendered document. Hashing the full input
+ * (type + job/relations + settings + resolved label) means any change that would
+ * alter the output produces a *different* key — so a cache hit can never be stale,
+ * and superseded versions simply age out of the bucket. Note: the header's
+ * "issued on" date is baked into the cached bytes (it's the first-render time),
+ * so repeat downloads of an unchanged document show a stable issue date — the
+ * correct behaviour for a receipt/payout.
+ */
+function docCacheKey(type: DocType, data: JobDocData): string {
+  const hash = createHash('sha256').update(JSON.stringify({ type, data })).digest('hex');
+  return `doc/${type}/${hash}.pdf`;
+}
+
+/**
+ * buildJobDocument + a content-addressed cache backed by the injected DocStore
+ * (R2 in prod, local disk in dev). On a hit we skip the expensive remote image
+ * fetches + pdfkit render entirely. Degrades gracefully: with no store configured
+ * — or on any cache read/write error — it just renders inline as before. This is
+ * the entrypoint callers should use; buildJobDocument stays the pure renderer.
+ */
+export async function renderJobDocument(type: DocType, data: JobDocData): Promise<Buffer> {
+  const store = getDocStore();
+  if (!store) return buildJobDocument(type, data);
+  const key = docCacheKey(type, data);
+  try {
+    const cached = await store.get(key);
+    if (cached) return cached;
+  } catch (err) {
+    getLogger().error({ err, key }, '[pdf] doc cache read failed — rendering fresh');
+  }
+  const pdf = await buildJobDocument(type, data);
+  try {
+    await store.put(key, pdf, 'application/pdf');
+  } catch (err) {
+    getLogger().error({ err, key }, '[pdf] doc cache write failed');
+  }
+  return pdf;
+}
 
 /** Render the requested document to a PDF Buffer. */
 export function buildJobDocument(type: DocType, data: JobDocData): Promise<Buffer> {

@@ -11,8 +11,7 @@ import {
   getCommissionPct,
   getEffectivePricePerKm,
   getSystemSettings,
-  notifyAdmins,
-  pushAdminLineGroup,
+  enqueueAdminAlert,
   toJobDto,
 } from '@movesook/services/support';
 
@@ -59,8 +58,7 @@ export async function uploadPaymentSlip(
     `งาน #${updated.id}`,
   ].filter((l): l is string => Boolean(l));
   const body = lines.join('\n');
-  await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
-  await pushAdminLineGroup(`${title}\n${body}`);
+  await enqueueAdminAlert({ type: 'GENERIC', title, body, jobId: updated.id, lineGroup: true });
 
   return toJobDto(updated);
 }
@@ -194,8 +192,7 @@ export async function requestDestChange(
     `ใหม่: ${input.destAddress} (${input.destProvince})`,
     `ค่าธรรมเนียม: ฿${fee.total.toLocaleString('th-TH')}`,
   ].join('\n');
-  await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
-  await pushAdminLineGroup(`${title}\n${body}`);
+  await enqueueAdminAlert({ type: 'GENERIC', title, body, jobId: updated.id, lineGroup: true });
 
   return toJobDto(updated);
 }
@@ -231,8 +228,7 @@ export async function uploadDestChangeSlip(
     `ที่อยู่ใหม่: ${updated.destChangeNewAddress} (${updated.destChangeNewProvince})`,
     `ค่าธรรมเนียม: ฿${(updated.destChangeFee ?? 0).toLocaleString('th-TH')}`,
   ].join('\n');
-  await notifyAdmins({ type: 'GENERIC', title, body, jobId: updated.id });
-  await pushAdminLineGroup(`${title}\n${body}`);
+  await enqueueAdminAlert({ type: 'GENERIC', title, body, jobId: updated.id, lineGroup: true });
 
   return toJobDto(updated);
 }

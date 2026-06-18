@@ -1,4 +1,5 @@
 import { prisma } from '@movesook/db';
+import { cached, CACHE_TTL } from '@movesook/services/support';
 import type {
   AdminAnalyticsQuery,
   AdminAnalyticsResponse,
@@ -11,10 +12,12 @@ import type {
   JobStatus,
 } from '@movesook/shared';
 
-/** Analytics (time series + funnel + leaderboard). */
-export async function getAnalytics(
-  q: AdminAnalyticsQuery,
-): Promise<AdminAnalyticsResponse> {
+/** Analytics (time series + funnel + leaderboard). Cached per window length. */
+export function getAnalytics(q: AdminAnalyticsQuery): Promise<AdminAnalyticsResponse> {
+  return cached(`analytics:${q.days}`, CACHE_TTL.analytics, () => computeAnalytics(q));
+}
+
+async function computeAnalytics(q: AdminAnalyticsQuery): Promise<AdminAnalyticsResponse> {
   const { days } = q;
   const start = new Date();
   start.setHours(0, 0, 0, 0);
@@ -112,7 +115,11 @@ export async function getAnalytics(
  * Marketplace liquidity by province: open (POSTED, unassigned) demand vs
  * available approved-driver supply.
  */
-export async function getSupplyDemand(): Promise<SupplyDemandResponse> {
+export function getSupplyDemand(): Promise<SupplyDemandResponse> {
+  return cached('supply-demand', CACHE_TTL.supplyDemand, computeSupplyDemand);
+}
+
+async function computeSupplyDemand(): Promise<SupplyDemandResponse> {
   const [openByProvince, availByProvince, approvedByProvince] = await Promise.all([
     prisma.job.groupBy({
       by: ['originProvince'],
@@ -179,7 +186,11 @@ export async function getSupplyDemand(): Promise<SupplyDemandResponse> {
  * Marketplace health: do customers come back, and do drivers stay active
  * month over month? Delivery time = Transaction.createdAt (commission ledger).
  */
-export async function getRetention(): Promise<RetentionResponse> {
+export function getRetention(): Promise<RetentionResponse> {
+  return cached('retention', CACHE_TTL.retention, computeRetention);
+}
+
+async function computeRetention(): Promise<RetentionResponse> {
   const now = new Date();
   const startOfMonth = (monthsAgo: number) =>
     new Date(now.getFullYear(), now.getMonth() - monthsAgo, 1);

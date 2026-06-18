@@ -14,7 +14,7 @@ import {
   type UpdateDriverLocationInput,
 } from '@movesook/shared';
 import { signJwt } from '@movesook/auth';
-import { getSystemSettings, notify, notifyAdmins, toDriverDto } from '@movesook/services/support';
+import { getSystemSettings, notify, enqueueAdminAlert, toDriverDto } from '@movesook/services/support';
 import { getEnv } from '@movesook/services/runtime';
 
 // Driver self-service surface: apply / claim / profile / availability / location /
@@ -246,7 +246,7 @@ export async function appealDriver(
   });
 
   const who = driver.user?.displayName ?? driver.name ?? 'คนขับ';
-  await notifyAdmins({
+  await enqueueAdminAlert({
     type: 'DRIVER_VERIFY',
     title: 'คนขับยื่นอุทธรณ์',
     body: `${who} (${wasRejected ? 'ถูกปฏิเสธ' : 'ถูกระงับ'}) ยื่นอุทธรณ์: ${message}`,

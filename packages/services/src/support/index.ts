@@ -16,6 +16,7 @@ export * from './audit';
 export * from './cron-tasks';
 export * from './rate-limit';
 export * from './redis';
+export * from './cache';
 
 // Async layer (BullMQ): worker lifecycle + producer entrypoints.
 export {
@@ -25,4 +26,6 @@ export {
   enqueueMulticast,
   enqueueAudit,
   maybeIssueReferralReward,
+  enqueueJobBroadcast,
+  enqueueAdminAlert,
 } from './queues';

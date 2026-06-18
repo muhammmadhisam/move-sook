@@ -26,8 +26,8 @@ import {
   orderByOf,
   writeAudit,
   notify,
-  notifyAdmins,
-  notifyNewJobToArea,
+  enqueueAdminAlert,
+  enqueueJobBroadcast,
   buildReceiptLink,
   getCommissionPct,
   getSystemSettings,
@@ -37,7 +37,7 @@ import {
   createDeliveryTransaction,
   attachToDriverPayout,
   maybeIssueReferralReward,
-  buildJobDocument,
+  renderJobDocument,
   type DocType,
 } from '@movesook/services/support';
 
@@ -247,7 +247,7 @@ export async function createJob(sub: string, input: AdminCreateJobInput): Promis
       jobId: job.id,
     });
   } else {
-    await notifyNewJobToArea(job);
+    await enqueueJobBroadcast(job.id);
   }
   return toJobDto(job);
 }
@@ -394,7 +394,7 @@ export async function buildJobDoc(
   if (!job) throw new HTTPException(404, { message: 'Job not found' });
 
   const settings = await getSystemSettings();
-  const pdf = await buildJobDocument(type as DocType, {
+  const pdf = await renderJobDocument(type as DocType, {
     job,
     customer: job.customer,
     driver: job.driver,
@@ -459,7 +459,7 @@ export async function approvePayment(sub: string, id: string): Promise<JobDto> {
     metadata: { priceQuoted: updated.priceQuoted, slipUrl: updated.paymentSlipUrl },
   });
   // Now public — alert approved, available drivers in the origin province.
-  await notifyNewJobToArea(updated);
+  await enqueueJobBroadcast(updated.id);
   if (job.customer.userId) {
     await notify({
       userId: job.customer.userId,
@@ -625,7 +625,7 @@ export async function rejectPayment(
   // Repeated rejections usually mean a stuck customer or a problem job —
   // surface it to ops instead of looping silently.
   if (updated.paymentRejectedCount >= 3) {
-    await notifyAdmins({
+    await enqueueAdminAlert({
       type: 'GENERIC',
       title: 'สลิปถูกปฏิเสธซ้ำหลายครั้ง',
       body: `งาน ${updated.originProvince} → ${updated.destProvince} ถูกปฏิเสธสลิปครั้งที่ ${updated.paymentRejectedCount} — ควรติดต่อลูกค้าโดยตรง`,

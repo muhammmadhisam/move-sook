@@ -3,11 +3,12 @@ import { HTTPException } from 'hono/http-exception';
 import { createMiddleware } from 'hono/factory';
 import { getCookie } from 'hono/cookie';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
+import { join, dirname } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { verifyJwt } from '@movesook/auth';
+import type { DocStore } from '@movesook/services/runtime';
 import { env, r2Enabled } from '../config';
 import type { AppEnv } from '../lib/context';
 
@@ -65,9 +66,22 @@ const r2 = r2Enabled
     })
   : null;
 
-// Object keys are always `<uuid>.<ext>` — anything else is rejected on read
-// so the proxy can never be used for path traversal.
-const KEY_RE = /^[0-9a-f-]{36}\.[a-z0-9]{2,5}$/i;
+// Object keys are `<folder>/<yyyy-mm-dd>/<uuid>.<ext>` (the optional prefix
+// buckets uploads by context + day); legacy flat `<uuid>.<ext>` keys are still
+// accepted for objects stored before foldering. Anything else is rejected on
+// read so the proxy can never be used for path traversal.
+const KEY_RE = /^([a-z][a-z0-9-]{0,31}\/\d{4}-\d{2}-\d{2}\/)?[0-9a-f-]{36}\.[a-z0-9]{2,5}$/i;
+
+// Folder is a client-supplied context slug (e.g. `slip`, `proof`, `driver`).
+// Reject anything that isn't a plain lowercase slug to keep keys traversal-free;
+// fall back to `misc` so an unset/invalid value never breaks the upload.
+const FOLDER_RE = /^[a-z][a-z0-9-]{0,31}$/;
+const resolveFolder = (raw: unknown): string =>
+  typeof raw === 'string' && FOLDER_RE.test(raw) ? raw : 'misc';
+
+// yyyy-mm-dd in Asia/Bangkok so the day-bucket matches local operations.
+const dateSegment = (): string =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
 
 // Serves GET /uploads/<key>: streams from R2 when configured, otherwise
 // falls back to static files on local disk. Mounted in app.ts.
@@ -103,9 +117,38 @@ async function store(name: string, buffer: Buffer, contentType: string): Promise
     );
     return;
   }
-  await mkdir(UPLOAD_DIR, { recursive: true });
-  await writeFile(join(UPLOAD_DIR, name), buffer);
+  const dest = join(UPLOAD_DIR, name);
+  await mkdir(dirname(dest), { recursive: true });
+  await writeFile(dest, buffer);
 }
+
+// Blob cache for server-generated documents (rendered PDFs). Same R2/disk backend
+// as user uploads, but objects live under a `doc/` prefix and are read internally
+// (never via the public /uploads proxy, so they're out of KEY_RE's scope). Injected
+// into @movesook/services at boot via configureDocStore so the PDF builders can
+// skip re-rendering on a cache hit. Keeps all storage logic inside this module.
+export const docStore: DocStore = {
+  async get(key) {
+    if (r2) {
+      try {
+        const out = await r2.send(new GetObjectCommand({ Bucket: env.R2_BUCKET!, Key: key }));
+        if (!out.Body) return null;
+        return Buffer.from(await out.Body.transformToByteArray());
+      } catch (err) {
+        if ((err as { name?: string }).name === 'NoSuchKey') return null;
+        throw err;
+      }
+    }
+    try {
+      return await readFile(join(UPLOAD_DIR, key));
+    } catch {
+      return null; // ENOENT (cache miss) or unreadable — render fresh upstream.
+    }
+  },
+  put(key, bytes, contentType) {
+    return store(key, bytes, contentType);
+  },
+};
 
 export const uploadRoutes = new Hono<AppEnv>()
   // Any authenticated user or admin may upload an image; returns an absolute URL.
@@ -129,7 +172,8 @@ export const uploadRoutes = new Hono<AppEnv>()
       });
     }
 
-    const key = `${randomUUID()}.${ext}`;
+    const folder = resolveFolder(body['folder']);
+    const key = `${folder}/${dateSegment()}/${randomUUID()}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
     await store(key, buffer, file.type);
 

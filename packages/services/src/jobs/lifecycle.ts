@@ -33,7 +33,7 @@ import {
   getSystemSettings,
   isVehicleTypeActive,
   notify,
-  notifyAdmins,
+  enqueueAdminAlert,
   toJobDto,
 } from '@movesook/services/support';
 
@@ -589,7 +589,7 @@ export async function flagJobIllegal(
   });
 
   // Alert every admin to review and resolve the flagged job.
-  await notifyAdmins({
+  await enqueueAdminAlert({
     type: 'GENERIC',
     title: '🚩 มีการแจ้งของผิดกฎหมาย',
     body: `งาน ${job.originProvince} → ${job.destProvince} ถูกแจ้งว่าเป็นของผิดกฎหมาย/ต้องห้าม — กรุณาตรวจสอบ`,

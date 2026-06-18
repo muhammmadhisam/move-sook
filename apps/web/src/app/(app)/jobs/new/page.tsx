@@ -1484,6 +1484,7 @@ export default function NewJobPage() {
                 {editor.photoUrls.length < MAX_ITEM_PHOTOS && (
                   <ImageUpload
                     hidePreview
+                    folder="item"
                     label={editor.photoUrls.length > 0 ? 'เพิ่มรูป' : 'อัปโหลดรูป'}
                     onUploaded={(url) =>
                       setEditor((p) =>

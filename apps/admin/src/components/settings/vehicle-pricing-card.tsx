@@ -268,6 +268,7 @@ export function VehiclePricingCard() {
             <div className="space-y-1">
               <Label>รูปตัวอย่างรถ (โชว์ให้ลูกค้าเห็น)</Label>
               <ImageUpload
+                folder="vehicle"
                 value={draft.imageUrl}
                 onUploaded={(url) => setDraft({ ...draft, imageUrl: url })}
                 label={draft.imageUrl ? 'เปลี่ยนรูป' : 'อัปโหลดรูปรถ'}

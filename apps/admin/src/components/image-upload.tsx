@@ -9,10 +9,12 @@ interface ImageUploadProps {
   value?: string | null;
   onUploaded: (url: string) => void;
   label?: string;
+  /** Storage bucket (context) the file is filed under, e.g. `slip`, `settings`. */
+  folder?: string;
 }
 
 /** Pick an image, upload to the API, report back the stored URL. */
-export function ImageUpload({ value, onUploaded, label = 'อัปโหลดรูป' }: ImageUploadProps) {
+export function ImageUpload({ value, onUploaded, label = 'อัปโหลดรูป', folder = 'misc' }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,6 +27,7 @@ export function ImageUpload({ value, onUploaded, label = 'อัปโหลด�
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('folder', folder);
       const res = await fetch(`${API_BASE}/uploads`, {
         method: 'POST',
         body: fd,

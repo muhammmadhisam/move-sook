@@ -320,6 +320,7 @@ export function BillingCompanyCard() {
       <div className="space-y-1">
         <Label>QR Code รับเงิน (พร้อมเพย์ / ธนาคาร)</Label>
         <ImageUpload
+          folder="settings"
           value={form.payQrUrl || null}
           label={form.payQrUrl ? 'เปลี่ยน QR' : 'อัปโหลด QR'}
           onUploaded={(url) => setForm({ ...form, payQrUrl: url })}
@@ -340,6 +341,7 @@ export function BillingCompanyCard() {
       <div className="space-y-1">
         <Label>โลโก้ (แสดงบนเอกสาร PDF)</Label>
         <ImageUpload
+          folder="settings"
           value={form.companyLogoUrl || null}
           label={form.companyLogoUrl ? 'เปลี่ยนโลโก้' : 'อัปโหลดโลโก้'}
           onUploaded={(url) => setForm({ ...form, companyLogoUrl: url })}

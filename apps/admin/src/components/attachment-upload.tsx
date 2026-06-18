@@ -16,12 +16,14 @@ export interface Attachment {
 interface AttachmentUploadProps {
   value: Attachment[];
   onChange: (next: Attachment[]) => void;
+  /** Storage bucket (context) the files are filed under, e.g. `ledger`. */
+  folder?: string;
 }
 
 const isImage = (mimeType: string) => mimeType.startsWith('image/');
 
 /** Upload one or more receipt images/documents and manage the attached list. */
-export function AttachmentUpload({ value, onChange }: AttachmentUploadProps) {
+export function AttachmentUpload({ value, onChange, folder = 'ledger' }: AttachmentUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +38,7 @@ export function AttachmentUpload({ value, onChange }: AttachmentUploadProps) {
       for (const file of files) {
         const fd = new FormData();
         fd.append('file', file);
+        fd.append('folder', folder);
         const res = await fetch(`${API_BASE}/uploads`, {
           method: 'POST',
           body: fd,

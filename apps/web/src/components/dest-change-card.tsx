@@ -294,7 +294,7 @@ export function DestChangeCard({ job, onChanged }: { job: JobDto; onChanged?: ()
                     )}
                   </div>
                 )}
-                <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
+                <ImageUpload folder="slip" value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
               </div>
 
               <div className="flex gap-2">
@@ -399,7 +399,7 @@ export function DestChangeCard({ job, onChanged }: { job: JobDto; onChanged?: ()
                   )}
                 </div>
               )}
-              <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
+              <ImageUpload folder="slip" value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
               <Button
                 type="button"
                 className="w-full"

@@ -192,7 +192,7 @@ export default function TransactionsPage() {
           </DialogHeader>
           <div className="space-y-2">
             <Label>สลิปการคืนเงิน (ถ้ามี)</Label>
-            <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
+            <ImageUpload folder="slip" value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRefunding(null)} disabled={refund.isPending}>

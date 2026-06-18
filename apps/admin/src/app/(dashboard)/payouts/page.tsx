@@ -205,7 +205,7 @@ export default function PayoutsPage() {
           </DialogHeader>
           <div className="space-y-2">
             <Label>สลิปการโอน (ถ้ามี)</Label>
-            <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
+            <ImageUpload folder="payout" value={slipUrl} onUploaded={setSlipUrl} label="อัปโหลดสลิป" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPaying(null)} disabled={markPaid.isPending}>

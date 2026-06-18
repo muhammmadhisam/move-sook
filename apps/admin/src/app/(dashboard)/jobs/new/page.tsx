@@ -442,6 +442,7 @@ export default function AdminNewJobPage() {
               แนบสลิปที่ลูกค้าโอนมาเพื่อเก็บเป็นหลักฐาน — งานที่แอดมินสร้างจะเผยแพร่ทันทีโดยไม่ต้องรออนุมัติ
             </p>
             <ImageUpload
+              folder="slip"
               value={paymentSlipUrl}
               onUploaded={setPaymentSlipUrl}
               label="แนบสลิปการโอน"

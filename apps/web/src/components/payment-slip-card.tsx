@@ -191,7 +191,7 @@ export function PaymentSlipCard({
               </div>
             )}
 
-          <ImageUpload value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
+          <ImageUpload folder="slip" value={slipUrl} onUploaded={setSlipUrl} label="แนบสลิปการโอน" />
           <Button
             type="button"
             className="w-full"

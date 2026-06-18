@@ -242,6 +242,7 @@ export function BlogForm({ post }: { post?: BlogPostDto }) {
             </CardHeader>
             <CardContent>
               <ImageUpload
+                folder="blog"
                 value={coverImageUrl}
                 onUploaded={(url) => setCoverImageUrl(url)}
                 label={coverImageUrl ? 'เปลี่ยนรูปปก' : 'อัปโหลดรูปปก'}

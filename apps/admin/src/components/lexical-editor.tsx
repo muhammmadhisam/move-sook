@@ -116,6 +116,7 @@ function Toolbar() {
       try {
         const fd = new FormData();
         fd.append('file', file);
+        fd.append('folder', 'blog');
         const res = await fetch(`${API_BASE}/uploads`, {
           method: 'POST',
           body: fd,

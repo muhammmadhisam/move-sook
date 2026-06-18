@@ -328,6 +328,7 @@ export default function DriverApplyPage() {
               <div className="grid gap-2">
                 <Label>รูปบัตรประชาชน</Label>
                 <ImageUpload
+                  folder="driver"
                   value={nationalIdUrl}
                   label={nationalIdUrl ? 'เปลี่ยนรูปบัตรประชาชน' : 'อัปโหลดรูปบัตรประชาชน'}
                   onUploaded={setNationalIdUrl}
@@ -402,6 +403,7 @@ export default function DriverApplyPage() {
               <div className="grid gap-2">
                 <Label>ใบขับขี่</Label>
                 <ImageUpload
+                  folder="driver"
                   value={licenseTw2}
                   label={licenseTw2 ? 'เปลี่ยนรูปใบขับขี่' : 'อัปโหลดรูปใบขับขี่'}
                   onUploaded={setLicenseTw2}

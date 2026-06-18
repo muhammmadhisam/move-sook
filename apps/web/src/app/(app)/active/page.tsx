@@ -211,6 +211,7 @@ export default function ActiveJobsPage() {
                 {/* Pickup proof: editable while in-hand, read-only once the job is closed. */}
                 {(!proofLocked || job.pickupProofUrls.length > 0) && (
                   <ImageUploadGallery
+                    folder="proof"
                     label={`รูปตอนรับของ (${job.pickupProofUrls.length})`}
                     value={job.pickupProofUrls}
                     onChange={(urls) => proof.mutate({ id: job.id, kind: 'PICKUP', urls })}
@@ -219,6 +220,7 @@ export default function ActiveJobsPage() {
                 )}
                 {canUploadDelivery && (
                   <ImageUploadGallery
+                    folder="proof"
                     label={`รูปตอนส่ง (${job.deliveryProofUrls.length})`}
                     value={job.deliveryProofUrls}
                     onChange={(urls) => proof.mutate({ id: job.id, kind: 'DELIVERY', urls })}

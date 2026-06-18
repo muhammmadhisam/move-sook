@@ -12,10 +12,12 @@ interface ImageUploadProps {
   label?: string;
   /** Hide the inline preview (e.g. when the parent renders a gallery). */
   hidePreview?: boolean;
+  /** Storage bucket (context) the file is filed under, e.g. `slip`, `driver`. */
+  folder?: string;
 }
 
 /** Pick/take a photo, upload to the API, and report back the stored URL. */
-export function ImageUpload({ value, onUploaded, label = 'อัปโหลดรูป', hidePreview }: ImageUploadProps) {
+export function ImageUpload({ value, onUploaded, label = 'อัปโหลดรูป', hidePreview, folder = 'misc' }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +30,7 @@ export function ImageUpload({ value, onUploaded, label = 'อัปโหลด�
     try {
       const fd = new FormData();
       fd.append('file', file);
+      fd.append('folder', folder);
       const res = await fetch(`${API_BASE}/uploads`, {
         method: 'POST',
         body: fd,

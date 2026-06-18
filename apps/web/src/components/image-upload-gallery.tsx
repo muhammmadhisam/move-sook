@@ -15,6 +15,8 @@ interface ImageUploadGalleryProps {
   /** Max number of photos allowed. */
   max?: number;
   disabled?: boolean;
+  /** Storage bucket (context) the files are filed under, e.g. `proof`. */
+  folder?: string;
 }
 
 /** Multi-photo picker: thumbnails with remove + an add tile. Uploads each file then reports the full list. */
@@ -24,6 +26,7 @@ export function ImageUploadGallery({
   label,
   max = 10,
   disabled,
+  folder = 'misc',
 }: ImageUploadGalleryProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -41,6 +44,7 @@ export function ImageUploadGallery({
       for (const file of files) {
         const fd = new FormData();
         fd.append('file', file);
+        fd.append('folder', folder);
         const res = await fetch(`${API_BASE}/uploads`, {
           method: 'POST',
           body: fd,

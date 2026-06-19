@@ -14,8 +14,19 @@ export const SITE = {
   email: "support@movesook.com",
   phone: "+66090-224-4336",
   lineOaUrl: "https://line.me/R/ti/p/@013ogbsz",
+  lineMiniAppUrl: "https://miniapp.line.me/2010389451-oorWbPjK",
   commissionPct: 12,
 } as const;
+
+// Build a LINE Mini App deep link. Inside LINE the Mini App runs in a logged-in
+// LIFF context (no external OAuth round-trip), so app-entry CTAs point here. An
+// optional in-app path (e.g. "/driver/apply") is appended after the LIFF id so
+// the Mini App opens directly on that screen.
+export function lineMiniAppLink(path = ""): string {
+  const base = SITE.lineMiniAppUrl.replace(/\/$/, "");
+  if (!path) return base;
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 // Marketing routes that belong in the sitemap (public, indexable).
 export const MARKETING_ROUTES = [

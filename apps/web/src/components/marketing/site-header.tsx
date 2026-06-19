@@ -5,6 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Menu, X } from 'lucide-react';
 import { Button, cn } from '@movesook/ui';
+import { lineMiniAppLink } from '@/lib/site';
 
 const NAV = [
   { href: '/how-it-works', label: 'วิธีใช้งาน' },
@@ -48,7 +49,9 @@ export function SiteHeader() {
 
         <div className="hidden md:block">
           <Button asChild size="sm">
-            <Link href="/app">เข้าใช้งาน</Link>
+            <a href={lineMiniAppLink()} target="_blank" rel="noopener noreferrer">
+              เข้าใช้งาน
+            </a>
           </Button>
         </div>
 
@@ -76,9 +79,14 @@ export function SiteHeader() {
             </Link>
           ))}
           <Button asChild className="mt-2">
-            <Link href="/app" onClick={() => setOpen(false)}>
+            <a
+              href={lineMiniAppLink()}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setOpen(false)}
+            >
               เข้าใช้งาน
-            </Link>
+            </a>
           </Button>
         </nav>
       </div>

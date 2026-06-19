@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { Wallet, Clock, MapPin, BadgeCheck, TrendingUp, CalendarCheck } from 'lucide-react';
 import { PageHeader, Section } from '@/components/marketing/sections';
 import { getCommissionPct } from '@/lib/system';
+import { lineMiniAppLink } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'สมัครเป็นคนขับ',
@@ -73,12 +73,14 @@ export default async function DriversPage() {
             ))}
           </ol>
           <div className="mt-10">
-            <Link
-              href="/driver/apply"
+            <a
+              href={lineMiniAppLink('/driver/apply')}
+              target="_blank"
+              rel="noopener noreferrer"
               className="inline-block rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-brand-700"
             >
               เริ่มสมัครเป็นคนขับ
-            </Link>
+            </a>
           </div>
         </Section>
       </section>

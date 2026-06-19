@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { cn } from '@movesook/ui';
+import { lineMiniAppLink } from '@/lib/site';
 
 /** Page hero/title block for inner marketing pages. */
 export function PageHeader({
@@ -67,12 +68,14 @@ export function CtaBand({
         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">{title}</h2>
         <p className="max-w-xl text-base leading-relaxed opacity-90">{description}</p>
         <div className="flex flex-wrap justify-center gap-3">
-          <Link
-            href="/app"
+          <a
+            href={lineMiniAppLink()}
+            target="_blank"
+            rel="noopener noreferrer"
             className="rounded-lg bg-white px-6 py-3 text-sm font-semibold text-primary shadow-sm transition-colors hover:bg-white/90"
           >
             เริ่มใช้งาน
-          </Link>
+          </a>
           <Link
             href="/drivers"
             className="rounded-lg border border-white/70 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"

@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Section, CtaBand } from '@/components/marketing/sections';
 import { JsonLd } from '@/components/marketing/json-ld';
-import { SITE } from '@/lib/site';
+import { SITE, lineMiniAppLink } from '@/lib/site';
 import { getServiceAreaProvinces } from '@/lib/provinces';
 
 export const metadata: Metadata = {
@@ -135,12 +135,14 @@ export default async function HomePage() {
               ราคาโปร่งใส รู้ก่อนจ่าย ติดตามสถานะได้แบบเรียลไทม์
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                href="/app"
+              <a
+                href={lineMiniAppLink()}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-brand-700"
               >
                 โพสต์งานขนย้าย
-              </Link>
+              </a>
               <Link
                 href="/how-it-works"
                 className="rounded-lg border border-navy-700 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-navy-800"

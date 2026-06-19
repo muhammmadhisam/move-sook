@@ -4,6 +4,7 @@ import { writeAudit } from '@movesook/services/support';
 import type {
   AdminUpsertVehiclePricingInput,
   VehiclePricingDto,
+  PublicVehicleRate,
 } from '@movesook/shared';
 
 /** Per-vehicle pricing — list. */
@@ -26,26 +27,23 @@ export async function listVehiclePricing(): Promise<{ items: VehiclePricingDto[]
   return { items };
 }
 
-/** Active vehicle types only, cheapest-first — for the public marketing site (no auth). */
-export async function listPublicVehiclePricing(): Promise<{ items: VehiclePricingDto[] }> {
-  const rows = await prisma.vehiclePricing.findMany({
+/**
+ * Active vehicle types + per-km rates only, cheapest-first — for the public
+ * marketing site (no auth). Selects just the columns the pricing page renders so
+ * it stays light and isn't coupled to newer admin-only columns.
+ */
+export async function listPublicVehiclePricing(): Promise<{ items: PublicVehicleRate[] }> {
+  const items = await prisma.vehiclePricing.findMany({
     where: { isActive: true },
     orderBy: { pricePerKm: 'asc' },
+    select: {
+      vehicleType: true,
+      label: true,
+      description: true,
+      pricePerKm: true,
+      pricePerKmShared: true,
+    },
   });
-  const items: VehiclePricingDto[] = rows.map((r) => ({
-    vehicleType: r.vehicleType,
-    label: r.label,
-    description: r.description,
-    imageUrl: r.imageUrl,
-    requirements: r.requirements,
-    maxWeightKg: r.maxWeightKg,
-    pricePerKm: r.pricePerKm,
-    pricePerKmShared: r.pricePerKmShared,
-    flatRate: r.flatRate,
-    perItemRate: r.perItemRate,
-    maxActiveJobs: r.maxActiveJobs,
-    isActive: r.isActive,
-  }));
   return { items };
 }
 

@@ -7,6 +7,8 @@ import type { Job, Customer, Driver, User, Transaction } from '@movesook/db';
 import {
   JOB_STATUS_LABEL,
   PRICING_MODE_LABEL,
+  PAYMENT_METHOD_LABEL,
+  CARGO_CATEGORY_LABELS,
   type SystemSettingsResponse,
 } from '@movesook/shared';
 
@@ -19,7 +21,7 @@ export const DOC_TITLE: Record<DocType, string> = {
   receipt: 'ใบเสร็จรับเงิน',
   payout: 'ใบสำคัญจ่าย (ค่างานคนขับ)',
   worksheet: 'ใบสรุปงาน (Work Order)',
-  delivery: 'ใบส่งมอบสินค้า',
+  delivery: 'ใบส่งมอบพัสดุ',
 };
 
 // Job + relations the builders need.
@@ -129,63 +131,271 @@ function safeImage(doc: PDFKit.PDFDocument, buf: Buffer | null, x: number, y: nu
 type Doc = PDFKit.PDFDocument;
 const LEFT = 40;
 const RIGHT = 555; // A4 width 595 - margin
+const PAGE_W = 595;
 
-function hr(doc: Doc, y?: number) {
-  const yy = y ?? doc.y;
-  doc.moveTo(LEFT, yy).lineTo(RIGHT, yy).strokeColor('#d1d5db').lineWidth(1).stroke();
+// ── Brand palette (matches the app: logo red + navy chrome) ──
+const NAVY = '#0A1D35';
+const RED = '#E0202A';
+const INK = '#1f2937';
+const SUBTLE = '#6b7280';
+const FAINT = '#9ca3af';
+const LINE = '#e5e7eb';
+const PANEL = '#f8fafc';
+const WHITE = '#ffffff';
+// Badge palette
+const OK_BG = '#e7f6ec',
+  OK_FG = '#15803d';
+const WARN_BG = '#fef3c7',
+  WARN_FG = '#b45309';
+const INFO_BG = '#e8edf5',
+  INFO_FG = NAVY;
+
+/** Floor + lift availability as a single human-readable line. */
+function fmtFloor(floor: number | null, lift: boolean | null): string {
+  if (floor == null) return '—';
+  const base = floor === 0 ? 'ชั้นล่าง' : `ชั้น ${floor}`;
+  if (lift === true) return `${base} · มีลิฟต์`;
+  if (lift === false) return `${base} · ไม่มีลิฟต์`;
+  return base;
 }
 
-/** Two-column key/value row. */
-function kv(doc: Doc, label: string, value: string) {
-  const y = doc.y;
-  doc.font('th').fontSize(10).fillColor('#6b7280').text(label, LEFT, y, { width: 130 });
-  doc.font('th').fontSize(10).fillColor('#111827').text(value, LEFT + 135, y, { width: RIGHT - LEFT - 135 });
-  doc.moveDown(0.3);
+/** A small rounded status pill; returns its width so callers can lay out a row. */
+function badge(doc: Doc, text: string, x: number, y: number, fg: string, bg: string): number {
+  doc.font('th-bold').fontSize(8.5);
+  const w = doc.widthOfString(text) + 16;
+  doc.roundedRect(x, y, w, 18, 9).fill(bg);
+  doc.fillColor(fg).font('th-bold').fontSize(8.5).text(text, x + 8, y + 4.5, { lineBreak: false });
+  return w;
 }
 
-/** A right-aligned amount line (label … value). */
-function amountRow(doc: Doc, label: string, value: string, bold = false) {
+type Badge = { text: string; fg: string; bg: string };
+function badgeRow(doc: Doc, badges: Badge[]) {
   const y = doc.y;
-  doc.font(bold ? 'th-bold' : 'th').fontSize(bold ? 12 : 10).fillColor('#111827');
-  doc.text(label, LEFT, y, { width: 340 });
-  doc.text(value, LEFT + 340, y, { width: RIGHT - LEFT - 340, align: 'right' });
-  doc.moveDown(0.35);
+  let x = LEFT;
+  for (const b of badges) x += badge(doc, b.text, x, y, b.fg, b.bg) + 6;
+  doc.y = y + 18;
+  doc.moveDown(0.7);
 }
 
 async function header(doc: Doc, data: JobDocData, type: DocType) {
   const s = data.settings;
+  // Full-bleed navy brand band.
+  doc.rect(0, 0, PAGE_W, 100).fill(NAVY);
+
   const logo = await fetchImage(s.companyLogoUrl);
-  if (logo) safeImage(doc, logo, LEFT, 40, { fit: [70, 70] });
-  const textX = logo ? LEFT + 82 : LEFT;
-  doc.font('th-bold').fontSize(16).fillColor('#111827').text(s.companyName || 'MoveSook', textX, 42);
-  doc.font('th').fontSize(9).fillColor('#6b7280');
-  if (s.companyAddress) doc.text(s.companyAddress, textX, doc.y, { width: 300 });
-  if (s.companyTaxId) doc.text(`เลขผู้เสียภาษี: ${s.companyTaxId}`, textX, doc.y);
+  let textX = LEFT;
+  if (logo) {
+    // White chip so a dark/coloured logo still reads on the navy band.
+    doc.roundedRect(LEFT, 22, 56, 56, 8).fill(WHITE);
+    safeImage(doc, logo, LEFT + 4, 26, { fit: [48, 48] });
+    textX = LEFT + 68;
+  }
+  doc.font('th-bold').fontSize(16).fillColor(WHITE).text(s.companyName || 'MoveSook', textX, 28, { width: 260 });
+  doc.font('th').fontSize(8.5).fillColor('#c7d2e0');
+  if (s.companyAddress) doc.text(s.companyAddress, textX, doc.y + 1, { width: 250 });
+  if (s.companyTaxId) doc.text(`เลขประจำตัวผู้เสียภาษี ${s.companyTaxId}`, textX, doc.y, { width: 250 });
 
-  // Document title (right)
-  doc.font('th-bold').fontSize(18).fillColor('#111827').text(DOC_TITLE[type], 300, 44, { width: RIGHT - 300, align: 'right' });
-  doc.font('th').fontSize(9).fillColor('#6b7280').text(`เลขที่งาน: ${data.job.id}`, 300, doc.y, { width: RIGHT - 300, align: 'right' });
-  doc.text(`วันที่ออก: ${fmtDate(new Date())}`, 300, doc.y, { width: RIGHT - 300, align: 'right' });
+  // Document title + meta (right side of band).
+  doc.font('th-bold').fontSize(17).fillColor(WHITE).text(DOC_TITLE[type], 310, 30, { width: RIGHT - 310, align: 'right' });
+  doc.font('th').fontSize(8.5).fillColor('#c7d2e0');
+  doc.text(`เลขที่งาน ${data.job.id}`, 310, 58, { width: RIGHT - 310, align: 'right' });
+  doc.text(`วันที่ออกเอกสาร ${fmtDate(new Date())}`, 310, doc.y, { width: RIGHT - 310, align: 'right' });
 
-  doc.moveDown(1);
-  hr(doc, 122);
-  doc.y = 134;
+  doc.y = 116;
+  doc.fillColor(INK);
 }
 
 function footer(doc: Doc, note?: string) {
-  // Keep within the A4 bottom margin (≈802) so it doesn't spill onto a 2nd page.
-  doc.font('th').fontSize(8).fillColor('#9ca3af');
-  doc.text(note ?? 'เอกสารนี้ออกโดยระบบ MoveSook — ใช้เป็นหลักฐานประกอบธุรกรรม', LEFT, 788, {
+  // Hairline + caption pinned within the A4 bottom margin (≈802) — single page.
+  doc.moveTo(LEFT, 778).lineTo(RIGHT, 778).strokeColor(LINE).lineWidth(0.8).stroke();
+  doc.font('th').fontSize(8).fillColor(FAINT);
+  doc.text(note ?? 'เอกสารนี้ออกโดยระบบ MoveSook — ใช้เป็นหลักฐานประกอบธุรกรรม', LEFT, 786, {
     width: RIGHT - LEFT,
     align: 'center',
     lineBreak: false,
   });
 }
 
-function sectionTitle(doc: Doc, t: string) {
-  doc.moveDown(0.5);
-  doc.font('th-bold').fontSize(11).fillColor('#374151').text(t, LEFT);
-  doc.moveDown(0.2);
+function sectionHeader(doc: Doc, t: string) {
+  doc.moveDown(0.3);
+  // Don't strand a heading at the bottom with its panel pushed to the next page —
+  // reserve enough for the heading plus a typical panel so they break together.
+  ensureSpace(doc, 120);
+  const y = doc.y;
+  doc.roundedRect(LEFT, y + 1, 3.5, 13, 1.5).fill(RED);
+  doc.font('th-bold').fontSize(11.5).fillColor(NAVY).text(t, LEFT + 11, y, { width: RIGHT - LEFT - 11 });
+  doc.moveDown(0.3);
+}
+
+// Largest y a panel may occupy before we spill to a fresh page. Keeps content
+// clear of the footer hairline (778).
+const CONTENT_BOTTOM = 762;
+
+/** Start a new page (resetting to the top margin) when `needed` px won't fit. */
+function ensureSpace(doc: Doc, needed: number) {
+  if (doc.y + needed > CONTENT_BOTTOM) {
+    doc.addPage();
+    doc.y = 40;
+  }
+}
+
+type GridRow = { label: string; value: string; full?: boolean };
+
+/**
+ * A bordered info panel laying label/value cells out in two columns (stacked
+ * label-over-value). Rows flagged `full` span the whole width — used for long
+ * values like addresses. Heights are measured first so the panel always wraps
+ * its content exactly.
+ */
+function infoGrid(doc: Doc, rows: GridRow[]) {
+  const x0 = LEFT,
+    totalW = RIGHT - LEFT,
+    pad = 14,
+    colGap = 24,
+    rowGap = 9;
+  const innerW = totalW - pad * 2;
+  const colW = (innerW - colGap) / 2;
+
+  // Group rows into render lines: full rows stand alone, others pair up.
+  const lines: GridRow[][] = [];
+  let pending: GridRow | null = null;
+  for (const r of rows) {
+    if (r.full) {
+      if (pending) {
+        lines.push([pending]);
+        pending = null;
+      }
+      lines.push([r]);
+    } else if (pending) {
+      lines.push([pending, r]);
+      pending = null;
+    } else {
+      pending = r;
+    }
+  }
+  if (pending) lines.push([pending]);
+
+  const cellW = (cells: GridRow[]) => (cells.length === 1 && cells[0]?.full ? innerW : colW);
+  const measure = (r: GridRow, cw: number) => {
+    doc.font('th').fontSize(8.5);
+    const lh = doc.heightOfString(r.label, { width: cw });
+    doc.font('th-bold').fontSize(10.5);
+    const vh = doc.heightOfString(r.value || '—', { width: cw });
+    return lh + 3 + vh;
+  };
+  const lineHeights = lines.map((cells) => {
+    const cw = cellW(cells);
+    return Math.max(...cells.map((c) => measure(c, cw)));
+  });
+
+  const contentH = lineHeights.reduce((a, b) => a + b, 0) + rowGap * Math.max(0, lines.length - 1);
+  const h = contentH + pad * 2;
+  ensureSpace(doc, h);
+  const y0 = doc.y;
+  doc.roundedRect(x0, y0, totalW, h, 7).fillAndStroke(PANEL, LINE);
+
+  let y = y0 + pad;
+  lines.forEach((cells, i) => {
+    const cw = cellW(cells);
+    let x = x0 + pad;
+    for (const c of cells) {
+      doc.font('th').fontSize(8.5).fillColor(SUBTLE).text(c.label, x, y, { width: cw });
+      const lh = doc.heightOfString(c.label, { width: cw });
+      doc.font('th-bold').fontSize(10.5).fillColor(INK).text(c.value || '—', x, y + lh + 3, { width: cw });
+      x += colW + colGap;
+    }
+    y += (lineHeights[i] ?? 0) + rowGap;
+  });
+  doc.y = y0 + h + 6;
+}
+
+type AmountLine = { label: string; value: string; muted?: boolean };
+/** A breakdown panel: plain rows, then a navy highlight bar for the grand total. */
+function amountsBlock(doc: Doc, lines: AmountLine[], grand: { label: string; value: string }) {
+  const x0 = LEFT,
+    w = RIGHT - LEFT,
+    pad = 14,
+    rowH = 19,
+    barH = 34;
+  const gap = lines.length ? 8 : 0;
+  const h = lines.length * rowH + gap + barH + pad * 2;
+  ensureSpace(doc, h);
+  const y0 = doc.y;
+  doc.roundedRect(x0, y0, w, h, 7).fillAndStroke(PANEL, LINE);
+
+  let y = y0 + pad;
+  for (const ln of lines) {
+    const color = ln.muted ? SUBTLE : INK;
+    doc.font('th').fontSize(10.5).fillColor(color).text(ln.label, x0 + pad, y, { width: w - pad * 2 - 110 });
+    doc.font('th').fontSize(10.5).fillColor(color).text(ln.value, x0 + pad, y, { width: w - pad * 2, align: 'right' });
+    y += rowH;
+  }
+  y += gap;
+  doc.roundedRect(x0 + pad, y, w - pad * 2, barH, 6).fill(NAVY);
+  const ty = y + (barH - 13) / 2;
+  doc.font('th-bold').fontSize(11.5).fillColor(WHITE).text(grand.label, x0 + pad + 12, ty + 1, { width: w - pad * 2 - 24 - 140 });
+  doc.font('th-bold').fontSize(13).fillColor(WHITE).text(grand.value, x0 + pad + 12, ty, { width: w - pad * 2 - 24, align: 'right' });
+  doc.y = y0 + h + 6;
+}
+
+/** A bulleted list inside a light panel (worksheet item list). */
+function bulletList(doc: Doc, items: string[]) {
+  const x0 = LEFT,
+    w = RIGHT - LEFT,
+    pad = 12,
+    gap = 4;
+  const cw = w - pad * 2 - 12;
+  doc.font('th').fontSize(10);
+  const hs = items.map((t) => doc.heightOfString(t, { width: cw }));
+  const h = pad * 2 + hs.reduce((a, b) => a + b + gap, 0) - gap;
+  ensureSpace(doc, h);
+  const y0 = doc.y;
+  doc.roundedRect(x0, y0, w, h, 7).fillAndStroke(PANEL, LINE);
+  let y = y0 + pad;
+  items.forEach((t, i) => {
+    doc.circle(x0 + pad + 2, y + 6, 1.8).fill(RED);
+    doc.font('th').fontSize(10).fillColor(INK).text(t, x0 + pad + 12, y, { width: cw });
+    y += (hs[i] ?? 0) + gap;
+  });
+  doc.y = y0 + h + 6;
+}
+
+/** A soft amber callout panel for free-text special instructions. */
+function notePanel(doc: Doc, text: string) {
+  const x0 = LEFT,
+    w = RIGHT - LEFT,
+    pad = 12;
+  doc.font('th').fontSize(10);
+  const th = doc.heightOfString(text, { width: w - pad * 2 });
+  const h = th + pad * 2;
+  ensureSpace(doc, h);
+  const y0 = doc.y;
+  doc.roundedRect(x0, y0, w, h, 7).fillAndStroke('#fffbeb', '#fcd34d');
+  doc.font('th').fontSize(10).fillColor('#92400e').text(text, x0 + pad, y0 + pad, { width: w - pad * 2 });
+  doc.y = y0 + h + 6;
+}
+
+/** A framed photo (white mat + hairline border). Advances doc.y past it. */
+function photoFrame(doc: Doc, buf: Buffer | null, x: number, y: number, w: number, h: number) {
+  doc.roundedRect(x, y, w, h, 6).fillAndStroke(WHITE, LINE);
+  safeImage(doc, buf, x + 5, y + 5, { fit: [w - 10, h - 10] });
+  doc.y = y + h + 6;
+}
+
+function signatureBlock(doc: Doc) {
+  doc.moveDown(1.5);
+  const y = Math.max(doc.y, 660);
+  const colW = (RIGHT - LEFT - 40) / 2;
+  const lineY = y + 34;
+  doc.strokeColor('#9ca3af').lineWidth(0.8);
+  doc.moveTo(LEFT, lineY).lineTo(LEFT + colW, lineY).stroke();
+  doc.moveTo(RIGHT - colW, lineY).lineTo(RIGHT, lineY).stroke();
+  doc.font('th').fontSize(9).fillColor(SUBTLE);
+  doc.text('ลงชื่อผู้ส่งมอบ (คนขับ)', LEFT, lineY + 6, { width: colW, align: 'center' });
+  doc.text('ลงชื่อผู้รับมอบ (ลูกค้า)', RIGHT - colW, lineY + 6, { width: colW, align: 'center' });
+  doc.font('th').fontSize(8).fillColor(FAINT);
+  doc.text('วันที่ ......... / ......... / .........', LEFT, lineY + 22, { width: colW, align: 'center' });
+  doc.text('วันที่ ......... / ......... / .........', RIGHT - colW, lineY + 22, { width: colW, align: 'center' });
 }
 
 function customerName(d: JobDocData) {
@@ -197,12 +407,14 @@ function customerPhone(d: JobDocData) {
 function driverName(d: JobDocData) {
   return d.driver?.user?.displayName ?? d.driver?.name ?? '—';
 }
-
-function routeBlock(doc: Doc, job: Job, vehicleLabel: string) {
-  sectionTitle(doc, 'เส้นทาง');
-  kv(doc, 'ต้นทาง', `${job.originAddress} (${job.originProvince})`);
-  kv(doc, 'ปลายทาง', `${job.destAddress} (${job.destProvince})`);
-  kv(doc, 'ประเภทรถ', vehicleLabel);
+function driverPhone(d: JobDocData) {
+  return d.driver?.user?.phone ?? d.driver?.phone ?? '—';
+}
+function routeRows(job: Job): GridRow[] {
+  return [
+    { label: 'ต้นทาง', value: `${job.originAddress} (${job.originProvince})`, full: true },
+    { label: 'ปลายทาง', value: `${job.destAddress} (${job.destProvince})`, full: true },
+  ];
 }
 
 // ── Document builders ─────────────────────────────────────────────────────────
@@ -210,115 +422,203 @@ function routeBlock(doc: Doc, job: Job, vehicleLabel: string) {
 async function buildReceipt(doc: Doc, d: JobDocData) {
   await header(doc, d, 'receipt');
   const { job } = d;
-  sectionTitle(doc, 'ข้อมูลลูกค้า');
-  kv(doc, 'ชื่อลูกค้า', customerName(d));
-  kv(doc, 'เบอร์โทร', customerPhone(d));
-  routeBlock(doc, job, d.vehicleLabel);
+  badgeRow(doc, [
+    job.paymentApprovedAt
+      ? { text: 'ชำระเงินแล้ว', fg: OK_FG, bg: OK_BG }
+      : { text: 'รอชำระเงิน', fg: WARN_FG, bg: WARN_BG },
+    { text: PAYMENT_METHOD_LABEL[job.paymentMethod], fg: INFO_FG, bg: INFO_BG },
+  ]);
 
-  sectionTitle(doc, 'รายละเอียดการชำระเงิน');
-  doc.moveDown(0.2);
-  amountRow(doc, `ค่าบริการขนย้าย (${PRICING_MODE_LABEL[job.pricingMode]})`, money(job.priceQuoted));
-  if (job.discountAmount) amountRow(doc, `ส่วนลด${job.promoCode ? ` (${job.promoCode})` : ''}`, `-${money(job.discountAmount)}`);
-  hr(doc, doc.y + 2);
-  doc.moveDown(0.4);
-  amountRow(doc, 'ยอดรวมที่ชำระ', money(job.priceQuoted), true);
-  doc.moveDown(0.6);
-  kv(doc, 'สถานะ', job.paymentApprovedAt ? 'ชำระเงินแล้ว ✓' : 'ยังไม่ชำระ');
-  kv(doc, 'วันที่ชำระ', fmtDate(job.paymentApprovedAt));
+  sectionHeader(doc, 'ข้อมูลลูกค้า');
+  infoGrid(doc, [
+    { label: 'ชื่อลูกค้า', value: customerName(d) },
+    { label: 'เบอร์โทร', value: customerPhone(d) },
+    { label: 'เบอร์ติดต่อหน้างาน', value: job.contactPhone ?? '—' },
+    { label: 'วันที่สร้างงาน', value: fmtDate(job.createdAt) },
+  ]);
+
+  sectionHeader(doc, 'รายละเอียดการขนส่ง');
+  infoGrid(doc, [
+    ...routeRows(job),
+    { label: 'ประเภทรถ', value: d.vehicleLabel },
+    { label: 'รูปแบบราคา', value: PRICING_MODE_LABEL[job.pricingMode] },
+  ]);
+
+  sectionHeader(doc, 'สรุปการชำระเงิน');
+  const breakdown: AmountLine[] = [
+    { label: `ค่าบริการขนย้าย (${PRICING_MODE_LABEL[job.pricingMode]})`, value: money(job.priceQuoted) },
+  ];
+  if (job.discountAmount)
+    breakdown.push({
+      label: `ส่วนลด${job.promoCode ? ` (${job.promoCode})` : ''}`,
+      value: `-${money(job.discountAmount)}`,
+      muted: true,
+    });
+  amountsBlock(doc, breakdown, { label: 'ยอดรวมที่ชำระ', value: money(job.priceQuoted) });
+
+  infoGrid(doc, [
+    { label: 'สถานะการชำระ', value: job.paymentApprovedAt ? 'ชำระเงินแล้ว' : 'ยังไม่ชำระ' },
+    { label: 'วันที่ชำระ', value: fmtDate(job.paymentApprovedAt) },
+  ]);
 
   const slip = await fetchImage(job.paymentSlipUrl);
   if (slip) {
-    sectionTitle(doc, 'หลักฐานการโอน');
-    safeImage(doc, slip, LEFT, doc.y, { fit: [180, 220] });
+    sectionHeader(doc, 'หลักฐานการโอนเงิน');
+    photoFrame(doc, slip, LEFT, doc.y, 170, 210);
   }
-  footer(doc, 'ใบเสร็จรับเงิน — ยืนยันว่าบริษัทได้รับชำระเงินจากลูกค้าแล้ว');
+  footer(doc, 'ใบเสร็จรับเงิน · ยืนยันว่าบริษัทได้รับชำระเงินจากลูกค้าเรียบร้อยแล้ว');
 }
 
 async function buildPayout(doc: Doc, d: JobDocData) {
   await header(doc, d, 'payout');
   const { job, transaction: t } = d;
-  sectionTitle(doc, 'ข้อมูลคนขับ');
-  kv(doc, 'ชื่อคนขับ', driverName(d));
-  kv(doc, 'เบอร์โทร', d.driver?.user?.phone ?? d.driver?.phone ?? '—');
-  kv(doc, 'ทะเบียนรถ', d.driver?.plateNumber ?? '—');
-  routeBlock(doc, job, d.vehicleLabel);
+  badgeRow(doc, [
+    t?.status === 'PAID'
+      ? { text: 'จ่ายแล้ว', fg: OK_FG, bg: OK_BG }
+      : t?.status === 'REFUNDED'
+        ? { text: 'คืนเงิน', fg: INFO_FG, bg: INFO_BG }
+        : { text: 'รอจ่าย', fg: WARN_FG, bg: WARN_BG },
+    { text: PAYMENT_METHOD_LABEL[job.paymentMethod], fg: INFO_FG, bg: INFO_BG },
+  ]);
 
-  sectionTitle(doc, 'การคำนวณค่าตอบแทน');
-  doc.moveDown(0.2);
-  amountRow(doc, 'ยอดรวมค่างาน', money(t?.grossAmount ?? job.priceQuoted));
-  amountRow(doc, `หักค่าคอมมิชชั่น (${t?.commissionPct ?? job.commissionPct ?? 0}%)`, `-${money(t?.commissionAmount)}`);
-  hr(doc, doc.y + 2);
-  doc.moveDown(0.4);
-  amountRow(doc, 'ยอดสุทธิจ่ายคนขับ', money(t?.netToDriver), true);
-  doc.moveDown(0.6);
-  kv(doc, 'สถานะการจ่าย', t?.status === 'PAID' ? 'จ่ายแล้ว ✓' : t?.status === 'REFUNDED' ? 'คืนเงิน' : 'รอจ่าย');
+  sectionHeader(doc, 'ข้อมูลคนขับ');
+  infoGrid(doc, [
+    { label: 'ชื่อคนขับ', value: driverName(d) },
+    { label: 'เบอร์โทร', value: driverPhone(d) },
+    { label: 'ทะเบียนรถ', value: d.driver?.plateNumber ?? '—' },
+    { label: 'ประเภทรถ', value: d.vehicleLabel },
+  ]);
+
+  sectionHeader(doc, 'เส้นทาง');
+  infoGrid(doc, routeRows(job));
+
+  sectionHeader(doc, 'การคำนวณค่าตอบแทน');
+  amountsBlock(
+    doc,
+    [
+      { label: 'ยอดรวมค่างาน', value: money(t?.grossAmount ?? job.priceQuoted) },
+      {
+        label: `หักค่าคอมมิชชั่น (${t?.commissionPct ?? job.commissionPct ?? 0}%)`,
+        value: `-${money(t?.commissionAmount)}`,
+        muted: true,
+      },
+    ],
+    { label: 'ยอดสุทธิจ่ายคนขับ', value: money(t?.netToDriver) },
+  );
+
+  infoGrid(doc, [
+    {
+      label: 'สถานะการจ่าย',
+      value: t?.status === 'PAID' ? 'จ่ายแล้ว' : t?.status === 'REFUNDED' ? 'คืนเงิน' : 'รอจ่าย',
+    },
+    { label: 'วันที่ทำรายการ', value: fmtDate(t?.createdAt ?? null) },
+  ]);
 
   const slip = await fetchImage(t?.slipUrl);
   if (slip) {
-    sectionTitle(doc, 'หลักฐานการโอนให้คนขับ');
-    safeImage(doc, slip, LEFT, doc.y, { fit: [180, 220] });
+    sectionHeader(doc, 'หลักฐานการโอนให้คนขับ');
+    photoFrame(doc, slip, LEFT, doc.y, 170, 210);
   }
-  footer(doc, 'ใบสำคัญจ่าย — ยืนยันการจ่ายค่าตอบแทนให้คนขับ');
+  footer(doc, 'ใบสำคัญจ่าย · ยืนยันการจ่ายค่าตอบแทนให้คนขับ');
 }
 
 async function buildWorksheet(doc: Doc, d: JobDocData) {
   await header(doc, d, 'worksheet');
   const { job } = d;
-  sectionTitle(doc, 'ข้อมูลทั่วไป');
-  kv(doc, 'สถานะงาน', JOB_STATUS_LABEL[job.status]);
-  kv(doc, 'ลูกค้า', `${customerName(d)} · ${customerPhone(d)}`);
-  kv(doc, 'คนขับ', driverName(d));
-  kv(doc, 'สร้างเมื่อ', fmtDate(job.createdAt));
-  if (job.scheduledAt) kv(doc, 'นัดหมาย', fmtDate(job.scheduledAt));
-  routeBlock(doc, job, d.vehicleLabel);
+  badgeRow(doc, [
+    { text: JOB_STATUS_LABEL[job.status], fg: INFO_FG, bg: INFO_BG },
+    { text: PAYMENT_METHOD_LABEL[job.paymentMethod], fg: INFO_FG, bg: INFO_BG },
+    { text: PRICING_MODE_LABEL[job.pricingMode], fg: INFO_FG, bg: INFO_BG },
+  ]);
 
-  sectionTitle(doc, 'รายการสิ่งของ');
+  sectionHeader(doc, 'ผู้เกี่ยวข้อง');
+  infoGrid(doc, [
+    { label: 'ลูกค้า', value: customerName(d) },
+    { label: 'เบอร์ลูกค้า', value: customerPhone(d) },
+    { label: 'คนขับ', value: driverName(d) },
+    { label: 'เบอร์คนขับ', value: driverPhone(d) },
+    { label: 'ทะเบียนรถ', value: d.driver?.plateNumber ?? '—' },
+    { label: 'ประเภทรถ', value: d.vehicleLabel },
+  ]);
+
+  sectionHeader(doc, 'รายละเอียดงาน');
+  infoGrid(doc, [
+    { label: 'สร้างเมื่อ', value: fmtDate(job.createdAt) },
+    { label: 'นัดหมาย', value: fmtDate(job.scheduledAt) },
+    {
+      label: 'หมวดพัสดุ',
+      value: job.itemCategory ? (CARGO_CATEGORY_LABELS[job.itemCategory] ?? job.itemCategory) : '—',
+    },
+    { label: 'จำนวนชิ้น (โดยประมาณ)', value: job.itemCount != null ? `${job.itemCount} ชิ้น` : '—' },
+    { label: 'ต้องการคนช่วยยก', value: job.needsHelpers ? 'ต้องการ' : 'ไม่ต้องการ' },
+    { label: 'เบอร์ติดต่อหน้างาน', value: job.contactPhone ?? '—' },
+    { label: 'มูลค่างาน', value: money(job.priceQuoted) },
+    { label: 'รูปแบบราคา', value: PRICING_MODE_LABEL[job.pricingMode] },
+  ]);
+
+  sectionHeader(doc, 'เส้นทาง');
+  infoGrid(doc, [
+    ...routeRows(job),
+    { label: 'จุดรับของ', value: fmtFloor(job.originFloor, job.originHasElevator) },
+    { label: 'จุดส่งของ', value: fmtFloor(job.destFloor, job.destHasElevator) },
+  ]);
+
+  sectionHeader(doc, 'รายการพัสดุ');
   const items = (job.items as { name: string; quantity: number }[] | null) ?? [];
-  if (items.length === 0) {
-    doc.font('th').fontSize(10).fillColor('#6b7280').text(job.itemDescription || '—', LEFT);
-  } else {
-    items.forEach((it, i) =>
-      doc.font('th').fontSize(10).fillColor('#111827').text(`${i + 1}. ${it.name} × ${it.quantity}`, LEFT),
-    );
-  }
+  const itemLines = items.length
+    ? items.map((it, i) => `${i + 1}.   ${it.name}   ×   ${it.quantity}`)
+    : [job.itemDescription || '—'];
+  bulletList(doc, itemLines);
+
   if (job.notes) {
-    sectionTitle(doc, 'หมายเหตุ');
-    doc.font('th').fontSize(10).fillColor('#111827').text(job.notes, LEFT, doc.y, { width: RIGHT - LEFT });
+    sectionHeader(doc, 'หมายเหตุพิเศษ');
+    notePanel(doc, job.notes);
   }
-  kv(doc, 'ราคา', money(job.priceQuoted));
-  footer(doc, 'ใบสรุปงาน — บันทึกรายละเอียดงานสำหรับอ้างอิง');
+  footer(doc, 'ใบสรุปงาน · บันทึกรายละเอียดงานสำหรับอ้างอิงภายใน');
 }
 
 async function buildDelivery(doc: Doc, d: JobDocData) {
   await header(doc, d, 'delivery');
   const { job } = d;
-  kv(doc, 'ลูกค้า', `${customerName(d)} · ${customerPhone(d)}`);
-  kv(doc, 'คนขับ', driverName(d));
-  routeBlock(doc, job, d.vehicleLabel);
-  kv(doc, 'ยืนยันรับของโดยลูกค้า', job.customerConfirmedAt ? `แล้ว · ${fmtDate(job.customerConfirmedAt)}` : 'ยังไม่ยืนยัน');
+  badgeRow(doc, [
+    job.customerConfirmedAt
+      ? { text: 'ลูกค้ายืนยันรับของแล้ว', fg: OK_FG, bg: OK_BG }
+      : { text: 'รอลูกค้ายืนยัน', fg: WARN_FG, bg: WARN_BG },
+  ]);
 
-  // Embed up to 4 proof photos (pickup + delivery), best-effort.
+  sectionHeader(doc, 'ข้อมูลการส่งมอบ');
+  infoGrid(doc, [
+    { label: 'ลูกค้า', value: customerName(d) },
+    { label: 'เบอร์ลูกค้า', value: customerPhone(d) },
+    { label: 'คนขับ', value: driverName(d) },
+    { label: 'เบอร์คนขับ', value: driverPhone(d) },
+    { label: 'ทะเบียนรถ', value: d.driver?.plateNumber ?? '—' },
+    { label: 'ยืนยันรับของเมื่อ', value: job.customerConfirmedAt ? fmtDate(job.customerConfirmedAt) : 'ยังไม่ยืนยัน' },
+  ]);
+
+  sectionHeader(doc, 'เส้นทาง');
+  infoGrid(doc, routeRows(job));
+
+  // Embed up to 4 proof photos (pickup + delivery), best-effort, each framed.
   const proofs = [...(job.pickupProofUrls ?? []), ...(job.deliveryProofUrls ?? [])].slice(0, 4);
   if (proofs.length > 0) {
-    sectionTitle(doc, 'รูปหลักฐาน (รับ/ส่งของ)');
+    sectionHeader(doc, 'รูปหลักฐานการรับ–ส่งของ');
     const imgs = await Promise.all(proofs.map(fetchImage));
+    const cell = 120,
+      gap = 8;
     let x = LEFT;
     const top = doc.y;
     for (const buf of imgs) {
-      if (safeImage(doc, buf, x, top, { fit: [120, 120] })) x += 128;
-      if (x > RIGHT - 120) break;
+      doc.roundedRect(x, top, cell, cell, 6).fillAndStroke(WHITE, LINE);
+      safeImage(doc, buf, x + 4, top + 4, { fit: [cell - 8, cell - 8] });
+      x += cell + gap;
+      if (x > RIGHT - cell) break;
     }
-    doc.y = top + 130;
+    doc.y = top + cell + 10;
   }
 
-  doc.moveDown(2);
-  const sy = doc.y;
-  doc.font('th').fontSize(10).fillColor('#111827');
-  doc.text('....................................', LEFT, sy);
-  doc.text('ผู้ส่งมอบ (คนขับ)', LEFT, sy + 16);
-  doc.text('....................................', 340, sy);
-  doc.text('ผู้รับมอบ (ลูกค้า)', 340, sy + 16);
-  footer(doc, 'ใบส่งมอบสินค้า — หลักฐานการส่งมอบและรับมอบ');
+  signatureBlock(doc);
+  footer(doc, 'ใบส่งมอบพัสดุ · หลักฐานการส่งมอบและรับมอบพัสดุ');
 }
 
 const BUILDERS: Record<DocType, (doc: Doc, d: JobDocData) => Promise<void>> = {
@@ -337,8 +637,14 @@ const BUILDERS: Record<DocType, (doc: Doc, d: JobDocData) => Promise<void>> = {
  * so repeat downloads of an unchanged document show a stable issue date — the
  * correct behaviour for a receipt/payout.
  */
+// Bump when the renderer/layout changes so previously-cached PDFs (keyed only on
+// type+data) don't keep serving the old design — new key, old bytes age out.
+const LAYOUT_VERSION = 2;
+
 function docCacheKey(type: DocType, data: JobDocData): string {
-  const hash = createHash('sha256').update(JSON.stringify({ type, data })).digest('hex');
+  const hash = createHash('sha256')
+    .update(JSON.stringify({ v: LAYOUT_VERSION, type, data }))
+    .digest('hex');
   return `doc/${type}/${hash}.pdf`;
 }
 

@@ -52,7 +52,7 @@ const JOB_DOCS = [
   { type: 'receipt', label: 'ใบเสร็จรับเงิน (ลูกค้า)' },
   { type: 'payout', label: 'ใบสำคัญจ่าย (คนขับ)' },
   { type: 'worksheet', label: 'ใบสรุปงาน (Work Order)' },
-  { type: 'delivery', label: 'ใบส่งมอบสินค้า' },
+  { type: 'delivery', label: 'ใบส่งมอบพัสดุ' },
 ] as const;
 
 /** Dropdown that opens each backend-generated PDF in a new tab to print/save. */

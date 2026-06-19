@@ -32,6 +32,16 @@ export const VehiclePricingDto = z.object({
 });
 export type VehiclePricingDto = z.infer<typeof VehiclePricingDto>;
 
+/** Slim public view of an active vehicle type's rates (marketing /pricing page). */
+export const PublicVehicleRate = z.object({
+  vehicleType: VehicleTypeSchema,
+  label: z.string().nullable(),
+  description: z.string().nullable(),
+  pricePerKm: z.number().int().nullable(),
+  pricePerKmShared: z.number().int().nullable(),
+});
+export type PublicVehicleRate = z.infer<typeof PublicVehicleRate>;
+
 export const AdminUpsertVehiclePricingInput = z.object({
   // Slug-validated: an admin coining a new type must use a clean UPPER_SNAKE slug.
   vehicleType: VehicleTypeSlugSchema,

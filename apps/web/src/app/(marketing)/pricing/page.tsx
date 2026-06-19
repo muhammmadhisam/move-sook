@@ -73,17 +73,29 @@ function baht(n: number) {
   return `${n.toLocaleString('th-TH')}`;
 }
 
+/** A per-km rate cell: the figure when set, or a soft "ask us" when the admin
+ * hasn't priced this vehicle yet (never a fabricated number). */
+function RateCell({ value, highlight }: { value: number | null; highlight?: boolean }) {
+  if (value == null) {
+    return <p className="text-sm text-muted-foreground">สอบถามราคา</p>;
+  }
+  return (
+    <p className={`font-semibold tabular-nums${highlight ? ' text-primary' : ''}`}>
+      {baht(value)} <span className="text-xs font-normal text-muted-foreground">บ.</span>
+    </p>
+  );
+}
+
 const BASE_FARE = 250; // flat starting fare (THB), AppSetting `base_fare` default
 const EXAMPLE_DISTANCE_KM = 15;
 
 export default async function PricingPage() {
   const vehicles = await getVehicleRates();
 
-  // Build the worked example from a representative live rate (prefer the pickup),
-  // so the example never contradicts the rate table above.
-  const example = vehicles.find((v) => v.vehicleType === 'PICKUP') ?? vehicles[0];
-  const exampleRate = example?.pricePerKm ?? 20; // fallback keeps the figures coherent if the API is down
-  const exampleDistanceFee = exampleRate * EXAMPLE_DISTANCE_KM;
+  // Worked example uses the first vehicle that actually has a per-km rate set, so
+  // the numbers always match a real row in the table. Hidden when none is priced.
+  const example = vehicles.find((v) => v.pricePerKm != null);
+  const exampleDistanceFee = example ? example.pricePerKm! * EXAMPLE_DISTANCE_KM : 0;
   const exampleTotal = BASE_FARE + exampleDistanceFee;
 
   return (
@@ -106,65 +118,60 @@ export default async function PricingPage() {
         </div>
 
         {vehicles.length > 0 ? (
-          <div className="mt-10 overflow-hidden rounded-2xl border bg-card shadow-sm">
-            {/* header row — desktop only */}
-            <div className="hidden grid-cols-[1.6fr_1fr_1fr] gap-4 border-b bg-muted/50 px-6 py-4 text-sm font-semibold sm:grid">
-              <span>ประเภทรถ</span>
-              <span className="text-center">เหมาลำ / กม.</span>
-              <span className="text-center">ไม่เหมาลำ / กม.</span>
+          <>
+            <div className="mt-10 overflow-hidden rounded-2xl border bg-card shadow-sm">
+              {/* header row — desktop only */}
+              <div className="hidden grid-cols-[1.6fr_1fr_1fr] gap-4 border-b bg-muted/50 px-6 py-4 text-sm font-semibold sm:grid">
+                <span>ประเภทรถ</span>
+                <span className="text-center">เหมาลำ / กม.</span>
+                <span className="text-center">ไม่เหมาลำ / กม.</span>
+              </div>
+
+              <ul className="divide-y">
+                {vehicles.map((v) => {
+                  const Icon = vehicleIcon(v.vehicleType);
+                  return (
+                    <li
+                      key={v.vehicleType}
+                      className="grid grid-cols-2 items-center gap-4 px-5 py-4 sm:grid-cols-[1.6fr_1fr_1fr] sm:px-6 sm:py-5"
+                    >
+                      <div className="col-span-2 flex items-center gap-3 sm:col-span-1">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-primary">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold leading-tight">{v.label}</p>
+                          {v.description && (
+                            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                              {v.description}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-center">
+                        <span className="text-xs text-muted-foreground sm:hidden">เหมาลำ</span>
+                        <RateCell value={v.pricePerKm} />
+                      </div>
+
+                      <div className="text-center">
+                        <span className="text-xs text-muted-foreground sm:hidden">ไม่เหมาลำ</span>
+                        <RateCell value={v.pricePerKmShared} highlight />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
-
-            <ul className="divide-y">
-              {vehicles.map((v) => {
-                const Icon = vehicleIcon(v.vehicleType);
-                return (
-                  <li
-                    key={v.vehicleType}
-                    className="grid grid-cols-2 items-center gap-4 px-5 py-4 sm:grid-cols-[1.6fr_1fr_1fr] sm:px-6 sm:py-5"
-                  >
-                    <div className="col-span-2 flex items-center gap-3 sm:col-span-1">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-primary">
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold leading-tight">{v.label}</p>
-                        {v.description && (
-                          <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                            {v.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="text-center">
-                      <span className="text-xs text-muted-foreground sm:hidden">เหมาลำ</span>
-                      <p className="font-semibold tabular-nums">
-                        {baht(v.pricePerKm)}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">บ.</span>
-                      </p>
-                    </div>
-
-                    <div className="text-center">
-                      <span className="text-xs text-muted-foreground sm:hidden">ไม่เหมาลำ</span>
-                      <p className="font-semibold tabular-nums text-primary">
-                        {baht(v.pricePerKmShared)}{' '}
-                        <span className="text-xs font-normal text-muted-foreground">บ.</span>
-                      </p>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+            <p className="mt-3 text-center text-xs text-muted-foreground">
+              * ราคาจริงขึ้นกับระยะทางและบริการเสริม โดยจะแสดงราคาประมาณการก่อนยืนยันงานทุกครั้ง
+            </p>
+          </>
         ) : (
           <p className="mt-10 rounded-2xl border bg-card px-6 py-10 text-center text-sm text-muted-foreground shadow-sm">
-            ขออภัย ขณะนี้ยังไม่สามารถแสดงอัตราค่าบริการได้ กรุณาลองใหม่อีกครั้ง
-            หรือดูราคาประมาณการได้ทันทีเมื่อโพสต์งานในแอป
+            ขณะนี้ยังไม่สามารถแสดงอัตราค่าบริการได้ — ดูราคาประมาณการได้ทันทีเมื่อโพสต์งานในแอป
           </p>
         )}
-        <p className="mt-3 text-center text-xs text-muted-foreground">
-          * ราคาจริงขึ้นกับระยะทางและบริการเสริม โดยจะแสดงราคาประมาณการก่อนยืนยันงานทุกครั้ง
-        </p>
       </Section>
 
       {/* How we calculate + example */}
@@ -183,38 +190,40 @@ export default async function PricingPage() {
             </ul>
           </div>
 
-          {/* Example calculation */}
-          <div className="rounded-2xl border bg-card p-6 shadow-sm lg:sticky lg:top-24">
-            <div className="flex items-center gap-2">
-              <Calculator className="h-5 w-5 text-primary" />
-              <h3 className="text-lg font-semibold">ตัวอย่างการคำนวณ</h3>
+          {/* Example calculation — only when at least one vehicle has a real rate */}
+          {example && (
+            <div className="rounded-2xl border bg-card p-6 shadow-sm lg:sticky lg:top-24">
+              <div className="flex items-center gap-2">
+                <Calculator className="h-5 w-5 text-primary" />
+                <h3 className="text-lg font-semibold">ตัวอย่างการคำนวณ</h3>
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                ย้ายของด้วย{example.label}แบบเหมาลำ ระยะทาง {EXAMPLE_DISTANCE_KM} กม.
+              </p>
+
+              <dl className="mt-5 space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">ค่าเริ่มต้น</dt>
+                  <dd className="tabular-nums">{baht(BASE_FARE)} บาท</dd>
+                </div>
+                <div className="flex items-center justify-between">
+                  <dt className="text-muted-foreground">
+                    ระยะทาง {EXAMPLE_DISTANCE_KM} กม. × {baht(example.pricePerKm!)} บ.
+                  </dt>
+                  <dd className="tabular-nums">{baht(exampleDistanceFee)} บาท</dd>
+                </div>
+                <div className="flex items-center justify-between border-t pt-3 text-base font-semibold">
+                  <dt>ราคาประมาณการ</dt>
+                  <dd className="tabular-nums text-primary">{baht(exampleTotal)} บาท</dd>
+                </div>
+              </dl>
+
+              <p className="mt-4 rounded-lg bg-brand-50 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+                ราคาจริงอาจปรับตามการขึ้น–ลงชั้น คนช่วยยก หรือช่วงเวลาเร่งด่วน
+                โดยทุกรายการจะแสดงให้เห็นก่อนกดยืนยันเสมอ
+              </p>
             </div>
-            <p className="mt-2 text-sm text-muted-foreground">
-              ย้ายของด้วย{example?.label ?? 'รถกระบะ'}แบบเหมาลำ ระยะทาง {EXAMPLE_DISTANCE_KM} กม.
-            </p>
-
-            <dl className="mt-5 space-y-3 text-sm">
-              <div className="flex items-center justify-between">
-                <dt className="text-muted-foreground">ค่าเริ่มต้น</dt>
-                <dd className="tabular-nums">{baht(BASE_FARE)} บาท</dd>
-              </div>
-              <div className="flex items-center justify-between">
-                <dt className="text-muted-foreground">
-                  ระยะทาง {EXAMPLE_DISTANCE_KM} กม. × {baht(exampleRate)} บ.
-                </dt>
-                <dd className="tabular-nums">{baht(exampleDistanceFee)} บาท</dd>
-              </div>
-              <div className="flex items-center justify-between border-t pt-3 text-base font-semibold">
-                <dt>ราคาประมาณการ</dt>
-                <dd className="tabular-nums text-primary">{baht(exampleTotal)} บาท</dd>
-              </div>
-            </dl>
-
-            <p className="mt-4 rounded-lg bg-brand-50 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-              ราคาจริงอาจปรับตามการขึ้น–ลงชั้น คนช่วยยก หรือช่วงเวลาเร่งด่วน
-              โดยทุกรายการจะแสดงให้เห็นก่อนกดยืนยันเสมอ
-            </p>
-          </div>
+          )}
         </div>
       </Section>
 

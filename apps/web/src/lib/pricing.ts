@@ -2,30 +2,30 @@
 // the admin app (VehiclePricing table) and served by the API's public
 // /system/vehicle-pricing route, so the page reflects live admin changes.
 import { api } from './api';
-import type { VehiclePricingDto } from '@movesook/shared';
+import type { PublicVehicleRate } from '@movesook/shared';
 
-// Narrowed shape the page renders: a label and both per-km rates are guaranteed
-// present (rows missing them are dropped in getVehicleRates).
+// What the page renders: the real active catalog. A label is guaranteed; per-km
+// rates may be null when an admin hasn't set them yet (shown as "ask us").
 export type VehicleRate = {
-  vehicleType: VehiclePricingDto['vehicleType'];
+  vehicleType: PublicVehicleRate['vehicleType'];
   label: string;
   description: string | null;
-  pricePerKm: number;
-  pricePerKmShared: number;
+  pricePerKm: number | null;
+  pricePerKmShared: number | null;
 };
 
 /**
- * Active vehicle types + per-km rates, cheapest-first. Drops rows missing a
- * label or either rate. Returns [] if the API is unreachable so the page can
- * fall back to a static notice.
+ * Active vehicle types, cheapest-first, exactly as configured in admin. Drops
+ * only rows with no label. Returns [] if the API is unreachable so the page can
+ * show a graceful notice (we never invent rates the operator didn't set).
  */
 export async function getVehicleRates(): Promise<VehicleRate[]> {
   try {
     const res = await api.system['vehicle-pricing'].$get();
     if (!res.ok) return [];
-    const data = (await res.json()) as { items: VehiclePricingDto[] };
+    const data = (await res.json()) as { items: PublicVehicleRate[] };
     return data.items.flatMap((v) =>
-      v.label != null && v.pricePerKm != null && v.pricePerKmShared != null
+      v.label != null
         ? [
             {
               vehicleType: v.vehicleType,

@@ -8,7 +8,6 @@ import {
   CalendarCheck,
 } from "lucide-react";
 import { PageHeader, Section } from "@/components/marketing/sections";
-import { MiniAppQr } from "@/components/marketing/mini-app-qr";
 import { AppEntryLink } from "@/components/marketing/app-entry-link";
 import { getCommissionPct } from "@/lib/system";
 

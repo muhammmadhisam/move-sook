@@ -28,7 +28,7 @@ export default function DriverClaimPage() {
     onSuccess: async () => {
       toast.success('ยืนยันคนขับสำเร็จ — กรอกข้อมูลให้ครบเพื่อรออนุมัติ');
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      router.replace('/driver/edit');
+      router.replace('/app/driver/edit');
     },
     onError: (e: Error) => setError(e.message),
   });

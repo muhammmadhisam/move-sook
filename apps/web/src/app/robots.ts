@@ -7,8 +7,11 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: '*',
         allow: '/',
-        // Keep the authenticated app + auth flow out of the index.
-        disallow: ['/app', '/jobs', '/my-jobs', '/active', '/notifications', '/profile', '/driver', '/referral', '/login'],
+        // Keep the authenticated app + auth flow out of the index. All
+        // authenticated pages now live under /app, so one prefix covers them.
+        // (The old per-route list also prefix-matched the marketing /drivers
+        // page via '/driver', wrongly blocking it from the index.)
+        disallow: ['/app', '/login'],
       },
     ],
     sitemap: `${SITE.url}/sitemap.xml`,

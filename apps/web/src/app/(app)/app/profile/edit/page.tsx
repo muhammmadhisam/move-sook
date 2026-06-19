@@ -94,7 +94,7 @@ export default function ProfileEditPage() {
     onSuccess: () => {
       toast.success('บันทึกข้อมูลแล้ว');
       queryClient.invalidateQueries({ queryKey: ['customer-profile'] });
-      router.push('/profile');
+      router.push('/app/profile');
     },
     onError: (e: Error) => setError(e.message),
   });
@@ -204,7 +204,7 @@ export default function ProfileEditPage() {
             <Button
               variant="outline"
               className="flex-1"
-              onClick={() => router.push('/profile')}
+              onClick={() => router.push('/app/profile')}
               disabled={save.isPending}
             >
               ยกเลิก

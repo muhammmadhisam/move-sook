@@ -46,7 +46,7 @@ export default function NotificationsPage() {
           );
           const onActivate = () => unread && markRead.mutate(n.id);
           return n.jobId ? (
-            <Link key={n.id} href={`/jobs/${n.jobId}`} className="block" onClick={onActivate}>
+            <Link key={n.id} href={`/app/jobs/${n.jobId}`} className="block" onClick={onActivate}>
               {card}
             </Link>
           ) : (

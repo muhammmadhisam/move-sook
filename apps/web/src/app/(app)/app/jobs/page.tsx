@@ -163,7 +163,7 @@ export default function JobsPage() {
             </p>
             <div className="mt-1 flex w-full flex-col gap-2">
               <Button asChild className="w-full">
-                <Link href="/profile">ดูสถานะคนขับ</Link>
+                <Link href="/app/profile">ดูสถานะคนขับ</Link>
               </Button>
               <Button asChild variant="outline" className="w-full">
                 <Link href="/app">กลับหน้าหลัก</Link>

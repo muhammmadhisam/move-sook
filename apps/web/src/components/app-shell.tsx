@@ -17,7 +17,7 @@ import { DriverLocationBroadcaster } from '@/components/driver-location-broadcas
 const EN_ROUTE: Set<JobStatus> = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT']);
 
 // Top-level destinations reachable from the bottom bar (no back button on these).
-const TOP_LEVEL = new Set(['/app', '/jobs', '/my-jobs', '/active', '/notifications', '/profile']);
+const TOP_LEVEL = new Set(['/app', '/app/jobs', '/app/my-jobs', '/app/active', '/app/notifications', '/app/profile']);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -66,10 +66,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tabs = [
     { href: '/app', label: 'หน้าหลัก', icon: Home, match: (p: string) => p === '/app' },
     isDriver
-      ? { href: '/active', label: 'งานของฉัน', icon: Truck, match: (p: string) => p.startsWith('/active') || p.startsWith('/jobs') }
-      : { href: '/my-jobs', label: 'งานของฉัน', icon: Package, match: (p: string) => p.startsWith('/my-jobs') || p.startsWith('/jobs') },
-    { href: '/notifications', label: 'แจ้งเตือน', icon: Bell, match: (p: string) => p.startsWith('/notifications'), badge: unreadCount },
-    { href: '/profile', label: 'โปรไฟล์', icon: User, match: (p: string) => p.startsWith('/profile') },
+      ? { href: '/app/active', label: 'งานของฉัน', icon: Truck, match: (p: string) => p.startsWith('/app/active') || p.startsWith('/app/jobs') }
+      : { href: '/app/my-jobs', label: 'งานของฉัน', icon: Package, match: (p: string) => p.startsWith('/app/my-jobs') || p.startsWith('/app/jobs') },
+    { href: '/app/notifications', label: 'แจ้งเตือน', icon: Bell, match: (p: string) => p.startsWith('/app/notifications'), badge: unreadCount },
+    { href: '/app/profile', label: 'โปรไฟล์', icon: User, match: (p: string) => p.startsWith('/app/profile') },
   ];
 
   return (

@@ -208,27 +208,27 @@ export default function ProfilePage() {
           {!isDriver && (
             <>
               <MenuRow
-                href="/profile/edit"
+                href="/app/profile/edit"
                 icon={<UserCog className="h-4 w-4" />}
                 label="ข้อมูลส่วนตัว"
               />
-              <MenuRow href="/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
+              <MenuRow href="/app/my-jobs" icon={<Package className="h-4 w-4" />} label="งานของฉัน" />
             </>
           )}
           {isDriver && (
             <>
               <MenuRow
-                href="/active"
+                href="/app/active"
                 icon={<FileText className="h-4 w-4" />}
                 label="งานที่รับไว้ · พิมพ์ใบงาน"
               />
-              <MenuRow href="/jobs" icon={<Truck className="h-4 w-4" />} label="หางานใหม่" />
+              <MenuRow href="/app/jobs" icon={<Truck className="h-4 w-4" />} label="หางานใหม่" />
             </>
           )}
-          <MenuRow href="/notifications" icon={<Bell className="h-4 w-4" />} label="การแจ้งเตือน" />
+          <MenuRow href="/app/notifications" icon={<Bell className="h-4 w-4" />} label="การแจ้งเตือน" />
           {!isDriver && (
             <MenuRow
-              href="/referral"
+              href="/app/referral"
               icon={<Gift className="h-4 w-4" />}
               label="แนะนำเพื่อน รับส่วนลด"
             />
@@ -288,7 +288,7 @@ export default function ProfilePage() {
       {/* Driver: complete / edit the application admin created */}
       {isDriver && (
         <Button asChild variant="outline" className="w-full">
-          <Link href="/driver/edit">แก้ไขข้อมูลคนขับ</Link>
+          <Link href="/app/driver/edit">แก้ไขข้อมูลคนขับ</Link>
         </Button>
       )}
 
@@ -301,10 +301,10 @@ export default function ProfilePage() {
               สมัครเป็นคนขับเพื่อเริ่มรับงานขนย้ายในพื้นที่ของคุณ
             </p>
             <Button asChild className="w-full">
-              <Link href="/driver/apply">สมัครเป็นคนขับ</Link>
+              <Link href="/app/driver/apply">สมัครเป็นคนขับ</Link>
             </Button>
             <Button asChild variant="ghost" className="w-full">
-              <Link href="/driver/claim">มีโค้ดเชิญจากแอดมิน?</Link>
+              <Link href="/app/driver/claim">มีโค้ดเชิญจากแอดมิน?</Link>
             </Button>
           </CardContent>
         </Card>

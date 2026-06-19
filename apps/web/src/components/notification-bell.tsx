@@ -9,7 +9,7 @@ export function NotificationBell() {
 
   return (
     <Link
-      href="/notifications"
+      href="/app/notifications"
       aria-label="การแจ้งเตือน"
       className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-input bg-background text-foreground shadow-xs transition-colors hover:bg-accent"
     >

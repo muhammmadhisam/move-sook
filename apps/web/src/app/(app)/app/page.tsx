@@ -73,7 +73,7 @@ function DriverHome({ me }: { me: MeResponse }) {
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-sm font-semibold">งานใกล้คุณ</h3>
           <Link
-            href="/jobs"
+            href="/app/jobs"
             className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
           >
             ดูแบบรายการ
@@ -83,7 +83,7 @@ function DriverHome({ me }: { me: MeResponse }) {
         <DriverJobsMap />
       </div>
       <Button asChild size="lg" variant="outline" className="w-full">
-        <Link href="/active">งานที่รับไว้</Link>
+        <Link href="/app/active">งานที่รับไว้</Link>
       </Button>
     </>
   );
@@ -106,14 +106,14 @@ const DRIVER_STATUS_VIEW: Record<
     tone: 'bg-warning/15 text-warning',
     title: 'รอการอนุมัติจากทีมงาน',
     desc: 'เราได้รับใบสมัครของคุณแล้ว ทีมงานกำลังตรวจสอบข้อมูล โดยทั่วไปใช้เวลาไม่เกิน 24 ชั่วโมง คุณจะเริ่มรับงานได้ทันทีที่ได้รับการอนุมัติ',
-    action: { href: '/driver/edit', label: 'แก้ไขข้อมูลใบสมัคร' },
+    action: { href: '/app/driver/edit', label: 'แก้ไขข้อมูลใบสมัคร' },
   },
   REJECTED: {
     icon: <XCircle className="h-7 w-7" />,
     tone: 'bg-destructive/15 text-destructive',
     title: 'การสมัครไม่ผ่านการอนุมัติ',
     desc: 'กรุณาตรวจสอบและแก้ไขข้อมูลให้ครบถ้วน แล้วส่งใบสมัครอีกครั้ง',
-    action: { href: '/driver/edit', label: 'แก้ไขและส่งใหม่' },
+    action: { href: '/app/driver/edit', label: 'แก้ไขและส่งใหม่' },
   },
   SUSPENDED: {
     icon: <ShieldX className="h-7 w-7" />,
@@ -156,7 +156,7 @@ function DriverStatusCard({
             </Button>
           )}
           <Button asChild variant="ghost" className="w-full">
-            <Link href="/profile">ดูสถานะที่โปรไฟล์</Link>
+            <Link href="/app/profile">ดูสถานะที่โปรไฟล์</Link>
           </Button>
         </div>
       </CardContent>
@@ -203,7 +203,7 @@ function CustomerHome() {
       {/* Slip-needed alert — highest priority action */}
       {needsSlip && (
         <Link
-          href={`/my-jobs`}
+          href={`/app/my-jobs`}
           className="flex items-center gap-3 rounded-2xl border border-warning/50 bg-warning/10 p-3.5"
         >
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-warning/20 text-warning">
@@ -224,7 +224,7 @@ function CustomerHome() {
 
       {/* Primary CTA — post a job */}
       <Link
-        href="/jobs/new"
+        href="/app/jobs/new"
         className="block rounded-2xl bg-primary p-4 text-primary-foreground shadow-sm transition-transform active:scale-[0.99]"
       >
         <div className="flex items-center gap-3">
@@ -263,13 +263,13 @@ function CustomerHome() {
       {/* Secondary actions */}
       <div className="grid gap-3">
         <Button asChild size="lg" variant="outline">
-          <Link href="/my-jobs">
+          <Link href="/app/my-jobs">
             <Package className="h-4 w-4" />
             งานของฉัน
           </Link>
         </Button>
         <Button asChild size="lg" variant="outline">
-          <Link href="/referral">
+          <Link href="/app/referral">
             <Gift className="h-4 w-4" />
             แนะนำเพื่อน รับส่วนลด
           </Link>
@@ -294,7 +294,7 @@ function ActiveJobCard({ job }: { job: JobDto }) {
 
   return (
     <Link
-      href={`/jobs/${job.id}`}
+      href={`/app/jobs/${job.id}`}
       className="block rounded-2xl border bg-card p-4 shadow-sm transition-transform active:scale-[0.99]"
     >
       <div className="mb-2 flex items-center justify-between gap-2">

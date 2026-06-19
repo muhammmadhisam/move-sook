@@ -157,7 +157,7 @@ export default function DriverEditPage() {
       toast.success('บันทึกข้อมูลแล้ว — รอแอดมินตรวจสอบ');
       queryClient.invalidateQueries({ queryKey: ['driver-me'] });
       queryClient.invalidateQueries({ queryKey: ['me'] });
-      router.push('/profile');
+      router.push('/app/profile');
     },
     onError: (e: Error) => setError(e.message),
   });

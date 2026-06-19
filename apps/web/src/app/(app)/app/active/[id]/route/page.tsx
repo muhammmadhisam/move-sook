@@ -52,7 +52,7 @@ export default function DriverRoutePage() {
       {/* Top bar */}
       <header className="flex items-center gap-2 border-b bg-background px-4 py-3">
         <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link href="/active" aria-label="ย้อนกลับ">
+          <Link href="/app/active" aria-label="ย้อนกลับ">
             <ArrowLeft className="h-5 w-5" />
           </Link>
         </Button>

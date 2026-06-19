@@ -283,6 +283,12 @@ function SummaryStep({
               ฿{estimate.total.toLocaleString()}
             </p>
             <div className="mt-3 space-y-1 text-sm">
+              {estimate.baseFare > 0 && (
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">ราคาเริ่มต้น</span>
+                  <span>฿{estimate.baseFare.toLocaleString()}</span>
+                </div>
+              )}
               <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">
                   ค่าขนส่ง ({estimate.distanceKm.toFixed(1)} กม. × ฿{estimate.pricePerKm}/กม.)
@@ -875,7 +881,7 @@ export default function NewJobPage() {
         // ignore — draft cleanup is best-effort.
       }
       toast.success('โพสต์งานแล้ว');
-      router.push('/my-jobs');
+      router.push('/app/my-jobs');
     },
     onError: (e: Error) => setError(e.message),
   });

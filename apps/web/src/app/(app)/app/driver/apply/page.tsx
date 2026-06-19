@@ -94,7 +94,7 @@ export default function DriverApplyPage() {
   useEffect(() => {
     if (isLoading) return;
     if (!me) router.replace('/login');
-    else if (me.isDriver) router.replace('/driver/edit');
+    else if (me.isDriver) router.replace('/app/driver/edit');
   }, [me, isLoading, router]);
 
   const set = (key: keyof typeof form) => (value: string) =>
@@ -135,7 +135,7 @@ export default function DriverApplyPage() {
     onSuccess: async () => {
       toast.success('ส่งใบสมัครแล้ว — รอแอดมินตรวจสอบ');
       await queryClient.invalidateQueries({ queryKey: ['me'] });
-      router.replace('/profile');
+      router.replace('/app/profile');
     },
     onError: (e: Error) => setError(e.message),
   });

@@ -189,7 +189,7 @@ export default function ActiveJobsPage() {
               <CardContent className="flex flex-col gap-3 p-4 pt-0">
                 <div className="flex gap-2">
                   <Button asChild variant="outline" className="flex-1">
-                    <Link href={`/active/${job.id}/route`}>
+                    <Link href={`/app/active/${job.id}/route`}>
                       <MapPin className="mr-1.5 h-4 w-4" />
                       ดูเส้นทาง
                     </Link>
@@ -286,7 +286,7 @@ export default function ActiveJobsPage() {
 
       <div className="mt-6 flex gap-2">
         <Button asChild className="flex-1">
-          <Link href="/jobs">หางานใหม่</Link>
+          <Link href="/app/jobs">หางานใหม่</Link>
         </Button>
         <Button asChild variant="outline" className="flex-1">
           <Link href="/app">หน้าหลัก</Link>

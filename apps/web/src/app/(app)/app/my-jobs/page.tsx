@@ -172,7 +172,7 @@ function JobCard({
       {/* Actions */}
       <div className="flex flex-wrap gap-2 p-3">
         <Button asChild size="sm" variant="outline" className="flex-1">
-          <Link href={`/jobs/${job.id}`}>ดูรายละเอียด</Link>
+          <Link href={`/app/jobs/${job.id}`}>ดูรายละเอียด</Link>
         </Button>
 
         {(jobOrigin(job) ?? jobDest(job)) && (
@@ -211,7 +211,7 @@ function JobCard({
 
         {(job.status === 'DELIVERED' || job.status === 'CANCELLED') && (
           <Button asChild size="sm" variant="outline" className="flex-1">
-            <Link href={`/jobs/new?from=${job.id}`}>สั่งซ้ำ</Link>
+            <Link href={`/app/jobs/new?from=${job.id}`}>สั่งซ้ำ</Link>
           </Button>
         )}
 
@@ -280,7 +280,7 @@ export default function MyJobsPage() {
       <div className="mb-5 flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">งานของฉัน</h1>
         <Button asChild size="sm">
-          <Link href="/jobs/new">+ โพสต์งาน</Link>
+          <Link href="/app/jobs/new">+ โพสต์งาน</Link>
         </Button>
       </div>
 
@@ -333,7 +333,7 @@ export default function MyJobsPage() {
             <p className="text-sm text-muted-foreground mt-1">โพสต์งานแรกของคุณได้เลย</p>
           </div>
           <Button asChild className="mt-1">
-            <Link href="/jobs/new">โพสต์งานขนย้าย</Link>
+            <Link href="/app/jobs/new">โพสต์งานขนย้าย</Link>
           </Button>
         </div>
       )}

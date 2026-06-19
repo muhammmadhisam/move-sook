@@ -10,6 +10,7 @@ export type VehicleRate = {
   vehicleType: PublicVehicleRate['vehicleType'];
   label: string;
   description: string | null;
+  imageUrl: string | null;
   pricePerKm: number | null;
   pricePerKmShared: number | null;
 };
@@ -31,6 +32,7 @@ export async function getVehicleRates(): Promise<VehicleRate[]> {
               vehicleType: v.vehicleType,
               label: v.label,
               description: v.description,
+              imageUrl: v.imageUrl,
               pricePerKm: v.pricePerKm,
               pricePerKmShared: v.pricePerKmShared,
             },

@@ -40,6 +40,7 @@ export async function listPublicVehiclePricing(): Promise<{ items: PublicVehicle
       vehicleType: true,
       label: true,
       description: true,
+      imageUrl: true,
       pricePerKm: true,
       pricePerKmShared: true,
     },

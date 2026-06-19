@@ -37,6 +37,7 @@ export const PublicVehicleRate = z.object({
   vehicleType: VehicleTypeSchema,
   label: z.string().nullable(),
   description: z.string().nullable(),
+  imageUrl: z.string().nullable(),
   pricePerKm: z.number().int().nullable(),
   pricePerKmShared: z.number().int().nullable(),
 });

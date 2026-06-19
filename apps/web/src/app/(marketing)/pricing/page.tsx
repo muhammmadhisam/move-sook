@@ -74,16 +74,53 @@ function baht(n: number) {
   return `${n.toLocaleString('th-TH')}`;
 }
 
-/** A per-km rate cell: the figure when set, or a soft "ask us" when the admin
- * hasn't priced this vehicle yet (never a fabricated number). */
-function RateCell({ value, highlight }: { value: number | null; highlight?: boolean }) {
-  if (value == null) {
-    return <p className="text-sm text-muted-foreground">สอบถามราคา</p>;
-  }
+/** One rate column inside a vehicle card: the figure when set, or a dash when
+ * the admin hasn't priced this vehicle yet (never a fabricated number). */
+function RateColumn({
+  caption,
+  value,
+  highlight,
+}: {
+  caption: string;
+  value: number | null;
+  highlight?: boolean;
+}) {
   return (
-    <p className={`font-semibold tabular-nums${highlight ? ' text-primary' : ''}`}>
-      {baht(value)} <span className="text-xs font-normal text-muted-foreground">บ.</span>
-    </p>
+    <div className="bg-card px-3 py-3 text-center">
+      <p className="text-xs text-muted-foreground">{caption}</p>
+      {value == null ? (
+        <p className="mt-0.5 text-sm font-medium text-muted-foreground">—</p>
+      ) : (
+        <p className={`mt-0.5 text-lg font-bold tabular-nums${highlight ? ' text-primary' : ''}`}>
+          {baht(value)}
+          <span className="ml-1 text-xs font-normal text-muted-foreground">บ./กม.</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** One block in the "ค่าเริ่มต้น + ค่าระยะทาง + บริการเสริม = ราคา" formula row. */
+function FormulaChip({
+  label,
+  sub,
+  primary,
+}: {
+  label: string;
+  sub: string;
+  primary?: boolean;
+}) {
+  return (
+    <div
+      className={`min-w-[6.5rem] rounded-xl border px-4 py-3 text-center shadow-sm ${
+        primary ? 'border-primary bg-primary text-primary-foreground' : 'bg-card'
+      }`}
+    >
+      <p className="text-sm font-semibold leading-tight">{label}</p>
+      <p className={`mt-0.5 text-xs ${primary ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
+        {sub}
+      </p>
+    </div>
   );
 }
 
@@ -107,125 +144,135 @@ export default async function PricingPage() {
         description="ค่าบริการคำนวณอัตโนมัติจากระยะทาง ประเภทรถ และปริมาณของ คุณจะเห็นราคาที่ชัดเจนก่อนยืนยันงานเสมอ"
       />
 
-      {/* Vehicle rate table */}
+      {/* Vehicle rate cards */}
       <Section>
         <div className="mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl font-bold tracking-tight">เรตต่อกิโลเมตรตามประเภทรถ</h2>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-            เลือกได้ทั้งแบบ <span className="font-medium text-foreground">เหมาลำ</span> (รถคันเดียวเพื่อคุณ
-            ของถึงไว) หรือ <span className="font-medium text-foreground">ไม่เหมาลำ</span> (แชร์รถ
-            คิดตามจำนวนชิ้น ประหยัดกว่า) ทุกงานมีค่าเริ่มต้น {baht(BASE_FARE)} บาท
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">เรตต่อกิโลเมตรตามประเภทรถ</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            เลือกได้ทั้งแบบ <span className="font-semibold text-foreground">เหมาลำ</span>{' '}
+            (รถคันเดียวเพื่อคุณ ของถึงไว) หรือ{' '}
+            <span className="font-semibold text-foreground">ไม่เหมาลำ</span> (แชร์รถ คิดตามจำนวนชิ้น
+            ประหยัดกว่า)
+          </p>
+          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-brand-50 px-4 py-1.5 text-sm font-medium text-primary">
+            ทุกงานเริ่มต้น {baht(BASE_FARE)} บาท + ค่าระยะทาง
           </p>
         </div>
 
         {vehicles.length > 0 ? (
-          <>
-            <div className="mt-10 overflow-hidden rounded-2xl border bg-card shadow-sm">
-              {/* header row — desktop only */}
-              <div className="hidden grid-cols-[1.6fr_1fr_1fr] gap-4 border-b bg-muted/50 px-6 py-4 text-sm font-semibold sm:grid">
-                <span>ประเภทรถ</span>
-                <span className="text-center">เหมาลำ / กม.</span>
-                <span className="text-center">ไม่เหมาลำ / กม.</span>
-              </div>
+          <ul className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {vehicles.map((v) => {
+              const Icon = vehicleIcon(v.vehicleType);
+              const noRate = v.pricePerKm == null && v.pricePerKmShared == null;
+              return (
+                <li
+                  key={v.vehicleType}
+                  className="flex flex-col overflow-hidden rounded-2xl border bg-card shadow-sm transition hover:border-primary/40 hover:shadow-md"
+                >
+                  <div className="relative flex h-44 items-center justify-center bg-muted">
+                    {v.imageUrl ? (
+                      <img
+                        src={v.imageUrl}
+                        alt={v.label}
+                        className="h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Icon className="h-14 w-14 text-muted-foreground/40" />
+                    )}
+                  </div>
 
-              <ul className="divide-y">
-                {vehicles.map((v) => {
-                  const Icon = vehicleIcon(v.vehicleType);
-                  return (
-                    <li
-                      key={v.vehicleType}
-                      className="grid grid-cols-2 items-center gap-4 px-5 py-4 sm:grid-cols-[1.6fr_1fr_1fr] sm:px-6 sm:py-5"
-                    >
-                      <div className="col-span-2 flex items-center gap-3 sm:col-span-1">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-primary">
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <div>
-                          <p className="font-semibold leading-tight">{v.label}</p>
-                          {v.description && (
-                            <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                              {v.description}
-                            </p>
-                          )}
-                        </div>
-                      </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <h3 className="font-semibold leading-tight">{v.label}</h3>
+                    {v.description && (
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        {v.description}
+                      </p>
+                    )}
 
-                      <div className="text-center">
-                        <span className="text-xs text-muted-foreground sm:hidden">เหมาลำ</span>
-                        <RateCell value={v.pricePerKm} />
+                    {noRate ? (
+                      <div className="mt-4 rounded-xl border border-dashed bg-muted/40 px-4 py-4 text-center text-sm text-muted-foreground">
+                        สอบถามราคา
                       </div>
-
-                      <div className="text-center">
-                        <span className="text-xs text-muted-foreground sm:hidden">ไม่เหมาลำ</span>
-                        <RateCell value={v.pricePerKmShared} highlight />
+                    ) : (
+                      <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border">
+                        <RateColumn caption="เหมาลำ" value={v.pricePerKm} />
+                        <RateColumn caption="ไม่เหมาลำ" value={v.pricePerKmShared} highlight />
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-            <p className="mt-3 text-center text-xs text-muted-foreground">
-              * ราคาจริงขึ้นกับระยะทางและบริการเสริม โดยจะแสดงราคาประมาณการก่อนยืนยันงานทุกครั้ง
-            </p>
-          </>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         ) : (
           <p className="mt-10 rounded-2xl border bg-card px-6 py-10 text-center text-sm text-muted-foreground shadow-sm">
             ขณะนี้ยังไม่สามารถแสดงอัตราค่าบริการได้ — ดูราคาประมาณการได้ทันทีเมื่อโพสต์งานในแอป
           </p>
         )}
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          * ราคาจริงขึ้นกับระยะทางและบริการเสริม โดยจะแสดงราคาประมาณการก่อนยืนยันงานทุกครั้ง
+        </p>
       </Section>
 
-      {/* How we calculate + example */}
-      <Section className="bg-muted/30 py-14 sm:py-20">
-        <div className="grid gap-10 lg:grid-cols-2 lg:items-start">
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">ค่าบริการคิดจากอะไรบ้าง</h2>
-            <ul className="mt-6 grid gap-3 sm:grid-cols-2">
-              {FACTORS.map(({ icon: Icon, label, desc }) => (
-                <li key={label} className="rounded-xl border bg-card p-5 shadow-sm">
-                  <Icon className="h-5 w-5 text-primary" />
-                  <p className="mt-3 font-semibold">{label}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{desc}</p>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Example calculation — only when at least one vehicle has a real rate */}
-          {example && (
-            <div className="rounded-2xl border bg-card p-6 shadow-sm lg:sticky lg:top-24">
-              <div className="flex items-center gap-2">
-                <Calculator className="h-5 w-5 text-primary" />
-                <h3 className="text-lg font-semibold">ตัวอย่างการคำนวณ</h3>
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                ย้ายของด้วย{example.label}แบบเหมาลำ ระยะทาง {EXAMPLE_DISTANCE_KM} กม.
-              </p>
-
-              <dl className="mt-5 space-y-3 text-sm">
-                <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">ค่าเริ่มต้น</dt>
-                  <dd className="tabular-nums">{baht(BASE_FARE)} บาท</dd>
-                </div>
-                <div className="flex items-center justify-between">
-                  <dt className="text-muted-foreground">
-                    ระยะทาง {EXAMPLE_DISTANCE_KM} กม. × {baht(example.pricePerKm!)} บ.
-                  </dt>
-                  <dd className="tabular-nums">{baht(exampleDistanceFee)} บาท</dd>
-                </div>
-                <div className="flex items-center justify-between border-t pt-3 text-base font-semibold">
-                  <dt>ราคาประมาณการ</dt>
-                  <dd className="tabular-nums text-primary">{baht(exampleTotal)} บาท</dd>
-                </div>
-              </dl>
-
-              <p className="mt-4 rounded-lg bg-brand-50 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
-                ราคาจริงอาจปรับตามการขึ้น–ลงชั้น คนช่วยยก หรือช่วงเวลาเร่งด่วน
-                โดยทุกรายการจะแสดงให้เห็นก่อนกดยืนยันเสมอ
-              </p>
-            </div>
-          )}
+      {/* How we calculate — formula + factors */}
+      <Section className="bg-muted/30">
+        <div className="mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">คิดราคายังไง</h2>
+          <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+            ราคาประกอบจาก 3 ส่วนหลัก คำนวณอัตโนมัติและแสดงให้เห็นก่อนยืนยันงานเสมอ
+          </p>
         </div>
+
+        {/* Formula chips */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2 sm:gap-3">
+          <FormulaChip label="ค่าเริ่มต้น" sub={`${baht(BASE_FARE)} บาท`} />
+          <span className="text-lg font-semibold text-muted-foreground">+</span>
+          <FormulaChip label="ค่าระยะทาง" sub="ระยะ × เรต/กม." />
+          <span className="text-lg font-semibold text-muted-foreground">+</span>
+          <FormulaChip label="บริการเสริม" sub="ชั้น / คนยก / ช่วงเวลา" />
+          <span className="text-lg font-semibold text-muted-foreground">=</span>
+          <FormulaChip label="ราคาประมาณการ" sub="เห็นก่อนยืนยัน" primary />
+        </div>
+
+        {/* Concrete worked example — only when a vehicle has a real rate */}
+        {example && (
+          <div className="mx-auto mt-8 max-w-md rounded-2xl border bg-card p-6 shadow-sm">
+            <div className="flex items-center gap-2">
+              <Calculator className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">ตัวอย่าง: {example.label} (เหมาลำ {EXAMPLE_DISTANCE_KM} กม.)</h3>
+            </div>
+            <dl className="mt-4 space-y-2.5 text-sm">
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">ค่าเริ่มต้น</dt>
+                <dd className="tabular-nums">{baht(BASE_FARE)} บาท</dd>
+              </div>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">
+                  {EXAMPLE_DISTANCE_KM} กม. × {baht(example.pricePerKm!)} บ.
+                </dt>
+                <dd className="tabular-nums">{baht(exampleDistanceFee)} บาท</dd>
+              </div>
+              <div className="flex items-center justify-between border-t pt-2.5 text-base font-bold">
+                <dt>ราคาประมาณการ</dt>
+                <dd className="tabular-nums text-primary">{baht(exampleTotal)} บาท</dd>
+              </div>
+            </dl>
+          </div>
+        )}
+
+        {/* Factor cards */}
+        <ul className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {FACTORS.map(({ icon: Icon, label, desc }) => (
+            <li key={label} className="rounded-xl border bg-card p-5 shadow-sm">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-primary">
+                <Icon className="h-5 w-5" />
+              </div>
+              <p className="mt-3 font-semibold">{label}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{desc}</p>
+            </li>
+          ))}
+        </ul>
       </Section>
 
       {/* Guarantees: customer + driver */}

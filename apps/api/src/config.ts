@@ -51,6 +51,11 @@ const EnvSchema = z.object({
   // Optional public base URL (custom domain or r2.dev) — when set, upload URLs
   // point straight at R2 instead of being proxied through GET /uploads/*.
   R2_PUBLIC_URL: z.string().url().optional(),
+  // Server-side Google Maps key for the cached Directions/Geocoding proxy
+  // (GET /geo/*). Keep this SEPARATE from the public NEXT_PUBLIC_* browser key:
+  // restrict it by server IP + to the Directions/Geocoding APIs only. When
+  // absent, /geo falls back to straight-line paths / null geocodes (no billing).
+  GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
   // Redis — backs BullMQ (LINE-push queue + repeatable maintenance jobs) and the
   // admin-login rate limiter. Required: the queue/worker layer and rate limiter
   // all depend on it.

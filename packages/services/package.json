@@ -15,7 +15,8 @@
     "./auth": "./src/auth/index.ts",
     "./me": "./src/me/index.ts",
     "./webhooks": "./src/webhooks/index.ts",
-    "./blog": "./src/blog/index.ts"
+    "./blog": "./src/blog/index.ts",
+    "./geo": "./src/geo/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -25,6 +26,7 @@
     "@movesook/auth": "workspace:*",
     "@movesook/db": "workspace:*",
     "@movesook/shared": "workspace:*",
+    "@movesook/thailand-provinces": "workspace:*",
     "bullmq": "^5.34.0",
     "hono": "^4.12.25",
     "ioredis": "^5.4.2",

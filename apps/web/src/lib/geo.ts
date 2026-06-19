@@ -1,4 +1,5 @@
 import type { LatLng } from '@/components/job-route-map';
+import { api } from './api';
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -32,4 +33,49 @@ export function directionsUrl(dest: LatLng, origin?: LatLng | null): string {
   });
   if (origin) params.set('origin', `${origin.lat},${origin.lng}`);
   return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+/**
+ * Road-following path between two points via the API's cached Directions proxy
+ * (GET /geo/route) instead of a per-view client-side Google call. The server
+ * caches by rounded endpoints, so every viewer of the same route shares one
+ * upstream call. Always resolves — falls back to a straight `[from, to]` line.
+ */
+export async function fetchRoutePath(
+  from: LatLng,
+  to: LatLng,
+  opts?: { live?: boolean },
+): Promise<LatLng[]> {
+  try {
+    const res = await api.geo.route.$get({
+      query: {
+        fromLat: String(from.lat),
+        fromLng: String(from.lng),
+        toLat: String(to.lat),
+        toLng: String(to.lng),
+        ...(opts?.live ? { live: '1' as const } : {}),
+      },
+    });
+    if (!res.ok) return [from, to];
+    const { path } = await res.json();
+    return path.length > 0 ? path : [from, to];
+  } catch {
+    return [from, to];
+  }
+}
+
+/** Reverse-geocode a coordinate via the API's cached Geocoding proxy. */
+export async function reverseGeocodeRemote(
+  lat: number,
+  lng: number,
+): Promise<{ address: string; province: string } | null> {
+  try {
+    const res = await api.geo['reverse-geocode'].$get({
+      query: { lat: String(lat), lng: String(lng) },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }

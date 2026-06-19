@@ -15,6 +15,8 @@ export interface ServiceEnv {
   PUBLIC_API_URL?: string;
   /** Public base URL of the R2 bucket (when uploads are served direct from R2). */
   R2_PUBLIC_URL?: string;
+  /** Server-side Google Maps key for the cached Directions/Geocoding proxy. */
+  GOOGLE_MAPS_SERVER_KEY?: string;
   WEB_ORIGIN: string;
   ADMIN_ORIGIN: string;
   LINE_CHANNEL_ID: string;

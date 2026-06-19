@@ -1,12 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import {
   APIProvider,
   Map,
   Marker,
   useMap,
-  useMapsLibrary,
   type MapMouseEvent,
 } from '@vis.gl/react-google-maps';
 import { Maximize2 } from 'lucide-react';
@@ -16,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@movesook/ui';
-import { matchProvinceName } from '@movesook/thailand-provinces/province';
+import { reverseGeocodeRemote } from '@/lib/geo';
 import type { LatLng } from './job-route-map';
 
 /** Address + canonical Thai province resolved by reverse-geocoding a map tap. */
@@ -78,34 +77,13 @@ function PickerMap({
   icon?: string;
   center: LatLng;
 }) {
-  const geocoding = useMapsLibrary('geocoding');
-  const geocoderRef = useRef<google.maps.Geocoder | null>(null);
-
-  useEffect(() => {
-    if (geocoding && !geocoderRef.current) {
-      geocoderRef.current = new geocoding.Geocoder();
-    }
-  }, [geocoding]);
-
   const resolve = useCallback(
     async (latLng: LatLng) => {
-      const geocoder = geocoderRef.current;
-      if (!geocoder || !onResolve) return;
-      try {
-        const { results } = await geocoder.geocode({
-          location: latLng,
-          language: 'th',
-        });
-        const best = results[0];
-        if (!best) return;
-        const provinceComp = best.address_components.find((c) =>
-          c.types.includes('administrative_area_level_1'),
-        );
-        const province = provinceComp ? (matchProvinceName(provinceComp.long_name) ?? '') : '';
-        onResolve({ address: best.formatted_address, province });
-      } catch {
-        // Reverse geocoding is best-effort; the tap still sets coordinates.
-      }
+      if (!onResolve) return;
+      // Reverse geocoding goes through the API's cached proxy (GET /geo/
+      // reverse-geocode); best-effort, so the tap still sets coordinates on miss.
+      const place = await reverseGeocodeRemote(latLng.lat, latLng.lng);
+      if (place) onResolve({ address: place.address, province: place.province });
     },
     [onResolve],
   );

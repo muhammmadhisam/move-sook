@@ -18,6 +18,7 @@ import { adminRoutes } from './routes/admin';
 import { blogRoutes } from './routes/blog';
 import { uploadRoutes, serveUploads } from './routes/uploads';
 import { webhookRoutes } from './routes/webhooks';
+import { geoRoutes } from './routes/geo';
 
 // One chain so hc<AppType>() sees every mounted route's literal types.
 const app = new Hono<AppEnv>()
@@ -105,7 +106,8 @@ const app = new Hono<AppEnv>()
   .route('/drivers', driverRoutes)
   .route('/uploads', uploadRoutes)
   .route('/admin', adminRoutes)
-  .route('/webhooks', webhookRoutes);
+  .route('/webhooks', webhookRoutes)
+  .route('/geo', geoRoutes);
 
 export { app };
 export type AppType = typeof app;

@@ -13,6 +13,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import { fetchRoutePath } from '@/lib/geo';
 import { DEST_ICON, DRIVER_ICON, PICKUP_ICON } from '@/lib/marker-icons';
 
 export interface LatLng {
@@ -181,14 +182,9 @@ function NavOverlay({
       pts.forEach((p) => b.extend(p));
       map.fitBounds(b, 64);
     };
-    const s = new routesLib.DirectionsService();
-    void s
-      .route({ origin, destination: dest, travelMode: google.maps.TravelMode.DRIVING })
-      .then((res) => {
-        const path = res.routes[0]?.overview_path;
-        place(path ? path.map((p) => ({ lat: p.lat(), lng: p.lng() })) : [origin, dest]);
-      })
-      .catch(() => place([origin, dest]));
+    // Static origin→dest overview — served from the API's cached route proxy
+    // (the live turn-by-turn leg below still uses Google directly for steps).
+    void fetchRoutePath(origin, dest).then(place);
   }, [map, routesLib, origin, dest, onState]);
 
   const recompute = useCallback(

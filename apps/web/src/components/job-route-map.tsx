@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { APIProvider, Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps';
 import { DEST_ICON, DRIVER_ICON, PICKUP_ICON } from '@/lib/marker-icons';
+import { fetchRoutePath } from '@/lib/geo';
 
 export interface LatLng {
   lat: number;
@@ -20,32 +21,6 @@ interface JobRouteMapProps {
   className?: string;
 }
 
-/**
- * Requests a driving route between two points and returns the road-following
- * path. Falls back to a straight `[from, to]` path if the Directions API can't
- * produce a route (e.g. islands, missing roads, quota errors).
- */
-async function roadPath(
-  service: google.maps.DirectionsService,
-  from: LatLng,
-  to: LatLng,
-): Promise<LatLng[]> {
-  try {
-    const result = await service.route({
-      origin: from,
-      destination: to,
-      travelMode: google.maps.TravelMode.DRIVING,
-    });
-    const path = result.routes[0]?.overview_path;
-    if (path && path.length > 0) {
-      return path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
-    }
-  } catch {
-    // Routing unavailable — fall through to the straight-line fallback.
-  }
-  return [from, to];
-}
-
 /** Fits the viewport to the available points and draws the route legs. */
 function RouteOverlay({
   origin,
@@ -57,10 +32,9 @@ function RouteOverlay({
   driver?: LatLng | null;
 }) {
   const map = useMap();
-  const routesLib = useMapsLibrary('routes');
 
   useEffect(() => {
-    if (!map || !routesLib) return;
+    if (!map) return;
     const points = [driver, origin, dest].filter((p): p is LatLng => p != null);
     if (points.length === 0) return;
 
@@ -72,7 +46,6 @@ function RouteOverlay({
 
     let cancelled = false;
     const lines: google.maps.Polyline[] = [];
-    const service = new routesLib.DirectionsService();
 
     const draw = (path: LatLng[], options: google.maps.PolylineOptions) => {
       if (cancelled) return;
@@ -91,9 +64,10 @@ function RouteOverlay({
     points.forEach((p) => initial.extend(p));
     map.fitBounds(initial, 64);
 
-    // Driver → pickup leg (dashed, the "go pick up" segment).
+    // Driver → pickup leg (dashed, the "go pick up" segment). The driver endpoint
+    // moves with live tracking, so this leg uses the short-TTL `live` cache.
     if (driver && origin) {
-      void roadPath(service, driver, origin).then((path) =>
+      void fetchRoutePath(driver, origin, { live: true }).then((path) =>
         draw(path, {
           geodesic: true,
           strokeOpacity: 0,
@@ -111,7 +85,7 @@ function RouteOverlay({
 
     // Pickup → dropoff leg (solid, the delivery segment).
     if (origin && dest) {
-      void roadPath(service, origin, dest).then((path) =>
+      void fetchRoutePath(origin, dest).then((path) =>
         draw(path, {
           geodesic: true,
           strokeColor: '#E0202A', // brand-600 (logo red)
@@ -125,7 +99,7 @@ function RouteOverlay({
       cancelled = true;
       lines.forEach((l) => l.setMap(null));
     };
-  }, [map, routesLib, origin, dest, driver]);
+  }, [map, origin, dest, driver]);
 
   return null;
 }

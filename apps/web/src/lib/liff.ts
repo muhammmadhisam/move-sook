@@ -6,8 +6,22 @@ import liff from '@line/liff';
 // the same single-use authorization code, and the second exchange 400s.
 let liffReady: Promise<typeof liff> | null = null;
 
+// Two LIFF apps under different channels: a LINE Login LIFF for desktop browsers
+// (standard OAuth redirect) and a LINE MINI App for mobile (native inside LINE).
+// A Mini App container rejects init() with a foreign liffId ("Invalid LIFF ID"),
+// so on mobile we MUST init with the Mini App's own id; desktop has no Mini App
+// container and uses the Login LIFF. Pick by device.
+function resolveLiffId(): string | undefined {
+  const login = process.env.NEXT_PUBLIC_LIFF_ID;
+  const miniApp = process.env.NEXT_PUBLIC_LIFF_ID_MINIAPP;
+  const isMobile =
+    typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  // Fall back to whichever is configured if the preferred one is unset.
+  return (isMobile ? miniApp ?? login : login ?? miniApp) || undefined;
+}
+
 export function ensureLiff(): Promise<typeof liff> {
-  const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  const liffId = resolveLiffId();
   if (!liffId) return Promise.reject(new Error('NEXT_PUBLIC_LIFF_ID is not configured'));
   if (!liffReady) {
     liffReady = liff.init({ liffId }).then(() => liff);

@@ -74,7 +74,7 @@ export default async function DriversPage() {
           </ol>
           <div className="mt-10">
             <Link
-              href="/app"
+              href="/driver/apply"
               className="inline-block rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-brand-700"
             >
               เริ่มสมัครเป็นคนขับ

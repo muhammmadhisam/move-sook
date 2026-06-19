@@ -9,8 +9,15 @@ import { useAuthStore } from '@/store/auth';
 import type { MeResponse } from '@movesook/shared';
 
 // Guards the auto-exchange so it fires once per page load even when several
-// components mount useAuth() (AppShell + the page both call it).
+// components mount useAuth() (AppShell + the page both call it). Reset on a
+// failed exchange so a later remount/navigation can try again rather than the
+// flag wedging the user on the error screen forever.
 let lineExchangeStarted = false;
+
+// Marks a /auth/line failure as transient (LINE verify endpoint blip / our API
+// 5xx) so the mutation retries with backoff. 4xx (bad/expired token, banned) is
+// permanent — surface it instead of hammering.
+class RetryableLoginError extends Error {}
 
 async function fetchMe(): Promise<MeResponse | null> {
   const res = await api.me.$get();
@@ -40,10 +47,26 @@ export function useAuth() {
     mutationFn: async () => {
       const idToken = await getLineIdToken();
       const res = await api.auth.line.$post({ json: { idToken } });
-      if (!res.ok) throw new Error('LINE login failed');
+      if (!res.ok) {
+        // 5xx = transient (retry); 4xx = permanent (don't).
+        throw res.status >= 500
+          ? new RetryableLoginError('LINE login failed (server)')
+          : new Error('LINE login failed');
+      }
       return res.json();
     },
+    // Only retry the transient class; getLineIdToken's redirect throw and 4xx
+    // are plain Errors and fall through immediately.
+    retry: (failureCount, error) =>
+      failureCount < 2 && error instanceof RetryableLoginError,
+    retryDelay: (attempt) => 500 * 2 ** attempt,
+    // Keep the gate set on success (we have a session now; the meQuery.data
+    // guard also blocks a re-fire). Only release it on failure so the next
+    // mount/navigation can retry the auto-exchange instead of wedging here.
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['me'] }),
+    onError: () => {
+      lineExchangeStarted = false;
+    },
   });
 
   // Initialize LIFF on load. liff.init() consumes the ?code/&state OAuth callback

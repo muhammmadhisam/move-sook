@@ -39,10 +39,15 @@ export function AppShell({ children }: { children: ReactNode }) {
     refetchInterval: 30_000,
   });
 
-  // Gate the app shell: once the session resolves with no user, bounce to /login.
+  // Gate the app shell: once the session resolves with no user, bounce to /login,
+  // carrying the intended destination so login returns the user here (e.g. the
+  // "สมัครคนขับ" CTA lands on /driver/apply, not the generic /app feed).
   useEffect(() => {
-    if (!isLoading && !me) router.replace('/login');
-  }, [isLoading, me, router]);
+    if (!isLoading && !me) {
+      const next = `${pathname}${window.location.search}`;
+      router.replace(`/login?next=${encodeURIComponent(next)}`);
+    }
+  }, [isLoading, me, router, pathname]);
 
   // First load / redirecting: render nothing chrome-less to avoid a flash.
   if (!me || isLoading) {

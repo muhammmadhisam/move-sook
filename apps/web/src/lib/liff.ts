@@ -36,6 +36,19 @@ function isIdTokenUsable(client: typeof liff): boolean {
   return decoded.exp * 1000 > Date.now() + ID_TOKEN_SKEW_MS;
 }
 
+// LINE requires the login redirect_uri to live UNDER the registered LIFF
+// endpoint, so we always return to `<domain>/login` (register that as the
+// endpoint; landing elsewhere makes the code→token exchange 400). We preserve
+// the post-login destination in `?next=` across the redirect: if we're already
+// on /login keep its existing param, otherwise carry the current page (e.g. a
+// stale-token re-login fired on /driver/apply returns there, not the generic feed).
+function loginRedirectUri(): string {
+  const { origin, pathname, search } = window.location;
+  if (pathname === '/login') return `${origin}/login${search}`;
+  const next = encodeURIComponent(`${pathname}${search}`);
+  return `${origin}/login?next=${next}`;
+}
+
 /** Run LIFF login (redirect) if needed, then return a fresh id_token. */
 export async function getLineIdToken(): Promise<string> {
   const client = await ensureLiff();
@@ -45,12 +58,7 @@ export async function getLineIdToken(): Promise<string> {
   // can short-circuit and never mint a fresh token).
   if (!client.isLoggedIn() || !isIdTokenUsable(client)) {
     if (client.isLoggedIn()) client.logout();
-    // LINE requires the login redirect_uri to live UNDER the registered LIFF
-    // endpoint. /login is the universal entry (login button + the AppShell auth
-    // bounce both land here), so register `<domain>/login` as the endpoint and
-    // return there. Landing elsewhere makes the code→token exchange fail (400).
-    // Once the session resolves, useAuth/login redirect onward to /app.
-    client.login({ redirectUri: `${window.location.origin}/login` });
+    client.login({ redirectUri: loginRedirectUri() });
     // login() redirects; throw to halt the current flow.
     throw new Error('redirecting to LINE login');
   }

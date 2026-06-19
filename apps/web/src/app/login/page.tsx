@@ -10,13 +10,23 @@ import { useAuth } from "@/hooks/use-auth";
 
 const IS_DEV = process.env.NODE_ENV !== "production";
 
+// Resolve the post-login destination from ?next=, but only accept a same-origin
+// path ("/foo") — never "//evil.com" or "http://…" — so the param can't be used
+// as an open redirect. Falls back to the app home.
+function safeNext(): string {
+  if (typeof window === "undefined") return "/app";
+  const raw = new URLSearchParams(window.location.search).get("next");
+  if (raw && raw.startsWith("/") && !raw.startsWith("//")) return raw;
+  return "/app";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const { me, isLoading, login, devLogin } = useAuth();
 
-  // Already signed in → straight to the app.
+  // Already signed in → go to the requested page (?next=), else the app home.
   useEffect(() => {
-    if (me) router.replace("/app");
+    if (me) router.replace(safeNext());
   }, [me, router]);
 
   return (

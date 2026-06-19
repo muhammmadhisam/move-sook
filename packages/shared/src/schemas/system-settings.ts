@@ -21,6 +21,7 @@ export const VehiclePricingDto = z.object({
   label: z.string().nullable(),
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  imageUrls: z.array(z.string()), // แกลเลอรีรูปตัวอย่างเพิ่มเติม
   requirements: z.string().nullable(),
   maxWeightKg: z.number().int().nullable(),
   pricePerKm: z.number().int().nullable(), // เหมาลำ per-km rate
@@ -38,6 +39,7 @@ export const PublicVehicleRate = z.object({
   label: z.string().nullable(),
   description: z.string().nullable(),
   imageUrl: z.string().nullable(),
+  imageUrls: z.array(z.string()), // แกลเลอรีรูปตัวอย่างเพิ่มเติม (โชว์ให้ลูกค้าเห็น)
   pricePerKm: z.number().int().nullable(),
   pricePerKmShared: z.number().int().nullable(),
 });
@@ -49,6 +51,7 @@ export const AdminUpsertVehiclePricingInput = z.object({
   label: z.string().max(80).nullable().optional(),
   description: z.string().max(300).nullable().optional(),
   imageUrl: z.string().url().nullable().optional(),
+  imageUrls: z.array(z.string().url()).max(10).optional(), // แกลเลอรีรูปตัวอย่างเพิ่มเติม (สูงสุด 10)
   requirements: z.string().max(500).nullable().optional(),
   maxWeightKg: z.number().int().min(0).max(100000).nullable().optional(),
   pricePerKm: z.number().int().min(0).max(100000).nullable().optional(),

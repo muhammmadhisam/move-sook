@@ -274,7 +274,16 @@ export async function listJobs(
   q: ListJobsQuery,
 ): Promise<JobListResponse> {
   let where: Prisma.JobWhereInput;
-  if (role === 'DRIVER') {
+  if (q.as === 'customer') {
+    // Explicit "as a customer" view: jobs this account posted, for ANY role.
+    // A DRIVER who also uses the moving service holds one account; this is how
+    // they see jobs they posted (the DRIVER default below shows the feed/their
+    // assigned work, never their own posted jobs).
+    where = {
+      customer: { userId: sub },
+      ...(q.status ? { status: q.status } : {}),
+    };
+  } else if (role === 'DRIVER') {
     const driver = await prisma.driver.findUnique({ where: { userId: sub } });
 
     if (q.mine) {
@@ -294,6 +303,10 @@ export async function listJobs(
         // see unpaid, admin-unapproved jobs the payment gate hides from them.
         status: 'POSTED',
         driverId: null,
+        // A driver must not see (nor accept) a job they posted themselves. Prisma's
+        // `not` keeps rows where userId is null (admin/walk-in customers), so those
+        // public jobs still appear in the feed.
+        customer: { userId: { not: sub } },
         ...(q.vehicleType ? { vehicleType: q.vehicleType } : {}),
         ...(areaProvince ? { originProvince: areaProvince } : {}),
         ...(q.destProvince ? { destProvince: q.destProvince } : {}),
@@ -540,9 +553,16 @@ export async function acceptJob(sub: string, jobId: string): Promise<JobDto> {
   });
   const target = await prisma.job.findUnique({
     where: { id: jobId },
-    select: { pricingMode: true },
+    select: { pricingMode: true, customer: { select: { userId: true } } },
   });
   if (!target) throw new HTTPException(404, { message: 'ไม่พบงานนี้' });
+
+  // Self-hire guard: a driver who also posts jobs as a customer must never claim
+  // their own job — that would let them spoof activity / referral / incentive
+  // metrics and write a self-dealing commission ledger row.
+  if (target.customer.userId === sub) {
+    throw new HTTPException(403, { message: 'ไม่สามารถรับงานที่คุณโพสต์เองได้' });
+  }
 
   // CHARTER (เหมาลำ) dedicates the whole vehicle to one job, so it's mutually
   // exclusive with any other in-hand work — both directions:

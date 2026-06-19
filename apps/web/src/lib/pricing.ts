@@ -11,6 +11,7 @@ export type VehicleRate = {
   label: string;
   description: string | null;
   imageUrl: string | null;
+  imageUrls: string[];
   pricePerKm: number | null;
   pricePerKmShared: number | null;
 };
@@ -33,6 +34,7 @@ export async function getVehicleRates(): Promise<VehicleRate[]> {
               label: v.label,
               description: v.description,
               imageUrl: v.imageUrl,
+              imageUrls: v.imageUrls,
               pricePerKm: v.pricePerKm,
               pricePerKmShared: v.pricePerKmShared,
             },

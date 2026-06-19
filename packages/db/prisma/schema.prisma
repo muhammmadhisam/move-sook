@@ -525,7 +525,8 @@ model VehiclePricing {
   vehicleType  String  @id
   label        String? // ชื่อที่แสดง เช่น "กระบะตอนเดียว"
   description  String? // คำอธิบายสั้น
-  imageUrl     String? // รูปตัวอย่างรถ (โชว์ให้ลูกค้าเห็นว่ารถที่จะได้หน้าตาประมาณนี้)
+  imageUrl     String? // รูปตัวอย่างรถ (ปก) — โชว์ให้ลูกค้าเห็นว่ารถที่จะได้หน้าตาประมาณนี้
+  imageUrls    String[] @default([]) // รูปตัวอย่างเพิ่มเติม (แกลเลอรี) นอกจากรูปปก
   requirements String? // ลักษณะ/สเปกรถที่รับเข้าร่วม (free text)
   maxWeightKg  Int? // น้ำหนักบรรทุกสูงสุด (กก.)
   pricePerKm   Int? // เหมาลำ: เรตต่อกม. (null = ใช้เรตกลาง price_per_km)

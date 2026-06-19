@@ -182,6 +182,21 @@ export default async function PricingPage() {
                     )}
                   </div>
 
+                  {/* รูปตัวอย่างเพิ่มเติม (แกลเลอรี) — โชว์ให้ลูกค้าเห็นหลายมุม */}
+                  {v.imageUrls.length > 0 && (
+                    <div className="flex gap-1.5 overflow-x-auto px-3 pt-3">
+                      {v.imageUrls.map((url) => (
+                        <img
+                          key={url}
+                          src={url}
+                          alt={v.label}
+                          loading="lazy"
+                          className="h-14 w-14 shrink-0 rounded-md border object-cover"
+                        />
+                      ))}
+                    </div>
+                  )}
+
                   <div className="flex flex-1 flex-col p-5">
                     <h3 className="font-semibold leading-tight">{v.label}</h3>
                     {v.description && (

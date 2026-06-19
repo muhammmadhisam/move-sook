@@ -369,6 +369,48 @@ export async function patchJob(
   return toJobDto(updated);
 }
 
+/**
+ * Hard-delete a job and everything that hangs off it. This is a destructive,
+ * admin-only escape hatch intended for clearing out test/garbage jobs (incl. on
+ * prod) — it is NOT part of the normal lifecycle (real jobs are CANCELLED, never
+ * deleted). Review rows cascade via the FK; Transaction / Dispute / Notification
+ * rows do not, so we remove them explicitly inside one transaction.
+ */
+export async function deleteJob(sub: string, id: string): Promise<{ id: string }> {
+  const actorId = sub;
+  const job = await prisma.job.findUnique({ where: { id } });
+  if (!job) throw new HTTPException(404, { message: 'Job not found' });
+
+  await prisma.$transaction(async (tx) => {
+    // Children without onDelete: Cascade — remove first to satisfy the FK.
+    await tx.transaction.deleteMany({ where: { jobId: id } });
+    await tx.dispute.deleteMany({ where: { jobId: id } });
+    // Notification.jobId is a loose deep-link (no FK) — clear stale links.
+    await tx.notification.deleteMany({ where: { jobId: id } });
+    // Review cascades via its FK.
+    await tx.job.delete({ where: { id } });
+  });
+
+  await writeAudit({
+    actorId,
+    action: 'job.delete',
+    targetType: 'job',
+    targetId: id,
+    metadata: {
+      job: {
+        status: job.status,
+        customerId: job.customerId,
+        driverId: job.driverId,
+        originProvince: job.originProvince,
+        destProvince: job.destProvince,
+        priceQuoted: job.priceQuoted,
+      },
+    },
+  });
+
+  return { id };
+}
+
 const DOC_TYPES = ['receipt', 'payout', 'worksheet', 'delivery'] as const;
 
 /**

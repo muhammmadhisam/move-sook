@@ -186,6 +186,11 @@ export const ListJobsQuery = z.object({
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
     .optional(),
+  // Audience selector: `customer` lists jobs this account POSTED as a customer,
+  // regardless of role. A single account can both drive and post (a DRIVER who
+  // also uses the service), so this lets a driver see their own posted jobs
+  // (the role-based default would otherwise show them the driver feed instead).
+  as: z.enum(['customer', 'driver']).optional(),
   take: z.coerce.number().int().min(1).max(100).default(20),
   cursor: z.string().optional(),
 });

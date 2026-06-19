@@ -48,7 +48,10 @@ const PROGRESS_STEPS: { status: JobStatus; label: string }[] = [
 const STEP_ORDER: JobStatus[] = PROGRESS_STEPS.map((s) => s.status);
 
 async function fetchMyJobs(): Promise<JobListResponse> {
-  const res = await api.jobs.$get({ query: {} });
+  // `as: 'customer'` → jobs this account posted, regardless of role. A DRIVER who
+  // also uses the service reaches this page too; without it the API would return
+  // their driver feed instead of the jobs they posted.
+  const res = await api.jobs.$get({ query: { as: 'customer' } });
   if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
   return (await res.json()) as JobListResponse;
 }

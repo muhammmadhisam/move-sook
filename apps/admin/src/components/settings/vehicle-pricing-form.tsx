@@ -17,11 +17,13 @@ import {
 import { VehicleTypeSlugSchema, vehicleTypeLabel, type VehiclePricingDto } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
+import { ImageUploadGallery } from '@/components/image-upload-gallery';
 
 type Draft = {
   label: string;
   description: string;
   imageUrl: string | null;
+  imageUrls: string[];
   requirements: string;
   maxWeightKg: string;
   pricePerKm: string;
@@ -36,6 +38,7 @@ const EMPTY_DRAFT: Draft = {
   label: '',
   description: '',
   imageUrl: null,
+  imageUrls: [],
   requirements: '',
   maxWeightKg: '',
   pricePerKmShared: '',
@@ -50,6 +53,7 @@ const toDraft = (c: VehiclePricingDto): Draft => ({
   label: c.label ?? '',
   description: c.description ?? '',
   imageUrl: c.imageUrl ?? null,
+  imageUrls: c.imageUrls ?? [],
   requirements: c.requirements ?? '',
   maxWeightKg: c.maxWeightKg != null ? String(c.maxWeightKg) : '',
   pricePerKm: c.pricePerKm != null ? String(c.pricePerKm) : '',
@@ -111,6 +115,7 @@ export function VehiclePricingForm({ slug }: { slug?: string }) {
           label: draft.label.trim() || null,
           description: draft.description.trim() || null,
           imageUrl: draft.imageUrl,
+          imageUrls: draft.imageUrls,
           requirements: draft.requirements.trim() || null,
           maxWeightKg: draft.maxWeightKg.trim() ? Number(draft.maxWeightKg) : null,
           pricePerKm: draft.pricePerKm.trim() ? Number(draft.pricePerKm) : null,
@@ -205,6 +210,15 @@ export function VehiclePricingForm({ slug }: { slug?: string }) {
               ลบรูป
             </Button>
           )}
+        </div>
+        <div className="space-y-1">
+          <Label>รูปตัวอย่างเพิ่มเติม (แกลเลอรี โชว์ให้ลูกค้าเห็นหลายมุม)</Label>
+          <ImageUploadGallery
+            folder="vehicle"
+            value={draft.imageUrls}
+            max={10}
+            onChange={(urls) => setDraft({ ...draft, imageUrls: urls })}
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="vreq">ลักษณะ/สเปกรถที่รับ</Label>

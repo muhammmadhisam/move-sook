@@ -15,6 +15,7 @@ export async function listVehiclePricing(): Promise<{ items: VehiclePricingDto[]
     label: r.label,
     description: r.description,
     imageUrl: r.imageUrl,
+    imageUrls: r.imageUrls,
     requirements: r.requirements,
     maxWeightKg: r.maxWeightKg,
     pricePerKm: r.pricePerKm,
@@ -41,6 +42,7 @@ export async function listPublicVehiclePricing(): Promise<{ items: PublicVehicle
       label: true,
       description: true,
       imageUrl: true,
+      imageUrls: true,
       pricePerKm: true,
       pricePerKmShared: true,
     },
@@ -53,12 +55,13 @@ export async function upsertVehiclePricing(
   sub: string,
   input: AdminUpsertVehiclePricingInput,
 ): Promise<VehiclePricingDto> {
-  const { vehicleType, label, description, imageUrl, requirements, maxWeightKg, pricePerKm, pricePerKmShared, flatRate, perItemRate, maxActiveJobs, isActive } =
+  const { vehicleType, label, description, imageUrl, imageUrls, requirements, maxWeightKg, pricePerKm, pricePerKmShared, flatRate, perItemRate, maxActiveJobs, isActive } =
     input;
   const data = {
     ...(label !== undefined ? { label } : {}),
     ...(description !== undefined ? { description } : {}),
     ...(imageUrl !== undefined ? { imageUrl } : {}),
+    ...(imageUrls !== undefined ? { imageUrls } : {}),
     ...(requirements !== undefined ? { requirements } : {}),
     ...(maxWeightKg !== undefined ? { maxWeightKg } : {}),
     ...(pricePerKm !== undefined ? { pricePerKm } : {}),
@@ -85,6 +88,7 @@ export async function upsertVehiclePricing(
     label: row.label,
     description: row.description,
     imageUrl: row.imageUrl,
+    imageUrls: row.imageUrls,
     requirements: row.requirements,
     maxWeightKg: row.maxWeightKg,
     pricePerKm: row.pricePerKm,

@@ -71,7 +71,9 @@ export default function ProfilePage() {
     queryKey: ['my-jobs'],
     enabled: me != null && !isDriver,
     queryFn: async (): Promise<JobListResponse> => {
-      const res = await api.jobs.$get({ query: {} });
+      // Shares the ['my-jobs'] cache key — use the same `as` selector as the
+      // other customer views so all reads of this key return the same shape.
+      const res = await api.jobs.$get({ query: { as: 'customer' } });
       if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
       return (await res.json()) as JobListResponse;
     },

@@ -2,9 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Printer, ChevronDown, MapPin } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { Printer, ChevronDown, MapPin, Trash2 } from 'lucide-react';
 import {
   Badge,
   Button,
@@ -23,6 +24,7 @@ import {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
+import { useAdminWhoami } from '@/hooks/use-admin-whoami';
 import { useJobTrack } from '@/hooks/use-job-track';
 import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { PaymentReview } from '@/components/payment-review';
@@ -111,9 +113,26 @@ function Photos({ title, urls }: { title: string; urls: string[] }) {
 export default function AdminJobDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
+  const router = useRouter();
   const queryClient = useQueryClient();
   const { vehicleLabelOf } = useVehicleLabels();
+  const { data: me } = useAdminWhoami();
   const [showMap, setShowMap] = useState(false);
+
+  // Destructive escape hatch (SUPER only) for clearing test jobs, incl. on prod.
+  const remove = useMutation({
+    mutationFn: async () => {
+      const res = await api.admin.jobs[':id'].$delete({ param: { id } });
+      if (!res.ok) throw new Error('ลบงานไม่สำเร็จ');
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'jobs'] });
+      toast.success('ลบงานแล้ว');
+      router.push('/jobs');
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const detail = useQuery({
     queryKey: ['admin', 'job', id],
@@ -161,6 +180,25 @@ export default function AdminJobDetailPage() {
             </Button>
           )}
           <PrintDocsMenu jobId={j.id} />
+          {me?.adminRole === 'SUPER' && (
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    'ลบงานนี้ถาวร? ใช้สำหรับงานทดสอบเท่านั้น — รวมถึงรีวิว/ธุรกรรม/ข้อพิพาทที่ผูกกับงานนี้จะถูกลบด้วย และไม่สามารถกู้คืนได้',
+                  )
+                ) {
+                  remove.mutate();
+                }
+              }}
+            >
+              <Trash2 className="h-4 w-4" />
+              ลบงาน
+            </Button>
+          )}
           <Badge variant={j.status === 'CANCELLED' ? 'destructive' : 'secondary'}>
             {JOB_STATUS_LABEL[j.status]}
           </Badge>

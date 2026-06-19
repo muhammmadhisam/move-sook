@@ -84,6 +84,7 @@ import {
   getJobDetail,
   createJob,
   patchJob,
+  deleteJob,
   buildJobDoc,
   approvePayment,
   listAssignableDrivers,
@@ -294,6 +295,12 @@ export const adminRoutes = new Hono<AppEnv>()
   // Intervene on a problem job (admin may set any status, but still legal-only).
   .patch('/jobs/:id', requireAdminRole('SUPER', 'OPS'), zValidator('json', AdminPatchJobInput), async (c) =>
     c.json(await patchJob(c.get('claims').sub, c.req.param('id'), c.req.valid('json'))),
+  )
+
+  // Hard-delete a job (SUPER only) — destructive escape hatch for clearing test
+  // jobs, incl. on prod. Real jobs are CANCELLED, never deleted.
+  .delete('/jobs/:id', requireAdminRole('SUPER'), async (c) =>
+    c.json(await deleteJob(c.get('claims').sub, c.req.param('id'))),
   )
 
   // Generate a printable PDF document for a job (receipt / payout / worksheet /

@@ -85,6 +85,26 @@ function DriverHome({ me }: { me: MeResponse }) {
       <Button asChild size="lg" variant="outline" className="w-full">
         <Link href="/app/active">งานที่รับไว้</Link>
       </Button>
+
+      {/* A driver can also use MoveSook as a customer (post their own moving job).
+          Kept visually separate from the driver workflow above. */}
+      <div className="rounded-2xl border bg-card p-3">
+        <p className="mb-2 px-1 text-xs font-medium text-muted-foreground">ต้องการใช้บริการขนย้าย?</p>
+        <div className="grid gap-2">
+          <Button asChild size="lg" className="w-full">
+            <Link href="/app/jobs/new">
+              <Plus className="h-4 w-4" />
+              โพสต์งานขนย้าย
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="w-full">
+            <Link href="/app/my-jobs">
+              <Package className="h-4 w-4" />
+              งานที่ฉันจ้าง
+            </Link>
+          </Button>
+        </div>
+      </div>
     </>
   );
 }
@@ -177,7 +197,9 @@ function CustomerHome() {
   const jobs = useQuery({
     queryKey: ['my-jobs'],
     queryFn: async (): Promise<JobListResponse> => {
-      const res = await api.jobs.$get({ query: {} });
+      // Shares the ['my-jobs'] cache with /app/my-jobs — keep the same `as`
+      // selector so both views read the account's posted jobs consistently.
+      const res = await api.jobs.$get({ query: { as: 'customer' } });
       if (!res.ok) throw new Error('โหลดงานไม่สำเร็จ');
       return (await res.json()) as JobListResponse;
     },

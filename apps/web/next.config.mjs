@@ -27,6 +27,19 @@ const nextConfig = {
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },
+  // The authenticated app moved under /app (commit "move all authenticated routes
+  // under /app to fix Mini App deep links"). Permanently redirect the old top-level
+  // paths so stale LINE Mini App / LIFF deep links (and bookmarks) still resolve
+  // instead of 404-ing. `:path*` matches the bare segment and any child.
+  async redirects() {
+    const moved = ['active', 'driver', 'jobs', 'my-jobs', 'notifications', 'profile', 'referral'];
+    return moved.flatMap((seg) => [
+      // bare segment (e.g. /jobs)
+      { source: `/${seg}`, destination: `/app/${seg}`, permanent: true },
+      // any child (e.g. /jobs/new, /driver/apply, /jobs/:id)
+      { source: `/${seg}/:path*`, destination: `/app/${seg}/:path*`, permanent: true },
+    ]);
+  },
 };
 
 export default nextConfig;

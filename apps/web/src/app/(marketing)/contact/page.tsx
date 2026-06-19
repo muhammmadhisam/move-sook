@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { MessageCircle, Clock, ArrowRight, Mail, Phone } from "lucide-react";
 import { PageHeader, Section } from "@/components/marketing/sections";
+import { MiniAppQr } from "@/components/marketing/mini-app-qr";
 import { JsonLd } from "@/components/marketing/json-ld";
 import { SITE } from "@/lib/site";
 
@@ -71,6 +72,13 @@ export default function ContactPage() {
               </span>
             </a>
           ))}
+        </div>
+
+        <div className="mt-12 rounded-2xl border bg-card p-8">
+          <MiniAppQr
+            size={170}
+            subtitle="เปิด MoveSook บน LINE แล้วเริ่มเรียกรถขนย้ายได้ทันที"
+          />
         </div>
 
         <div className="mt-10 flex items-center justify-center gap-2 text-sm text-muted-foreground">

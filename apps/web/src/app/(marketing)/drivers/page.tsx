@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Wallet, Clock, MapPin, BadgeCheck, TrendingUp, CalendarCheck } from 'lucide-react';
 import { PageHeader, Section } from '@/components/marketing/sections';
+import { MiniAppQr } from '@/components/marketing/mini-app-qr';
 import { getCommissionPct } from '@/lib/system';
 import { lineMiniAppLink } from '@/lib/site';
 
@@ -72,7 +73,7 @@ export default async function DriversPage() {
               </li>
             ))}
           </ol>
-          <div className="mt-10">
+          <div className="mt-10 flex flex-col items-start gap-6 sm:flex-row sm:items-center">
             <a
               href={lineMiniAppLink('/driver/apply')}
               target="_blank"
@@ -81,6 +82,7 @@ export default async function DriversPage() {
             >
               เริ่มสมัครเป็นคนขับ
             </a>
+            <MiniAppQr size={130} subtitle="หรือสแกนเพื่อสมัครบนมือถือ" />
           </div>
         </Section>
       </section>

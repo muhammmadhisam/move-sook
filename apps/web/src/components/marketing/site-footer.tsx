@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { SITE } from '@/lib/site';
+import { MiniAppQr } from '@/components/marketing/mini-app-qr';
 
 const GROUPS = [
   {
@@ -47,6 +48,7 @@ export function SiteFooter() {
             <span className="text-lg font-semibold tracking-tight">MoveSook</span>
           </Link>
           <p className="mt-3 max-w-xs text-sm leading-relaxed">{SITE.tagline}</p>
+          <MiniAppQr size={120} dark className="mt-5 items-start text-left" />
         </div>
 
         {GROUPS.map((group) => (

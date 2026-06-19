@@ -195,31 +195,14 @@ export default function DriverEditPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
-            <div className="grid gap-2">
-              <Label htmlFor="birthDate">วันเกิด</Label>
-              <Input
-                id="birthDate"
-                type="date"
-                value={form.birthDate}
-                onChange={(e) => set('birthDate')(e.target.value)}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label>เพศ</Label>
-              <Select value={form.gender} onValueChange={(v) => set('gender')(v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="เลือกเพศ" />
-                </SelectTrigger>
-                <SelectContent>
-                  {GenderSchema.options.map((g) => (
-                    <SelectItem key={g} value={g}>
-                      {GENDER_LABEL[g]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid gap-2">
+            <Label htmlFor="birthDate">วันเกิด</Label>
+            <Input
+              id="birthDate"
+              type="date"
+              value={form.birthDate}
+              onChange={(e) => set('birthDate')(e.target.value)}
+            />
           </div>
 
           <div className="grid gap-2">
@@ -252,6 +235,24 @@ export default function DriverEditPage() {
                 placeholder="เบอร์โทร"
               />
             </div>
+          </div>
+
+          {/* เพศ — full-width at the bottom of the personal-info block to match
+              the apply form's narrow Mini App layout. */}
+          <div className="grid gap-2">
+            <Label>เพศ</Label>
+            <Select value={form.gender} onValueChange={(v) => set('gender')(v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="เลือกเพศ" />
+              </SelectTrigger>
+              <SelectContent>
+                {GenderSchema.options.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {GENDER_LABEL[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* ── ข้อมูลรถ & ใบขับขี่ ── */}

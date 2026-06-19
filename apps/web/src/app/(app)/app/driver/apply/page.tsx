@@ -221,31 +221,14 @@ export default function DriverApplyPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
-                <div className="grid gap-2">
-                  <Label htmlFor="birthDate">วันเกิด</Label>
-                  <Input
-                    id="birthDate"
-                    type="date"
-                    value={form.birthDate}
-                    onChange={(e) => set('birthDate')(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label>เพศ</Label>
-                  <Select value={form.gender} onValueChange={(v) => set('gender')(v)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="เลือกเพศ" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GenderSchema.options.map((g) => (
-                        <SelectItem key={g} value={g}>
-                          {GENDER_LABEL[g]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="birthDate">วันเกิด</Label>
+                <Input
+                  id="birthDate"
+                  type="date"
+                  value={form.birthDate}
+                  onChange={(e) => set('birthDate')(e.target.value)}
+                />
               </div>
 
               <div className="grid gap-2">
@@ -269,6 +252,24 @@ export default function DriverApplyPage() {
                   onChange={(e) => set('email')(e.target.value)}
                   placeholder="you@example.com"
                 />
+              </div>
+
+              {/* เพศ — full-width at the bottom so the narrow Mini App layout
+                  isn't cramped pairing it next to วันเกิด. */}
+              <div className="grid gap-2">
+                <Label>เพศ</Label>
+                <Select value={form.gender} onValueChange={(v) => set('gender')(v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="เลือกเพศ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GenderSchema.options.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {GENDER_LABEL[g]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </>
           )}

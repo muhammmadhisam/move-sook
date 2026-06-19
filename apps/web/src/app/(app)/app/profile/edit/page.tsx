@@ -135,25 +135,6 @@ export default function ProfileEditPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>เพศ</Label>
-            <Select
-              value={form.gender || undefined}
-              onValueChange={(v) => set('gender')(v)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="เลือกเพศ" />
-              </SelectTrigger>
-              <SelectContent>
-                {GenderSchema.options.map((g) => (
-                  <SelectItem key={g} value={g}>
-                    {GENDER_LABEL[g]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
             <Label htmlFor="birthDate">วันเกิด</Label>
             <Input
               id="birthDate"
@@ -196,6 +177,27 @@ export default function ProfileEditPage() {
               placeholder="บ้านเลขที่ ถนน ตำบล อำเภอ จังหวัด รหัสไปรษณีย์"
               rows={3}
             />
+          </div>
+
+          {/* เพศ — moved to the bottom of the personal-info block for a
+              consistent narrow Mini App layout across the driver/profile forms. */}
+          <div className="space-y-1.5">
+            <Label>เพศ</Label>
+            <Select
+              value={form.gender || undefined}
+              onValueChange={(v) => set('gender')(v)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="เลือกเพศ" />
+              </SelectTrigger>
+              <SelectContent>
+                {GenderSchema.options.map((g) => (
+                  <SelectItem key={g} value={g}>
+                    {GENDER_LABEL[g]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}

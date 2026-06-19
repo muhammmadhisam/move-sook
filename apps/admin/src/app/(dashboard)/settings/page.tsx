@@ -57,6 +57,12 @@ type TabKey = (typeof TABS)[number]['key'];
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabKey>('pricing');
+
+  // Honor a ?tab= deep link (e.g. returning from the vehicle editor page).
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('tab');
+    if (q && TABS.some((t) => t.key === q)) setTab(q as TabKey);
+  }, []);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [baseFare, setBaseFare] = useState('');

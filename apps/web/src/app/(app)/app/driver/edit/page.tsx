@@ -33,6 +33,16 @@ import {
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
 
+// Vehicle photo angles the driver uploads (front/back/left/right + plate).
+const VEHICLE_PHOTOS = [
+  { key: 'vehiclePhotoFront', label: 'รูปรถ ด้านหน้า' },
+  { key: 'vehiclePhotoBack', label: 'รูปรถ ด้านหลัง' },
+  { key: 'vehiclePhotoLeft', label: 'รูปรถ ด้านซ้าย' },
+  { key: 'vehiclePhotoRight', label: 'รูปรถ ด้านขวา' },
+  { key: 'vehiclePhotoPlate', label: 'รูปป้ายทะเบียน' },
+] as const;
+type VehiclePhotoKey = (typeof VEHICLE_PHOTOS)[number]['key'];
+
 export default function DriverEditPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -59,6 +69,13 @@ export default function DriverEditPage() {
   });
   const [licenseTw2, setLicenseTw2] = useState<string | null>(null);
   const [nationalIdUrl, setNationalIdUrl] = useState<string | null>(null);
+  const [vehiclePhotos, setVehiclePhotos] = useState<Record<VehiclePhotoKey, string | null>>({
+    vehiclePhotoFront: null,
+    vehiclePhotoBack: null,
+    vehiclePhotoLeft: null,
+    vehiclePhotoRight: null,
+    vehiclePhotoPlate: null,
+  });
 
   const me = useQuery({
     queryKey: ['driver-me'],
@@ -116,6 +133,13 @@ export default function DriverEditPage() {
     });
     setLicenseTw2(d.licenseTw2 ?? null);
     setNationalIdUrl(d.nationalIdUrl ?? null);
+    setVehiclePhotos({
+      vehiclePhotoFront: d.vehiclePhotoFront ?? null,
+      vehiclePhotoBack: d.vehiclePhotoBack ?? null,
+      vehiclePhotoLeft: d.vehiclePhotoLeft ?? null,
+      vehiclePhotoRight: d.vehiclePhotoRight ?? null,
+      vehiclePhotoPlate: d.vehiclePhotoPlate ?? null,
+    });
   }, [me.data]);
 
   const set = (key: keyof typeof form) => (value: string) =>
@@ -138,6 +162,11 @@ export default function DriverEditPage() {
         licenseNo: form.licenseNo || undefined,
         licenseExpiry: form.licenseExpiry || undefined,
         licenseTw2: licenseTw2 || undefined,
+        vehiclePhotoFront: vehiclePhotos.vehiclePhotoFront || undefined,
+        vehiclePhotoBack: vehiclePhotos.vehiclePhotoBack || undefined,
+        vehiclePhotoLeft: vehiclePhotos.vehiclePhotoLeft || undefined,
+        vehiclePhotoRight: vehiclePhotos.vehiclePhotoRight || undefined,
+        vehiclePhotoPlate: vehiclePhotos.vehiclePhotoPlate || undefined,
         nationalId: form.nationalId || undefined,
         nationalIdUrl: nationalIdUrl || undefined,
         address: form.address || undefined,
@@ -363,6 +392,20 @@ export default function DriverEditPage() {
               onUploaded={setLicenseTw2}
             />
           </div>
+
+          {/* ── รูปรถ (4 ด้าน + ป้ายทะเบียน) ── */}
+          <p className="mt-2 text-sm font-medium text-muted-foreground">รูปรถ</p>
+          {VEHICLE_PHOTOS.map((p) => (
+            <div key={p.key} className="grid gap-2">
+              <Label>{p.label}</Label>
+              <ImageUpload
+                folder="driver"
+                value={vehiclePhotos[p.key]}
+                label={vehiclePhotos[p.key] ? `เปลี่ยน${p.label}` : `อัปโหลด${p.label}`}
+                onUploaded={(url) => setVehiclePhotos((v) => ({ ...v, [p.key]: url }))}
+              />
+            </div>
+          ))}
 
           <div className="grid gap-2">
             <Label>บัญชีรับเงิน</Label>

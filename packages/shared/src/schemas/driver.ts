@@ -93,6 +93,12 @@ const driverPersonalFields = {
   licenseNo: z.string().min(1).max(40).optional(), // เลขใบขับขี่
   licenseExpiry: DateOnlySchema.optional(), // วันหมดอายุใบขับขี่
   screening: DriverScreeningSchema.optional(), // คำตอบแบบสอบถามคัดกรอง
+  // ── Vehicle photos (uploaded URLs) ──
+  vehiclePhotoFront: z.string().min(1).optional(), // รูปรถ ด้านหน้า
+  vehiclePhotoBack: z.string().min(1).optional(), // รูปรถ ด้านหลัง
+  vehiclePhotoLeft: z.string().min(1).optional(), // รูปรถ ด้านซ้าย
+  vehiclePhotoRight: z.string().min(1).optional(), // รูปรถ ด้านขวา
+  vehiclePhotoPlate: z.string().min(1).optional(), // รูปป้ายทะเบียน
 } as const;
 
 // POST /drivers/apply — self-signup. Identity + contact + service area are
@@ -189,6 +195,11 @@ export const DriverDto = z.object({
   vehicleRegUrl: z.string().nullable(),
   vehicleRegExpiry: z.string().datetime().nullable(),
   insuranceExpiry: z.string().datetime().nullable(),
+  vehiclePhotoFront: z.string().nullable(),
+  vehiclePhotoBack: z.string().nullable(),
+  vehiclePhotoLeft: z.string().nullable(),
+  vehiclePhotoRight: z.string().nullable(),
+  vehiclePhotoPlate: z.string().nullable(),
   completedCount: z.number().int(),
   cancelCount: z.number().int(),
   submittedAt: z.string().datetime().nullable(), // last application (re)submission — verify-queue SLA anchor

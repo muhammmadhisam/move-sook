@@ -26,6 +26,29 @@ export async function listVehiclePricing(): Promise<{ items: VehiclePricingDto[]
   return { items };
 }
 
+/** Active vehicle types only, cheapest-first — for the public marketing site (no auth). */
+export async function listPublicVehiclePricing(): Promise<{ items: VehiclePricingDto[] }> {
+  const rows = await prisma.vehiclePricing.findMany({
+    where: { isActive: true },
+    orderBy: { pricePerKm: 'asc' },
+  });
+  const items: VehiclePricingDto[] = rows.map((r) => ({
+    vehicleType: r.vehicleType,
+    label: r.label,
+    description: r.description,
+    imageUrl: r.imageUrl,
+    requirements: r.requirements,
+    maxWeightKg: r.maxWeightKg,
+    pricePerKm: r.pricePerKm,
+    pricePerKmShared: r.pricePerKmShared,
+    flatRate: r.flatRate,
+    perItemRate: r.perItemRate,
+    maxActiveJobs: r.maxActiveJobs,
+    isActive: r.isActive,
+  }));
+  return { items };
+}
+
 /** Upsert a vehicle type's pricing. */
 export async function upsertVehiclePricing(
   sub: string,

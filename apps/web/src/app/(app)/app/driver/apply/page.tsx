@@ -36,7 +36,17 @@ import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
 
-const STEPS = ['ข้อมูลส่วนตัว', 'บัตร & ที่อยู่', 'ข้อมูลรถ & ใบขับขี่', 'คำถามคัดกรอง'] as const;
+const STEPS = ['ข้อมูลส่วนตัว', 'บัตร & ที่อยู่', 'ข้อมูลรถ & ใบขับขี่', 'รูปรถ', 'คำถามคัดกรอง'] as const;
+
+// Vehicle photo angles the applicant uploads (front/back/left/right + plate).
+const VEHICLE_PHOTOS = [
+  { key: 'vehiclePhotoFront', label: 'รูปรถ ด้านหน้า' },
+  { key: 'vehiclePhotoBack', label: 'รูปรถ ด้านหลัง' },
+  { key: 'vehiclePhotoLeft', label: 'รูปรถ ด้านซ้าย' },
+  { key: 'vehiclePhotoRight', label: 'รูปรถ ด้านขวา' },
+  { key: 'vehiclePhotoPlate', label: 'รูปป้ายทะเบียน' },
+] as const;
+type VehiclePhotoKey = (typeof VEHICLE_PHOTOS)[number]['key'];
 
 export default function DriverApplyPage() {
   const router = useRouter();
@@ -63,6 +73,13 @@ export default function DriverApplyPage() {
   });
   const [licenseTw2, setLicenseTw2] = useState<string | null>(null);
   const [nationalIdUrl, setNationalIdUrl] = useState<string | null>(null);
+  const [vehiclePhotos, setVehiclePhotos] = useState<Record<VehiclePhotoKey, string | null>>({
+    vehiclePhotoFront: null,
+    vehiclePhotoBack: null,
+    vehiclePhotoLeft: null,
+    vehiclePhotoRight: null,
+    vehiclePhotoPlate: null,
+  });
   const [screening, setScreening] = useState<Record<string, string>>({});
 
   // Vehicle types come from admin settings (VehiclePricing) so the applicant only
@@ -120,6 +137,11 @@ export default function DriverApplyPage() {
         licenseNo: form.licenseNo || undefined,
         licenseExpiry: form.licenseExpiry || undefined,
         licenseTw2: licenseTw2 || undefined,
+        vehiclePhotoFront: vehiclePhotos.vehiclePhotoFront || undefined,
+        vehiclePhotoBack: vehiclePhotos.vehiclePhotoBack || undefined,
+        vehiclePhotoLeft: vehiclePhotos.vehiclePhotoLeft || undefined,
+        vehiclePhotoRight: vehiclePhotos.vehiclePhotoRight || undefined,
+        vehiclePhotoPlate: vehiclePhotos.vehiclePhotoPlate || undefined,
         screening,
       });
       if (!parsed.success) {
@@ -149,6 +171,7 @@ export default function DriverApplyPage() {
     form.firstName.trim() !== '' && form.lastName.trim() !== '' && form.phone.trim().length >= 6,
     form.nationalId.length === 13,
     form.serviceProvince !== '',
+    VEHICLE_PHOTOS.every((p) => vehiclePhotos[p.key]),
     DRIVER_SCREENING_QUESTIONS.every((q) => screening[q.key]),
   ];
   const isLastStep = step === STEPS.length - 1;
@@ -413,8 +436,30 @@ export default function DriverApplyPage() {
             </>
           )}
 
-          {/* ── Step 3: คำถามคัดกรอง ── */}
+          {/* ── Step 3: รูปรถ ── */}
           {step === 3 && (
+            <>
+              <p className="text-sm text-muted-foreground">
+                ถ่ายรูปรถให้เห็นทั้ง 4 ด้าน และรูปป้ายทะเบียนให้ชัดเจน เพื่อใช้ยืนยันตัวรถ
+              </p>
+              {VEHICLE_PHOTOS.map((p) => (
+                <div key={p.key} className="grid gap-2">
+                  <Label>
+                    {p.label} <span className="text-destructive">*</span>
+                  </Label>
+                  <ImageUpload
+                    folder="driver"
+                    value={vehiclePhotos[p.key]}
+                    label={vehiclePhotos[p.key] ? `เปลี่ยน${p.label}` : `อัปโหลด${p.label}`}
+                    onUploaded={(url) => setVehiclePhotos((v) => ({ ...v, [p.key]: url }))}
+                  />
+                </div>
+              ))}
+            </>
+          )}
+
+          {/* ── Step 4: คำถามคัดกรอง ── */}
+          {step === 4 && (
             <>
               <p className="text-sm text-muted-foreground">
                 ตอบคำถามต่อไปนี้เพื่อให้ทีมงานพิจารณาการรับสมัคร

@@ -242,6 +242,12 @@ model Driver {
   vehicleRegUrl     String? // รูปทะเบียนรถ
   vehicleRegExpiry  DateTime? // ทะเบียน/พรบ. หมดอายุ
   insuranceExpiry   DateTime? // ประกันหมดอายุ
+  // ── Vehicle photos (captured during self-signup) ──
+  vehiclePhotoFront String? // รูปรถ ด้านหน้า
+  vehiclePhotoBack  String? // รูปรถ ด้านหลัง
+  vehiclePhotoLeft  String? // รูปรถ ด้านซ้าย
+  vehiclePhotoRight String? // รูปรถ ด้านขวา
+  vehiclePhotoPlate String? // รูปป้ายทะเบียน
   // ── SLA counters (denormalised from jobs) ──
   completedCount  Int                @default(0)
   cancelCount     Int                @default(0)

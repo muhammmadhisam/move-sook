@@ -12,6 +12,7 @@ import {
   DRIVER_ADVANCEABLE,
   DRIVER_IN_HAND,
   JOB_STATUS_LABEL,
+  type JobStatus,
   type CreateJobInput,
   type JobDetailResponse,
   type JobDto,
@@ -33,6 +34,7 @@ import {
   getHelperSurcharge,
   getSurge,
   getSystemSettings,
+  getVehicleLabel,
   isVehicleTypeActive,
   notify,
   enqueueAdminAlert,
@@ -468,6 +470,56 @@ export async function confirmDelivery(sub: string, id: string): Promise<JobDto> 
 }
 
 /** DRIVER accepts an open job; snapshots the current commission %. */
+// Driver fields needed to enrich a customer-facing status push.
+type DriverContact = {
+  firstName: string | null;
+  lastName: string | null;
+  phone: string | null;
+  vehicleType: string;
+  plateNumber: string | null;
+};
+
+function driverDisplayName(d: DriverContact): string {
+  const full = [d.firstName, d.lastName].filter(Boolean).join(' ').trim();
+  return full || 'พนักงานขนส่ง';
+}
+
+/**
+ * Detail rows (route, item, driver, vehicle, contact) attached to a customer's
+ * LINE status push so the message is useful on its own — not just a status word.
+ */
+async function customerJobRows(
+  job: { originProvince: string; destProvince: string; itemDescription: string },
+  driver: DriverContact,
+): Promise<{ label: string; value: string }[]> {
+  const vehicle = await getVehicleLabel(driver.vehicleType);
+  const rows = [
+    { label: 'เส้นทางการขนส่ง', value: `${job.originProvince} → ${job.destProvince}` },
+    { label: 'รายการพัสดุ', value: job.itemDescription },
+    { label: 'พนักงานขนส่ง', value: driverDisplayName(driver) },
+    { label: 'ยานพาหนะ', value: driver.plateNumber ? `${vehicle} (${driver.plateNumber})` : vehicle },
+  ];
+  if (driver.phone) rows.push({ label: 'เบอร์ติดต่อ', value: driver.phone });
+  return rows;
+}
+
+// Friendly, status-specific copy for the customer push when a driver advances a
+// job. Falls back to a generic line for any status not listed here.
+const CUSTOMER_STATUS_NOTICE: Partial<Record<JobStatus, { title: string; body: string }>> = {
+  PICKED_UP: {
+    title: 'รับพัสดุเรียบร้อยแล้ว',
+    body: 'พนักงานขนส่งได้รับพัสดุของท่านเรียบร้อยแล้ว และกำลังเตรียมจัดส่งไปยังปลายทาง',
+  },
+  IN_TRANSIT: {
+    title: 'อยู่ระหว่างการจัดส่ง',
+    body: 'พัสดุของท่านอยู่ระหว่างการนำส่งไปยังปลายทาง',
+  },
+  PENDING_CONFIRMATION: {
+    title: 'จัดส่งถึงปลายทางแล้ว',
+    body: 'พนักงานขนส่งแจ้งว่าได้นำส่งพัสดุถึงปลายทางเรียบร้อยแล้ว กรุณาตรวจสอบและกดยืนยันการรับพัสดุในแอปพลิเคชัน',
+  },
+};
+
 export async function acceptJob(sub: string, jobId: string): Promise<JobDto> {
   const driver = await prisma.driver.findUnique({ where: { userId: sub } });
   if (!driver) throw new HTTPException(403, { message: 'Not a driver' });
@@ -554,9 +606,10 @@ export async function acceptJob(sub: string, jobId: string): Promise<JobDto> {
     await notify({
       userId: job.customer.userId,
       type: 'JOB_STATUS',
-      title: 'มีคนขับรับงานของคุณแล้ว',
-      body: `${job.originProvince} → ${job.destProvince}`,
+      title: 'พนักงานขนส่งรับงานของท่านแล้ว',
+      body: 'พนักงานขนส่งกำลังเดินทางไปรับพัสดุของท่าน สามารถดูรายละเอียดพนักงานและยานพาหนะได้ด้านล่าง',
       jobId: job.id,
+      rows: await customerJobRows(job, driver),
     });
   }
   return toJobDto(job);
@@ -661,12 +714,17 @@ export async function updateJobStatus(
     select: { userId: true },
   });
   if (customer?.userId) {
+    const notice = CUSTOMER_STATUS_NOTICE[next] ?? {
+      title: 'อัปเดตสถานะการจัดส่ง',
+      body: `สถานะงานของท่านเปลี่ยนเป็น “${JOB_STATUS_LABEL[next]}”`,
+    };
     await notify({
       userId: customer.userId,
       type: 'JOB_STATUS',
-      title: 'สถานะงานอัปเดต',
-      body: `งานของคุณเปลี่ยนเป็น ${JOB_STATUS_LABEL[next]}`,
+      title: notice.title,
+      body: notice.body,
       jobId: updated.id,
+      rows: await customerJobRows(updated, driver),
     });
   }
   return toJobDto(updated);

@@ -433,6 +433,50 @@ export default function DriverDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {(
+          [
+            ['รูปรถ ด้านหน้า', driver.vehiclePhotoFront],
+            ['รูปรถ ด้านหลัง', driver.vehiclePhotoBack],
+            ['รูปรถ ด้านซ้าย', driver.vehiclePhotoLeft],
+            ['รูปรถ ด้านขวา', driver.vehiclePhotoRight],
+            ['รูปป้ายทะเบียน', driver.vehiclePhotoPlate],
+          ] as const
+        ).some(([, url]) => url) && (
+          <Card>
+            <CardHeader>
+              <CardTitle>รูปรถ</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {(
+                [
+                  ['รูปรถ ด้านหน้า', driver.vehiclePhotoFront],
+                  ['รูปรถ ด้านหลัง', driver.vehiclePhotoBack],
+                  ['รูปรถ ด้านซ้าย', driver.vehiclePhotoLeft],
+                  ['รูปรถ ด้านขวา', driver.vehiclePhotoRight],
+                  ['รูปป้ายทะเบียน', driver.vehiclePhotoPlate],
+                ] as const
+              )
+                .filter(([, url]) => url && isUrl(url))
+                .map(([label, url]) => (
+                  <a
+                    key={label}
+                    href={url as string}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="group flex flex-col gap-1"
+                  >
+                    <img
+                      src={url as string}
+                      alt={label}
+                      className="aspect-square w-full rounded-lg border object-cover transition-opacity group-hover:opacity-80"
+                    />
+                    <span className="text-xs text-muted-foreground">{label}</span>
+                  </a>
+                ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       <div>

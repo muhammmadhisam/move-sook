@@ -8,7 +8,7 @@ import { env } from './config';
 import { logger as baseLogger } from './lib/logger';
 import type { AppEnv } from './lib/context';
 import { getSystemSettings, getCommissionPct } from '@movesook/services/support';
-import { listPublicServiceAreas } from '@movesook/services/admin';
+import { listPublicServiceAreas, listPublicVehiclePricing } from '@movesook/services/admin';
 import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
 import { authRoutes } from './routes/auth';
 import { meRoutes } from './routes/me';
@@ -96,6 +96,8 @@ const app = new Hono<AppEnv>()
   })
   // Public list of active service-area provinces (marketing site, no auth).
   .get('/system/service-areas', async (c) => c.json(await listPublicServiceAreas()))
+  // Public active vehicle types + per-km rates (marketing pricing page, no auth).
+  .get('/system/vehicle-pricing', async (c) => c.json(await listPublicVehiclePricing()))
   // Serve uploaded images (GET /uploads/<file>) from R2 or local disk;
   // POST /uploads is handled by the router below.
   .use('/uploads/*', serveUploads)

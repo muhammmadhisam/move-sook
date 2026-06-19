@@ -19,6 +19,12 @@ type NotifyInput = {
   jobId?: string | null;
   /** Optional call-to-action button rendered on the LINE Flex card (e.g. a receipt link). */
   cta?: { label: string; url: string };
+  /**
+   * Optional label/value detail rows rendered on the LINE Flex card (e.g. route,
+   * item, driver contact). Push-only — the in-app Notification row stores just
+   * title/body, so keep the essentials in `body` too.
+   */
+  rows?: { label: string; value: string }[];
 };
 
 /** Plain-text fallback (chat-list preview / push alert) for a Flex card. */
@@ -68,6 +74,7 @@ export async function notify(input: NotifyInput): Promise<void> {
         altText: formatPush(input.title, input.body),
         title: input.title,
         body: input.body,
+        rows: input.rows,
         button: input.cta,
       });
       await enqueuePushMessages(user.lineUserId, [card]);

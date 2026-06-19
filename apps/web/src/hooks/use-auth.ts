@@ -48,10 +48,20 @@ export function useAuth() {
       const idToken = await getLineIdToken();
       const res = await api.auth.line.$post({ json: { idToken } });
       if (!res.ok) {
+        // Surface the server's reason (e.g. "LINE verify failed: aud_mismatch")
+        // instead of a generic message — the login page shows it so failures are
+        // self-diagnosing rather than an opaque "เข้าสู่ระบบไม่สำเร็จ".
+        let reason = `HTTP ${res.status}`;
+        try {
+          const body: unknown = await res.json();
+          if (body && typeof body === 'object' && 'error' in body) {
+            reason = String((body as { error: unknown }).error);
+          }
+        } catch {
+          // non-JSON body — keep the status code
+        }
         // 5xx = transient (retry); 4xx = permanent (don't).
-        throw res.status >= 500
-          ? new RetryableLoginError('LINE login failed (server)')
-          : new Error('LINE login failed');
+        throw res.status >= 500 ? new RetryableLoginError(reason) : new Error(reason);
       }
       return res.json();
     },

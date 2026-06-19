@@ -57,11 +57,19 @@ export default function LoginPage() {
           {login.isPending ? "กำลังเข้าสู่ระบบ…" : "เข้าสู่ระบบด้วย LINE"}
         </Button>
       )}
-      {login.isError && (
-        <p className="text-sm text-destructive">
-          เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง
-        </p>
-      )}
+      {login.isError &&
+        // The redirect-to-LINE throw isn't a real failure (the page is
+        // navigating away) — don't flash an error for it.
+        login.error?.message !== "redirecting to LINE login" && (
+          <p className="text-sm text-destructive">
+            เข้าสู่ระบบไม่สำเร็จ ลองใหม่อีกครั้ง
+            {login.error instanceof Error && login.error.message && (
+              <span className="mt-1 block text-xs opacity-70">
+                ({login.error.message})
+              </span>
+            )}
+          </p>
+        )}
 
       {IS_DEV && (
         <div className="w-full rounded-lg border border-dashed p-4">

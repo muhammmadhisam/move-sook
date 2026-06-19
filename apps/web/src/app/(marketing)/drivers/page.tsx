@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import { Wallet, Clock, MapPin, BadgeCheck, TrendingUp, CalendarCheck } from 'lucide-react';
 import { PageHeader, Section } from '@/components/marketing/sections';
 import { MiniAppQr } from '@/components/marketing/mini-app-qr';
+import { AppEntryLink } from '@/components/marketing/app-entry-link';
 import { getCommissionPct } from '@/lib/system';
-import { lineMiniAppLink } from '@/lib/site';
 
 export const metadata: Metadata = {
   title: 'สมัครเป็นคนขับ',
@@ -74,14 +74,12 @@ export default async function DriversPage() {
             ))}
           </ol>
           <div className="mt-10 flex flex-col items-start gap-6 sm:flex-row sm:items-center">
-            <a
-              href={lineMiniAppLink('/driver/apply')}
-              target="_blank"
-              rel="noopener noreferrer"
+            <AppEntryLink
+              path="/driver/apply"
               className="inline-block rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground shadow-sm transition-colors hover:bg-brand-700"
             >
               เริ่มสมัครเป็นคนขับ
-            </a>
+            </AppEntryLink>
             <MiniAppQr size={130} subtitle="หรือสแกนเพื่อสมัครบนมือถือ" />
           </div>
         </Section>

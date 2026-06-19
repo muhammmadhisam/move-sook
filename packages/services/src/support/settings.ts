@@ -1,6 +1,7 @@
 import { prisma } from '@movesook/db';
 import {
   APP_SETTING_KEYS,
+  DEFAULT_BASE_FARE,
   DEFAULT_COMMISSION_PCT,
   DEFAULT_FLAT_RATE,
   DEFAULT_FLOOR_SURCHARGE,
@@ -30,6 +31,24 @@ export async function setCommissionPct(pct: number): Promise<void> {
     where: { key: APP_SETTING_KEYS.COMMISSION_PCT },
     create: { key: APP_SETTING_KEYS.COMMISSION_PCT, value: String(pct) },
     update: { value: String(pct) },
+  });
+}
+
+/** Flat starting fare (THB) added to every distance-priced quote before per-km. AppSetting-backed. */
+export async function getBaseFare(): Promise<number> {
+  const row = await prisma.appSetting.findUnique({
+    where: { key: APP_SETTING_KEYS.BASE_FARE },
+  });
+  if (!row) return DEFAULT_BASE_FARE;
+  const parsed = Number(row.value);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_BASE_FARE;
+}
+
+export async function setBaseFare(value: number): Promise<void> {
+  await prisma.appSetting.upsert({
+    where: { key: APP_SETTING_KEYS.BASE_FARE },
+    create: { key: APP_SETTING_KEYS.BASE_FARE, value: String(value) },
+    update: { value: String(value) },
   });
 }
 
@@ -166,6 +185,22 @@ export async function getEffectiveFlatRate(vehicleType: VehicleType): Promise<nu
 export async function getEffectivePerItemRate(vehicleType: VehicleType): Promise<number> {
   const row = await prisma.vehiclePricing.findUnique({ where: { vehicleType } });
   return row?.perItemRate ?? DEFAULT_PER_ITEM_RATE;
+}
+
+/**
+ * Max concurrent in-hand jobs a driver of this vehicle type may hold: the
+ * per-vehicle override (VehiclePricing.maxActiveJobs) if set, else the global
+ * `max_active_jobs_per_driver` setting. Returns 0 for "unlimited" only when the
+ * global is 0 and no per-vehicle override is set.
+ */
+export async function getEffectiveMaxActiveJobs(vehicleType: string): Promise<number> {
+  const row = await prisma.vehiclePricing.findUnique({
+    where: { vehicleType },
+    select: { maxActiveJobs: true },
+  });
+  if (row?.maxActiveJobs != null) return row.maxActiveJobs;
+  const { maxActiveJobsPerDriver } = await getSystemSettings();
+  return maxActiveJobsPerDriver;
 }
 
 /**

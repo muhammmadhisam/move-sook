@@ -73,7 +73,16 @@ describe('estimateJobPrice', () => {
 });
 
 describe('computeJobQuote', () => {
-  const base = { distanceKm: 30, pricePerKm: 20 };
+  // baseFare defaults to DEFAULT_BASE_FARE (250); pin it to 0 here so the
+  // distance/surcharge assertions below stay focused on those parts.
+  const base = { distanceKm: 30, pricePerKm: 20, baseFare: 0 };
+
+  it('base fare is a flat starting add-on, not surged', () => {
+    const q = computeJobQuote({ distanceKm: 30, pricePerKm: 20, baseFare: 250, surgeMultiplier: 2 });
+    expect(q.baseFare).toBe(250);
+    expect(q.base).toBe(1200); // 600 × 2 surge — base fare excluded from surge
+    expect(q.subtotal).toBe(1450); // 250 + 1200
+  });
 
   it('CHARTER mode: distance base + flat rate, no per-item charge', () => {
     const q = computeJobQuote({ ...base, pricingMode: 'CHARTER', flatRate: 500 });
@@ -137,7 +146,7 @@ describe('computeJobQuote', () => {
       needsHelpers: true,
     });
     expect(q.subtotal).toBe(
-      q.base + q.flatRate + q.itemsCharge + q.floorSurcharge + q.helperSurcharge,
+      q.baseFare + q.base + q.flatRate + q.itemsCharge + q.floorSurcharge + q.helperSurcharge,
     );
   });
 });

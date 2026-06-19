@@ -526,6 +526,7 @@ model VehiclePricing {
   pricePerKmShared Int? // ไม่เหมาลำ (PER_ITEM): เรตต่อกม. ที่ถูกกว่า (null = ใช้เรตกลาง price_per_km_shared)
   flatRate     Int? // เหมาลำ: ค่าเหมาเริ่มต้นต่อคัน (null = ใช้เรตกลาง flat_rate)
   perItemRate  Int? // หลายสินค้า: ค่าต่อชิ้น (null = ใช้เรตกลาง per_item_rate)
+  maxActiveJobs Int? // จำนวนงานที่ถือพร้อมกันได้สูงสุดของรถประเภทนี้ (null = ใช้ค่ากลาง max_active_jobs_per_driver)
   isActive     Boolean     @default(true)
   updatedAt    DateTime    @updatedAt
 }

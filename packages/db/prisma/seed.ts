@@ -66,6 +66,7 @@ async function main() {
   await prisma.appSetting.createMany({
     data: [
       { key: 'commission_pct', value: String(COMMISSION_PCT) },
+      { key: 'base_fare', value: '250' }, // flat starting fare added before per-km
       { key: 'price_per_km', value: '20' },
       { key: 'price_per_km_shared', value: '12' }, // non-charter (ไม่เหมาลำ) rate — cheaper per km
       { key: 'min_job_price', value: '300' },

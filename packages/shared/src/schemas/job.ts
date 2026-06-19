@@ -112,6 +112,7 @@ export const EstimateJobResponse = z.object({
   pricingMode: PricingModeSchema,
   distanceKm: z.number(),
   pricePerKm: z.number(),
+  baseFare: z.number().int(), // flat starting fare added before per-km
   base: z.number().int(), // distance × rate × surge
   flatRate: z.number().int(), // เหมาลำ flat fee (0 in PER_ITEM)
   itemsCharge: z.number().int(), // per-item total (0 in CHARTER)

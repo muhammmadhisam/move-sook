@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   SlidersHorizontal,
   Settings2,
+  Truck,
   TrendingUp,
 } from 'lucide-react';
 import {
@@ -44,6 +45,7 @@ import {
 
 const TABS = [
   { key: 'pricing', label: 'ราคา & ค่าธรรมเนียม', icon: Coins },
+  { key: 'vehicles', label: 'ประเภทรถ', icon: Truck },
   { key: 'areas', label: 'พื้นที่บริการ', icon: MapPin },
   { key: 'drivers', label: 'คนขับ & รางวัล', icon: BadgeCheck },
   { key: 'rules', label: 'กฎ & นโยบาย', icon: ShieldCheck },
@@ -57,6 +59,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<TabKey>('pricing');
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [baseFare, setBaseFare] = useState('');
   const [price, setPrice] = useState('');
   const [priceShared, setPriceShared] = useState('');
   const [priceError, setPriceError] = useState<string | null>(null);
@@ -91,6 +94,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (pricing.data) {
+      setBaseFare(String(pricing.data.baseFare));
       setPrice(String(pricing.data.pricePerKm));
       setPriceShared(String(pricing.data.pricePerKmShared));
       setFloor(String(pricing.data.floorSurcharge));
@@ -115,6 +119,7 @@ export default function SettingsPage() {
 
   const savePrice = useMutation({
     mutationFn: async (patch: {
+      baseFare?: number;
       pricePerKm?: number;
       pricePerKmShared?: number;
       floorSurcharge?: number;
@@ -169,13 +174,22 @@ export default function SettingsPage() {
 
   const onSavePrices = () => {
     setPriceError(null);
+    const b = Number(baseFare);
     const n = Number(price);
     const s = Number(priceShared);
-    if (!Number.isFinite(n) || n < 0 || !Number.isFinite(s) || s < 0) {
+    if (
+      !Number.isFinite(b) ||
+      b < 0 ||
+      !Number.isFinite(n) ||
+      n < 0 ||
+      !Number.isFinite(s) ||
+      s < 0
+    ) {
       setPriceError('กรอกตัวเลขไม่ติดลบ');
       return;
     }
-    const patch: { pricePerKm?: number; pricePerKmShared?: number } = {};
+    const patch: { baseFare?: number; pricePerKm?: number; pricePerKmShared?: number } = {};
+    if (baseFareDirty) patch.baseFare = b;
     if (priceDirty) patch.pricePerKm = n;
     if (priceSharedDirty) patch.pricePerKmShared = s;
     savePrice.mutate(patch);
@@ -203,11 +217,12 @@ export default function SettingsPage() {
   };
 
   const dirty = commission.data ? String(commission.data.commissionPct) !== value : false;
+  const baseFareDirty = pricing.data ? String(pricing.data.baseFare) !== baseFare : false;
   const priceDirty = pricing.data ? String(pricing.data.pricePerKm) !== price : false;
   const priceSharedDirty = pricing.data
     ? String(pricing.data.pricePerKmShared) !== priceShared
     : false;
-  const pricesDirty = priceDirty || priceSharedDirty;
+  const pricesDirty = baseFareDirty || priceDirty || priceSharedDirty;
   const surchargeDirty = pricing.data
     ? String(pricing.data.floorSurcharge) !== floor ||
       String(pricing.data.helperSurcharge) !== helper
@@ -320,6 +335,21 @@ export default function SettingsPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="baseFare">ราคาเริ่มต้น (บาท)</Label>
+                  <Input
+                    id="baseFare"
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={baseFare}
+                    disabled={pricing.isLoading}
+                    onChange={(e) => setBaseFare(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    ค่าเริ่มต้นที่บวกให้ทุกงานก่อนคิดค่าระยะทาง (เช่น 250 บาท) แล้วจึง + ค่าต่อกิโลเมตร
+                  </p>
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="pricePerKm">เหมาลำ (บาท/กม.)</Label>
@@ -462,7 +492,11 @@ export default function SettingsPage() {
             <PriceLimitsCard />
             <CodCard />
           </div>
+        </div>
+      )}
 
+      {tab === 'vehicles' && (
+        <div className="space-y-6">
           <VehiclePricingCard />
         </div>
       )}

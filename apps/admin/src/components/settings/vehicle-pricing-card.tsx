@@ -36,6 +36,7 @@ type Draft = {
   pricePerKmShared: string;
   flatRate: string;
   perItemRate: string;
+  maxActiveJobs: string;
   isActive: boolean;
 };
 
@@ -49,6 +50,7 @@ const EMPTY_DRAFT: Draft = {
   pricePerKmShared: '',
   flatRate: '',
   perItemRate: '',
+  maxActiveJobs: '',
   isActive: true,
 };
 
@@ -96,6 +98,7 @@ export function VehiclePricingCard() {
           pricePerKmShared: draft.pricePerKmShared.trim() ? Number(draft.pricePerKmShared) : null,
           flatRate: draft.flatRate.trim() ? Number(draft.flatRate) : null,
           perItemRate: draft.perItemRate.trim() ? Number(draft.perItemRate) : null,
+          maxActiveJobs: draft.maxActiveJobs.trim() ? Number(draft.maxActiveJobs) : null,
           isActive: draft.isActive,
         },
       });
@@ -135,6 +138,7 @@ export function VehiclePricingCard() {
       pricePerKmShared: c.pricePerKmShared != null ? String(c.pricePerKmShared) : '',
       flatRate: c.flatRate != null ? String(c.flatRate) : '',
       perItemRate: c.perItemRate != null ? String(c.perItemRate) : '',
+      maxActiveJobs: c.maxActiveJobs != null ? String(c.maxActiveJobs) : '',
       isActive: c.isActive,
     });
     setEditing(c.vehicleType);
@@ -353,6 +357,22 @@ export function VehiclePricingCard() {
             <p className="text-xs text-muted-foreground">
               เหมาลำ = ค่าเหมา + (ระยะ×เรต/กม.เหมาลำ) · ไม่เหมาลำ = (จำนวน×ค่าต่อชิ้น) + (ระยะ×เรต/กม.ไม่เหมาลำ) — เรตไม่เหมาลำควรถูกกว่า
             </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="vmaxjobs">รับงานพร้อมกันได้สูงสุด (งาน)</Label>
+                <Input
+                  id="vmaxjobs"
+                  type="number"
+                  min={1}
+                  placeholder="เว้นว่าง = ใช้ค่ากลาง"
+                  value={draft.maxActiveJobs}
+                  onChange={(e) => setDraft({ ...draft, maxActiveJobs: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">
+                  จำนวนงานที่คนขับรถประเภทนี้ถือพร้อมกันได้ · เว้นว่าง = ใช้ค่ากลาง (ปกติ 3)
+                </p>
+              </div>
+            </div>
             {save.isError && <p className="text-sm text-destructive">{(save.error as Error).message}</p>}
           </div>
           <DialogFooter>

@@ -27,6 +27,7 @@ export const VehiclePricingDto = z.object({
   pricePerKmShared: z.number().int().nullable(), // ไม่เหมาลำ (PER_ITEM) per-km rate
   flatRate: z.number().int().nullable(), // เหมาลำ per-vehicle fee
   perItemRate: z.number().int().nullable(), // หลายสินค้า per-item fee
+  maxActiveJobs: z.number().int().nullable(), // concurrent in-hand cap (null = global max_active_jobs_per_driver)
   isActive: z.boolean(),
 });
 export type VehiclePricingDto = z.infer<typeof VehiclePricingDto>;
@@ -43,6 +44,7 @@ export const AdminUpsertVehiclePricingInput = z.object({
   pricePerKmShared: z.number().int().min(0).max(100000).nullable().optional(),
   flatRate: z.number().int().min(0).max(1000000).nullable().optional(),
   perItemRate: z.number().int().min(0).max(1000000).nullable().optional(),
+  maxActiveJobs: z.number().int().min(1).max(100).nullable().optional(),
   isActive: z.boolean(),
 });
 export type AdminUpsertVehiclePricingInput = z.infer<typeof AdminUpsertVehiclePricingInput>;

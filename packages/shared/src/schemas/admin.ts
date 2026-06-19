@@ -124,6 +124,7 @@ export type UpdateCommissionInput = z.infer<typeof UpdateCommissionInput>;
 
 // GET / PUT /admin/settings/pricing — delivery rate + job surcharges + demand surge.
 export const PricingSettingResponse = z.object({
+  baseFare: z.number().min(0), // flat starting fare added to every quote before per-km
   pricePerKm: z.number().min(0), // charter (เหมาลำ) per-km rate
   pricePerKmShared: z.number().min(0), // non-charter (PER_ITEM / ไม่เหมาลำ) per-km rate
   floorSurcharge: z.number().min(0), // per floor above ground with no lift, per end
@@ -136,6 +137,7 @@ export type PricingSettingResponse = z.infer<typeof PricingSettingResponse>;
 // All fields optional: the admin UI saves each card independently (partial patch).
 export const UpdatePricingInput = z
   .object({
+    baseFare: z.number().min(0).max(100000).optional(),
     pricePerKm: z.number().min(0).max(100000).optional(),
     pricePerKmShared: z.number().min(0).max(100000).optional(),
     floorSurcharge: z.number().min(0).max(100000).optional(),

@@ -10,6 +10,7 @@ import {
 } from '@movesook/shared';
 import {
   evaluatePromo,
+  getBaseFare,
   getEffectiveFlatRate,
   getEffectivePerItemRate,
   getEffectivePricePerKm,
@@ -58,8 +59,9 @@ export async function getServiceAreas(): Promise<JobServiceAreasResponse> {
  *  plus an optional promo-code preview. Mirrors what POST /jobs charges so the
  *  customer sees the real price before posting. */
 export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobResponse> {
-  const [pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate, sys] =
+  const [baseFare, pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate, sys] =
     await Promise.all([
+      getBaseFare(),
       getEffectivePricePerKm(input.vehicleType),
       getEffectivePricePerKmShared(input.vehicleType),
       getFloorSurcharge(),
@@ -73,6 +75,7 @@ export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobR
   const quote = computeJobQuote({
     pricingMode: input.pricingMode,
     distanceKm,
+    baseFare,
     pricePerKm,
     pricePerKmShared,
     originFloor: input.originFloor,
@@ -98,6 +101,7 @@ export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobR
     // Report the per-km rate actually applied to the base: the cheaper non-charter
     // rate for PER_ITEM, the full charter rate otherwise.
     pricePerKm: quote.pricingMode === 'PER_ITEM' ? pricePerKmShared : pricePerKm,
+    baseFare: quote.baseFare,
     base: quote.base,
     flatRate: quote.flatRate,
     itemsCharge: quote.itemsCharge,

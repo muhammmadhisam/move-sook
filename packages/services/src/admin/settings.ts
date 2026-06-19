@@ -2,6 +2,8 @@ import { prisma, type Prisma } from '@movesook/db';
 import {
   getCommissionPct,
   setCommissionPct,
+  getBaseFare,
+  setBaseFare,
   getPricePerKm,
   setPricePerKm,
   getPricePerKmShared,
@@ -56,8 +58,9 @@ export async function updateCommission(
 
 /** Read delivery price per km + surcharges + surge. */
 export async function getPricing(): Promise<PricingSettingResponse> {
-  const [pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surgeEnabled, surgeMultiplier] =
+  const [baseFare, pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surgeEnabled, surgeMultiplier] =
     await Promise.all([
+      getBaseFare(),
       getPricePerKm(),
       getPricePerKmShared(),
       getFloorSurcharge(),
@@ -66,6 +69,7 @@ export async function getPricing(): Promise<PricingSettingResponse> {
       getSurgeMultiplier(),
     ]);
   return {
+    baseFare,
     pricePerKm,
     pricePerKmShared,
     floorSurcharge,
@@ -80,8 +84,9 @@ export async function updatePricing(
   sub: string,
   input: UpdatePricingInput,
 ): Promise<PricingSettingResponse> {
-  const [prevPrice, prevPriceShared, prevFloor, prevHelper, prevSurgeOn, prevSurgeMult] =
+  const [prevBaseFare, prevPrice, prevPriceShared, prevFloor, prevHelper, prevSurgeOn, prevSurgeMult] =
     await Promise.all([
+      getBaseFare(),
       getPricePerKm(),
       getPricePerKmShared(),
       getFloorSurcharge(),
@@ -91,6 +96,10 @@ export async function updatePricing(
     ]);
 
   const changes: Record<string, { from: number | boolean; to: number | boolean }> = {};
+  if (input.baseFare !== undefined) {
+    await setBaseFare(input.baseFare);
+    changes.base_fare = { from: prevBaseFare, to: input.baseFare };
+  }
   if (input.pricePerKm !== undefined) {
     await setPricePerKm(input.pricePerKm);
     changes.price_per_km = { from: prevPrice, to: input.pricePerKm };
@@ -124,6 +133,7 @@ export async function updatePricing(
   });
 
   return {
+    baseFare: input.baseFare ?? prevBaseFare,
     pricePerKm: input.pricePerKm ?? prevPrice,
     pricePerKmShared: input.pricePerKmShared ?? prevPriceShared,
     floorSurcharge: input.floorSurcharge ?? prevFloor,

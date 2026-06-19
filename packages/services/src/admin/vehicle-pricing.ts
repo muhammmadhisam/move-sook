@@ -20,6 +20,7 @@ export async function listVehiclePricing(): Promise<{ items: VehiclePricingDto[]
     pricePerKmShared: r.pricePerKmShared,
     flatRate: r.flatRate,
     perItemRate: r.perItemRate,
+    maxActiveJobs: r.maxActiveJobs,
     isActive: r.isActive,
   }));
   return { items };
@@ -30,7 +31,7 @@ export async function upsertVehiclePricing(
   sub: string,
   input: AdminUpsertVehiclePricingInput,
 ): Promise<VehiclePricingDto> {
-  const { vehicleType, label, description, imageUrl, requirements, maxWeightKg, pricePerKm, pricePerKmShared, flatRate, perItemRate, isActive } =
+  const { vehicleType, label, description, imageUrl, requirements, maxWeightKg, pricePerKm, pricePerKmShared, flatRate, perItemRate, maxActiveJobs, isActive } =
     input;
   const data = {
     ...(label !== undefined ? { label } : {}),
@@ -42,6 +43,7 @@ export async function upsertVehiclePricing(
     ...(pricePerKmShared !== undefined ? { pricePerKmShared } : {}),
     ...(flatRate !== undefined ? { flatRate } : {}),
     ...(perItemRate !== undefined ? { perItemRate } : {}),
+    ...(maxActiveJobs !== undefined ? { maxActiveJobs } : {}),
     isActive,
   };
   const row = await prisma.vehiclePricing.upsert({
@@ -54,7 +56,7 @@ export async function upsertVehiclePricing(
     action: 'settings.vehicle_pricing',
     targetType: 'setting',
     targetId: vehicleType,
-    metadata: { isActive, pricePerKm: pricePerKm ?? null, pricePerKmShared: pricePerKmShared ?? null, flatRate: flatRate ?? null, perItemRate: perItemRate ?? null },
+    metadata: { isActive, pricePerKm: pricePerKm ?? null, pricePerKmShared: pricePerKmShared ?? null, flatRate: flatRate ?? null, perItemRate: perItemRate ?? null, maxActiveJobs: maxActiveJobs ?? null },
   });
   return {
     vehicleType: row.vehicleType,
@@ -67,6 +69,7 @@ export async function upsertVehiclePricing(
     pricePerKmShared: row.pricePerKmShared,
     flatRate: row.flatRate,
     perItemRate: row.perItemRate,
+    maxActiveJobs: row.maxActiveJobs,
     isActive: row.isActive,
   };
 }

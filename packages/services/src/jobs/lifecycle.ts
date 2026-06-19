@@ -22,9 +22,11 @@ import {
 } from '@movesook/shared';
 import {
   evaluatePromo,
+  getBaseFare,
   getCommissionPct,
   getEffectiveFlatRate,
   getEffectivePerItemRate,
+  getEffectiveMaxActiveJobs,
   getEffectivePricePerKm,
   getEffectivePricePerKmShared,
   getFloorSurcharge,
@@ -82,8 +84,9 @@ export async function createJob(sub: string, input: CreateJobInput): Promise<Job
     input.destLat != null &&
     input.destLng != null
   ) {
-    const [rate, sharedRate, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate] =
+    const [baseFare, rate, sharedRate, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate] =
       await Promise.all([
+        getBaseFare(),
         getEffectivePricePerKm(input.vehicleType),
         getEffectivePricePerKmShared(input.vehicleType),
         getFloorSurcharge(),
@@ -105,6 +108,7 @@ export async function createJob(sub: string, input: CreateJobInput): Promise<Job
     const quote = computeJobQuote({
       pricingMode: input.pricingMode,
       distanceKm: distKm,
+      baseFare,
       pricePerKm: rate,
       pricePerKmShared: sharedRate,
       originFloor: input.originFloor,
@@ -503,11 +507,12 @@ export async function acceptJob(sub: string, jobId: string): Promise<JobDto> {
     });
   }
 
-  // Cap concurrent in-hand jobs per driver (0 = unlimited).
-  const sys = await getSystemSettings();
-  if (sys.maxActiveJobsPerDriver > 0 && inHandJobs.length >= sys.maxActiveJobsPerDriver) {
+  // Cap concurrent in-hand jobs — per the driver's vehicle type if it sets its own
+  // limit, otherwise the global setting (0 = unlimited).
+  const maxActiveJobs = await getEffectiveMaxActiveJobs(driver.vehicleType);
+  if (maxActiveJobs > 0 && inHandJobs.length >= maxActiveJobs) {
     throw new HTTPException(422, {
-      message: `รับงานพร้อมกันได้สูงสุด ${sys.maxActiveJobsPerDriver} งาน — ส่งงานเดิมให้เสร็จก่อน`,
+      message: `รับงานพร้อมกันได้สูงสุด ${maxActiveJobs} งาน — ส่งงานเดิมให้เสร็จก่อน`,
     });
   }
 

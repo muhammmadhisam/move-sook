@@ -3,6 +3,7 @@
 /** AppSetting keys (DB table `AppSetting.key`). */
 export const APP_SETTING_KEYS = {
   COMMISSION_PCT: 'commission_pct',
+  BASE_FARE: 'base_fare', // flat starting fare (THB) added to every distance-priced quote, before per-km
   PRICE_PER_KM: 'price_per_km',
   PRICE_PER_KM_SHARED: 'price_per_km_shared', // cheaper per-km rate for non-charter (PER_ITEM / ไม่เหมาลำ) jobs
   MAINTENANCE_MODE: 'maintenance_mode',
@@ -152,6 +153,9 @@ export const JOB_POSTING_TERMS = [
 /** Fallback commission % if AppSetting row is missing. */
 export const DEFAULT_COMMISSION_PCT = 12;
 
+/** Fallback flat starting fare (THB) added to every distance-priced quote if the AppSetting row is missing. */
+export const DEFAULT_BASE_FARE = 250;
+
 /** Fallback delivery price per kilometre (THB) if AppSetting row is missing. */
 export const DEFAULT_PRICE_PER_KM = 20;
 
@@ -187,6 +191,7 @@ export const DEFAULT_PER_ITEM_RATE = 50;
 export type JobQuoteInput = {
   pricingMode?: 'CHARTER' | 'PER_ITEM'; // how to price (defaults to CHARTER)
   distanceKm: number;
+  baseFare?: number; // flat starting fare added before per-km (defaults to DEFAULT_BASE_FARE)
   pricePerKm: number; // charter per-km rate (used for CHARTER base)
   pricePerKmShared?: number; // non-charter per-km rate (used for PER_ITEM base; defaults to pricePerKm)
   originFloor?: number | null;
@@ -206,6 +211,7 @@ export type JobQuoteInput = {
 export type JobQuote = {
   pricingMode: 'CHARTER' | 'PER_ITEM';
   distanceKm: number;
+  baseFare: number; // flat starting fare (THB), not surged
   base: number; // distance × rate × surge (both modes)
   flatRate: number; // เหมาลำ flat fee (0 in PER_ITEM mode)
   itemsCharge: number; // perItemRate × itemCount (0 in CHARTER mode)
@@ -233,6 +239,7 @@ function endFloorSurcharge(
  */
 export function computeJobQuote(input: JobQuoteInput): JobQuote {
   const mode = input.pricingMode ?? 'CHARTER';
+  const baseFare = Math.max(0, Math.round(input.baseFare ?? DEFAULT_BASE_FARE));
   const perFloor = input.floorSurcharge ?? DEFAULT_FLOOR_SURCHARGE;
   const helperFee = input.helperSurcharge ?? DEFAULT_HELPER_SURCHARGE;
   const surge = input.surgeMultiplier && input.surgeMultiplier > 0 ? input.surgeMultiplier : 1;
@@ -258,13 +265,14 @@ export function computeJobQuote(input: JobQuoteInput): JobQuote {
   return {
     pricingMode: mode,
     distanceKm: input.distanceKm,
+    baseFare,
     base,
     flatRate,
     itemsCharge,
     floorSurcharge,
     helperSurcharge,
     surgeMultiplier: surge,
-    subtotal: base + flatRate + itemsCharge + floorSurcharge + helperSurcharge,
+    subtotal: baseFare + base + flatRate + itemsCharge + floorSurcharge + helperSurcharge,
   };
 }
 

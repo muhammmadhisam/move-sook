@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { PageHeader, Section, CtaBand } from '@/components/marketing/sections';
 import { getVehicleRates } from '@/lib/pricing';
+import { getCommissionPct } from '@/lib/system';
 
 // ISR: re-fetch active vehicle rates at most every 5 minutes so admin pricing
 // edits go live without a redeploy.
@@ -90,7 +91,7 @@ const BASE_FARE = 250; // flat starting fare (THB), AppSetting `base_fare` defau
 const EXAMPLE_DISTANCE_KM = 15;
 
 export default async function PricingPage() {
-  const vehicles = await getVehicleRates();
+  const [vehicles, commissionPct] = await Promise.all([getVehicleRates(), getCommissionPct()]);
 
   // Worked example uses the first vehicle that actually has a per-km rate set, so
   // the numbers always match a real row in the table. Hidden when none is priced.
@@ -257,7 +258,7 @@ export default async function PricingPage() {
               </li>
               <li className="flex gap-3 text-sm text-muted-foreground">
                 <Check className="h-5 w-5 shrink-0 text-primary" />
-                <span>หักค่าคอมมิชชั่นเพียง 12% ต่องาน ที่เหลือเป็นของคนขับเต็ม ๆ</span>
+                <span>หักค่าคอมมิชชั่นเพียง {commissionPct}% ต่องาน ที่เหลือเป็นของคนขับเต็ม ๆ</span>
               </li>
               <li className="flex gap-3 text-sm text-muted-foreground">
                 <Check className="h-5 w-5 shrink-0 text-primary" />

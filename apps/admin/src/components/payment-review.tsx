@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogContent,
   DialogDescription,
@@ -48,12 +49,23 @@ export function PaymentReview({
   const [rejectOpen, setRejectOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [reason, setReason] = useState('');
+  // Whether to also push a "payment confirmed" message to the customer's LINE.
+  // The in-app notification is always written regardless of this toggle.
+  const [notifyLine, setNotifyLine] = useState(true);
+  // Whether to fan the new-job alert out to nearby drivers (in-app + LINE) on
+  // publish. Defaults OFF so the admin opts in to pushing the alert; the job is
+  // still POSTED and visible in the driver feed regardless. Only applies to the
+  // "approve & publish" path.
+  const [broadcast, setBroadcast] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const { vehicleLabelOf } = useVehicleLabels();
 
   const approve = useMutation({
     mutationFn: async () => {
-      const res = await api.admin.jobs[':id'].payment.approve.$post({ param: { id: job.id } });
+      const res = await api.admin.jobs[':id'].payment.approve.$post({
+        param: { id: job.id },
+        json: { notifyLine, broadcast },
+      });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error ?? 'อนุมัติไม่สำเร็จ');
@@ -85,7 +97,7 @@ export function PaymentReview({
     mutationFn: async (driverId: string) => {
       const res = await api.admin.jobs[':id'].payment['approve-assign'].$post({
         param: { id: job.id },
-        json: { driverId },
+        json: { driverId, notifyLine },
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -174,6 +186,19 @@ export function PaymentReview({
 
       {pending && (
         <div className="space-y-2">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-2 text-sm">
+            <Checkbox checked={notifyLine} onCheckedChange={setNotifyLine} />
+            <span>ส่งข้อความแจ้งลูกค้าทาง LINE</span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2 rounded-md border bg-muted/40 px-2.5 py-2 text-sm">
+            <Checkbox checked={broadcast} onCheckedChange={setBroadcast} className="mt-0.5" />
+            <span>
+              บอร์ดแคสต์แจ้งคนขับในพื้นที่
+              <span className="block text-xs text-muted-foreground">
+                เฉพาะตอน “อนุมัติ &amp; เผยแพร่” · ถ้าไม่ติ๊ก งานยังขึ้นในฟีดคนขับแต่ไม่ยิงแจ้งเตือน
+              </span>
+            </span>
+          </label>
           <div className="flex gap-2">
             <Button
               className="flex-1"

@@ -252,6 +252,7 @@ const RULES_KEYS = [
   'maxScheduleDays',
   'minDistanceKm',
   'maxDistanceKm',
+  'deliveryGeofenceMeters',
   'termsVersion',
   'privacyVersion',
   'prohibitedItemsList',
@@ -271,6 +272,7 @@ export function RulesCard() {
         <NumberField id="maxScheduleDays" label="จองล่วงหน้าได้กี่วัน" value={form.maxScheduleDays} onChange={(v) => setForm({ ...form, maxScheduleDays: v })} />
         <NumberField id="minDistanceKm" label="ระยะขั้นต่ำ (กม., 0=ไม่จำกัด)" value={form.minDistanceKm} onChange={(v) => setForm({ ...form, minDistanceKm: v })} />
         <NumberField id="maxDistanceKm" label="ระยะสูงสุด (กม., 0=ไม่จำกัด)" value={form.maxDistanceKm} onChange={(v) => setForm({ ...form, maxDistanceKm: v })} />
+        <NumberField id="deliveryGeofenceMeters" label="รัศมีจุดส่งก่อนกดส่งสำเร็จ (เมตร, 0=ปิด)" hint="คนขับต้องอยู่ในรัศมีนี้จากปลายทางจึงจะกดส่งสำเร็จได้ (บังคับเฉพาะ production)" value={form.deliveryGeofenceMeters} onChange={(v) => setForm({ ...form, deliveryGeofenceMeters: v })} />
         <TextField id="termsVersion" label="เวอร์ชันข้อตกลง" value={form.termsVersion} onChange={(v) => setForm({ ...form, termsVersion: v })} />
         <TextField id="privacyVersion" label="เวอร์ชันนโยบายความเป็นส่วนตัว" value={form.privacyVersion} onChange={(v) => setForm({ ...form, privacyVersion: v })} />
       </div>

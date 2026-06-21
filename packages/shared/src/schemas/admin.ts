@@ -263,6 +263,19 @@ export const AdminCreateJobInput = z
   });
 export type AdminCreateJobInput = z.infer<typeof AdminCreateJobInput>;
 
+// POST /admin/jobs/:id/payment/approve — admin confirms a slip and publishes the
+// job. `notifyLine` lets the admin choose whether to also push the "payment
+// confirmed" message to the customer's LINE (the in-app notification is always
+// written regardless). `broadcast` controls whether the new-job alert is fanned
+// out to nearby drivers (in-app + LINE) — when false the job is still POSTED and
+// discoverable in the feed, just not actively pushed. Both default to true so the
+// body stays optional for callers.
+export const AdminApprovePaymentInput = z.object({
+  notifyLine: z.boolean().default(true),
+  broadcast: z.boolean().default(true),
+});
+export type AdminApprovePaymentInput = z.infer<typeof AdminApprovePaymentInput>;
+
 // POST /admin/jobs/:id/payment/reject — admin bounces a slip back to the customer.
 export const AdminRejectPaymentInput = z.object({
   reason: z.string().trim().max(500).optional(),
@@ -270,9 +283,11 @@ export const AdminRejectPaymentInput = z.object({
 export type AdminRejectPaymentInput = z.infer<typeof AdminRejectPaymentInput>;
 
 // POST /admin/jobs/:id/payment/approve-assign — approve the slip AND hand the job
-// straight to a chosen driver (skips the open POSTED feed).
+// straight to a chosen driver (skips the open POSTED feed). `notifyLine` controls
+// the customer's LINE confirmation push (the assigned driver is always notified).
 export const AdminApproveAssignInput = z.object({
   driverId: z.string().min(1),
+  notifyLine: z.boolean().default(true),
 });
 export type AdminApproveAssignInput = z.infer<typeof AdminApproveAssignInput>;
 

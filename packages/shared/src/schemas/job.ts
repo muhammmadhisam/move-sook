@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   AddrChangeStatusSchema,
   CargoCategorySchema,
+  CodCollectionMethodSchema,
   JobStatusSchema,
   PaymentMethodSchema,
   PricingModeSchema,
@@ -166,6 +167,20 @@ export const UploadDestChangeSlipInput = z.object({
 });
 export type UploadDestChangeSlipInput = z.infer<typeof UploadDestChangeSlipInput>;
 
+// POST /jobs/:id/cod-collection — for a COD job, the assigned DRIVER records how
+// they received the cash remainder from the customer (CASH or TRANSFER) before
+// marking the delivery done. TRANSFER must carry a proof slip image.
+export const RecordCodCollectionInput = z
+  .object({
+    method: CodCollectionMethodSchema,
+    slipUrl: z.string().url().optional(), // proof image — required when method is TRANSFER
+  })
+  .refine((v) => v.method !== 'TRANSFER' || !!v.slipUrl, {
+    message: 'กรุณาแนบรูปหลักฐานการโอน',
+    path: ['slipUrl'],
+  });
+export type RecordCodCollectionInput = z.infer<typeof RecordCodCollectionInput>;
+
 // POST /jobs/:id/proof — driver attaches a pickup or delivery photo.
 export const SetJobProofInput = z.object({
   kind: z.enum(['PICKUP', 'DELIVERY']),
@@ -199,6 +214,10 @@ export type ListJobsQuery = z.infer<typeof ListJobsQuery>;
 // PATCH /jobs/:id/status (driver advances via state machine)
 export const UpdateJobStatusInput = z.object({
   status: JobStatusSchema,
+  // Driver's current position, sent when marking a delivery done so the API can
+  // verify they are within the destination geofence. Optional for other transitions.
+  lat: latitude.optional(),
+  lng: longitude.optional(),
 });
 export type UpdateJobStatusInput = z.infer<typeof UpdateJobStatusInput>;
 
@@ -247,6 +266,11 @@ export const JobDto = z.object({
   codCommissionSlipUploadedAt: z.string().datetime().nullable(),
   codCommissionApprovedAt: z.string().datetime().nullable(),
   codCommissionRejectedReason: z.string().nullable(),
+  // COD payment collection: how the driver received the cash remainder from the
+  // customer at the destination (recorded before marking the delivery done).
+  codCollectionMethod: CodCollectionMethodSchema.nullable(),
+  codCollectionSlipUrl: z.string().nullable(),
+  codCollectedAt: z.string().datetime().nullable(),
   pricingMode: PricingModeSchema,
   priceQuoted: z.number().int().nullable(),
   promoCode: z.string().nullable(),

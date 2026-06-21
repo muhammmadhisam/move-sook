@@ -77,6 +77,11 @@ export type TransactionStatus = z.infer<typeof TransactionStatusSchema>;
 export const PaymentMethodSchema = z.enum(['PREPAID', 'COD']);
 export type PaymentMethod = z.infer<typeof PaymentMethodSchema>;
 
+// How a COD driver received the cash remainder from the customer at the destination.
+// CASH = paid on the spot; TRANSFER = bank transfer (requires a proof slip).
+export const CodCollectionMethodSchema = z.enum(['CASH', 'TRANSFER']);
+export type CodCollectionMethod = z.infer<typeof CodCollectionMethodSchema>;
+
 export const AdminRoleSchema = z.enum(['SUPER', 'OPS', 'FINANCE']);
 export type AdminRole = z.infer<typeof AdminRoleSchema>;
 
@@ -108,7 +113,7 @@ export type PayoutStatus = z.infer<typeof PayoutStatusSchema>;
 export const ConsentTypeSchema = z.enum(['TERMS', 'PRIVACY', 'MARKETING', 'DRIVER_AGREEMENT']);
 export type ConsentType = z.infer<typeof ConsentTypeSchema>;
 
-export const PromoTypeSchema = z.enum(['PERCENT', 'FIXED']);
+export const PromoTypeSchema = z.enum(['PERCENT', 'FIXED', 'FIXED_PRICE']);
 export type PromoType = z.infer<typeof PromoTypeSchema>;
 
 export const PricingModeSchema = z.enum(['CHARTER', 'PER_ITEM']);

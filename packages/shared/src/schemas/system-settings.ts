@@ -100,6 +100,7 @@ export const SystemSettingsResponse = z.object({
   privacyVersion: z.string(),
   prohibitedItemsList: z.string(), // banned cargo, one item per line ('' = use default list)
   adminLineGroupId: z.string(), // LINE group/room/user ID for ops push alerts ('' = disabled)
+  deliveryGeofenceMeters: z.number().int().min(0), // radius (m) to mark a delivery done (0 = no geofence)
 });
 export type SystemSettingsResponse = z.infer<typeof SystemSettingsResponse>;
 
@@ -138,6 +139,7 @@ export const UpdateSystemSettingsInput = z.object({
   privacyVersion: z.string().min(1).max(40).optional(),
   prohibitedItemsList: z.string().max(5000).optional(),
   adminLineGroupId: z.string().max(120).optional(),
+  deliveryGeofenceMeters: z.number().int().min(0).max(50_000).optional(),
 });
 export type UpdateSystemSettingsInput = z.infer<typeof UpdateSystemSettingsInput>;
 
@@ -160,5 +162,6 @@ export const PublicSystemConfig = z.object({
   codMinPrice: z.number().int().min(0),
   codMaxPrice: z.number().int().min(0),
   commissionPct: z.number().min(0).max(100), // current platform commission rate (display on marketing pages)
+  deliveryGeofenceMeters: z.number().int().min(0), // driver geofence (m) for marking a delivery done (0 = off); drives the driver UI gate
 });
 export type PublicSystemConfig = z.infer<typeof PublicSystemConfig>;

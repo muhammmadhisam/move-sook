@@ -91,6 +91,7 @@ const app = new Hono<AppEnv>()
       codMinPrice: s.codMinPrice,
       codMaxPrice: s.codMaxPrice,
       commissionPct,
+      deliveryGeofenceMeters: s.deliveryGeofenceMeters,
     };
     return c.json(body);
   })

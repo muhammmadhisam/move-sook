@@ -265,6 +265,19 @@ export default function AdminJobDetailPage() {
                 ? ` · ค่าธรรมเนียม ${baht(j.codCommissionFee)}`
                 : ''}
             </p>
+            {j.paymentMethod === 'COD' && (
+              <p>
+                คนขับรับเงินจากลูกค้า:{' '}
+                {j.codCollectedAt ? (
+                  <span className="font-medium text-emerald-600">
+                    {j.codCollectionMethod === 'TRANSFER' ? 'โอน' : 'เงินสด'} (
+                    {new Date(j.codCollectedAt).toLocaleString('th-TH')})
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">ยังไม่บันทึก</span>
+                )}
+              </p>
+            )}
             {j.discountAmount != null && j.discountAmount > 0 && (
               <p className="text-emerald-600">
                 ส่วนลด: -{baht(j.discountAmount)} {j.promoCode ? `(${j.promoCode})` : ''}
@@ -326,7 +339,10 @@ export default function AdminJobDetailPage() {
         </Card>
       )}
 
-      {(j.itemPhotos.length > 0 || j.pickupProofUrls.length > 0 || j.deliveryProofUrls.length > 0) && (
+      {(j.itemPhotos.length > 0 ||
+        j.pickupProofUrls.length > 0 ||
+        j.deliveryProofUrls.length > 0 ||
+        j.codCollectionSlipUrl) && (
         <Card>
           <CardHeader>
             <CardTitle>รูปภาพ</CardTitle>
@@ -336,6 +352,10 @@ export default function AdminJobDetailPage() {
             <Photos title="รูปสิ่งของ" urls={j.itemPhotos} />
             <Photos title="หลักฐานตอนรับของ" urls={j.pickupProofUrls} />
             <Photos title="หลักฐานตอนส่ง" urls={j.deliveryProofUrls} />
+            <Photos
+              title="หลักฐานการโอน (เก็บปลายทาง)"
+              urls={j.codCollectionSlipUrl ? [j.codCollectionSlipUrl] : []}
+            />
           </CardContent>
         </Card>
       )}

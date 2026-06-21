@@ -44,6 +44,7 @@ export const APP_SETTING_KEYS = {
   COMPANY_LOGO_URL: 'company_logo_url',
   PROHIBITED_ITEMS_LIST: 'prohibited_items_list', // admin-editable list of banned cargo (one item per line)
   ADMIN_LINE_GROUP_ID: 'admin_line_group_id', // LINE group/room/user ID the OA pushes ops alerts to (e.g. new payment slips)
+  DELIVERY_GEOFENCE_M: 'delivery_geofence_m', // radius (m) the driver must be within the destination to mark a delivery done (0 = off)
 } as const;
 
 /** Defaults for the misc system settings. */
@@ -82,6 +83,7 @@ export const DEFAULT_SYSTEM_SETTINGS = {
   privacyVersion: '1.0',
   prohibitedItemsList: '', // '' = fall back to DEFAULT_PROHIBITED_ITEMS
   adminLineGroupId: '', // '' = no ops LINE alerts (in-app notifications still fire)
+  deliveryGeofenceMeters: 1000, // driver must be within 1 km of the destination to mark delivered (0 = no geofence)
 } as const;
 
 /**

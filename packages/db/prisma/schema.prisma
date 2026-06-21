@@ -77,6 +77,12 @@ enum PaymentMethod {
   //   transfers the commission (a "fee") to the platform BEFORE starting the job
 }
 
+// How a COD driver received the cash remainder from the customer at the destination.
+enum CodCollectionMethod {
+  CASH // เงินสด — paid in cash on the spot
+  TRANSFER // โอน — bank transfer; requires a proof slip
+}
+
 enum ConsentType {
   TERMS // ข้อตกลงการใช้บริการ
   PRIVACY // นโยบายความเป็นส่วนตัว (PDPA)
@@ -121,6 +127,7 @@ enum PayoutStatus {
 enum PromoType {
   PERCENT // value = percent off (0..100)
   FIXED // value = THB off
+  FIXED_PRICE // value = the locked total price (THB); overrides the computed quote
 }
 
 enum PricingMode {
@@ -323,6 +330,12 @@ model Job {
   codCommissionApprovedById String? // admin User who approved the commission payment
   codCommissionRejectedReason String? // admin's reason when a commission slip was rejected (driver re-uploads)
   codCommissionRejectedCount  Int  @default(0) // how many times the commission slip was rejected
+  // ── COD payment collection: for a COD job the driver records HOW they received the
+  //    cash remainder from the customer at the destination, BEFORE marking the delivery
+  //    done. TRANSFER requires a proof slip (codCollectionSlipUrl). ──
+  codCollectionMethod  CodCollectionMethod? // how the driver received payment from the customer (CASH/TRANSFER)
+  codCollectionSlipUrl String? // proof image when the customer paid by bank transfer
+  codCollectedAt       DateTime? // when the driver recorded the collection
   // Snapshot of the cancellation fee owed at cancel time (collected manually by
   // ops — there is no customer wallet). Null = cancelled inside the free window.
   cancellationFeeApplied Int?

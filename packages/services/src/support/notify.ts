@@ -25,6 +25,12 @@ type NotifyInput = {
    * title/body, so keep the essentials in `body` too.
    */
   rows?: { label: string; value: string }[];
+  /**
+   * When true, write only the in-app Notification row and skip the LINE push.
+   * Lets callers (e.g. an admin choosing not to ping the customer's LINE on slip
+   * approval) suppress the side channel without losing the in-app record.
+   */
+  skipLinePush?: boolean;
 };
 
 /** Plain-text fallback (chat-list preview / push alert) for a Flex card. */
@@ -64,6 +70,7 @@ export async function notify(input: NotifyInput): Promise<void> {
   }
 
   // Side channel: enqueue a LINE push to the recipient's account if we know it.
+  if (input.skipLinePush) return;
   try {
     const user = await prisma.user.findUnique({
       where: { id: input.userId },

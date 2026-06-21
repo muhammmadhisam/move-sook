@@ -10,6 +10,7 @@
 /** The subset of the API env the services package depends on. The app's full env
  *  object is a structural superset and is assignable to this. */
 export interface ServiceEnv {
+  NODE_ENV: 'development' | 'test' | 'production';
   PORT: number;
   JWT_SECRET: string;
   PUBLIC_API_URL?: string;

@@ -462,8 +462,14 @@ export async function buildJobDoc(
  * Approve a customer's transfer slip: publishes a PENDING_PAYMENT job (-> POSTED)
  * and fans it out to drivers in the area. Requires a slip to have been uploaded.
  */
-export async function approvePayment(sub: string, id: string): Promise<JobDto> {
+export async function approvePayment(
+  sub: string,
+  id: string,
+  opts: { notifyLine?: boolean; broadcast?: boolean } = {},
+): Promise<JobDto> {
   const actorId = sub;
+  const notifyLine = opts.notifyLine ?? true;
+  const broadcast = opts.broadcast ?? true;
   const job = await prisma.job.findUnique({
     where: { id },
     include: { customer: { select: { userId: true } } },
@@ -500,8 +506,10 @@ export async function approvePayment(sub: string, id: string): Promise<JobDto> {
     targetId: id,
     metadata: { priceQuoted: updated.priceQuoted, slipUrl: updated.paymentSlipUrl },
   });
-  // Now public — alert approved, available drivers in the origin province.
-  await enqueueJobBroadcast(updated.id);
+  // Now public — alert approved, available drivers in the origin province. The
+  // admin can skip this fan-out; the job is POSTED and stays discoverable in the
+  // driver feed regardless.
+  if (broadcast) await enqueueJobBroadcast(updated.id);
   if (job.customer.userId) {
     await notify({
       userId: job.customer.userId,
@@ -510,6 +518,7 @@ export async function approvePayment(sub: string, id: string): Promise<JobDto> {
       body: `งาน ${updated.originProvince} → ${updated.destProvince} ถูกเผยแพร่ให้คนขับแล้ว`,
       jobId: updated.id,
       cta: { label: 'ดูใบเสร็จรับเงิน', url: await buildReceiptLink(updated.id) },
+      skipLinePush: !notifyLine,
     });
   }
   return toJobDto(updated);
@@ -624,6 +633,7 @@ export async function approveAssign(
       body: `งาน ${updated.originProvince} → ${updated.destProvince} ได้รับการมอบหมายให้คนขับแล้ว`,
       jobId: updated.id,
       cta: { label: 'ดูใบเสร็จรับเงิน', url: await buildReceiptLink(updated.id) },
+      skipLinePush: !(input.notifyLine ?? true),
     });
   }
   return toJobDto(updated);

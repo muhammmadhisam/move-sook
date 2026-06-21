@@ -16,6 +16,7 @@ import {
   AdminConnectDriverInput,
   AdminCreateJobInput,
   AdminPatchJobInput,
+  AdminApprovePaymentInput,
   AdminRejectPaymentInput,
   AdminApproveAssignInput,
   AdminRejectDestChangeInput,
@@ -322,8 +323,17 @@ export const adminRoutes = new Hono<AppEnv>()
 
   // Approve a customer's transfer slip: publishes a PENDING_PAYMENT job (-> POSTED)
   // and fans it out to drivers in the area. Requires a slip to have been uploaded.
-  .post('/jobs/:id/payment/approve', requireAdminRole('SUPER', 'OPS', 'FINANCE'), async (c) =>
-    c.json(await approvePayment(c.get('claims').sub, c.req.param('id'))),
+  .post(
+    '/jobs/:id/payment/approve',
+    requireAdminRole('SUPER', 'OPS', 'FINANCE'),
+    zValidator('json', AdminApprovePaymentInput),
+    async (c) =>
+      c.json(
+        await approvePayment(c.get('claims').sub, c.req.param('id'), {
+          notifyLine: c.req.valid('json').notifyLine,
+          broadcast: c.req.valid('json').broadcast,
+        }),
+      ),
   )
 
   // Drivers an admin can hand THIS job to right now: approved, currently available,

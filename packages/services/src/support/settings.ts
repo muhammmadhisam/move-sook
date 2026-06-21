@@ -241,7 +241,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
           K.SUPPORT_LINE_ID, K.SUPPORT_EMAIL, K.PAY_BANK_NAME, K.PAY_ACCOUNT_NAME,
           K.PAY_ACCOUNT_NUMBER, K.PAY_QR_URL, K.COMPANY_NAME, K.COMPANY_ADDRESS,
           K.COMPANY_TAX_ID, K.COMPANY_LOGO_URL, K.TERMS_VERSION, K.PRIVACY_VERSION,
-          K.PROHIBITED_ITEMS_LIST, K.ADMIN_LINE_GROUP_ID,
+          K.PROHIBITED_ITEMS_LIST, K.ADMIN_LINE_GROUP_ID, K.DELIVERY_GEOFENCE_M,
         ],
       },
     },
@@ -288,6 +288,7 @@ export async function getSystemSettings(): Promise<SystemSettingsResponse> {
     privacyVersion: str(K.PRIVACY_VERSION, D.privacyVersion),
     prohibitedItemsList: str(K.PROHIBITED_ITEMS_LIST, D.prohibitedItemsList),
     adminLineGroupId: str(K.ADMIN_LINE_GROUP_ID, D.adminLineGroupId),
+    deliveryGeofenceMeters: num(K.DELIVERY_GEOFENCE_M, D.deliveryGeofenceMeters),
   };
 }
 
@@ -339,6 +340,7 @@ export async function updateSystemSettings(patch: UpdateSystemSettingsInput): Pr
   put(K.PRIVACY_VERSION, patch.privacyVersion);
   put(K.PROHIBITED_ITEMS_LIST, patch.prohibitedItemsList);
   put(K.ADMIN_LINE_GROUP_ID, patch.adminLineGroupId);
+  put(K.DELIVERY_GEOFENCE_M, patch.deliveryGeofenceMeters);
   await Promise.all(
     entries.map(([key, value]) =>
       prisma.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } }),

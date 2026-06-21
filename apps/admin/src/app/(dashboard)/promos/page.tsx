@@ -142,7 +142,13 @@ export default function PromosPage() {
           {promos.data?.items.map((p) => (
             <TableRow key={p.code}>
               <TableCell className="font-mono font-medium">{p.code}</TableCell>
-              <TableCell>{p.type === 'PERCENT' ? `${p.value}%` : `฿${p.value.toLocaleString()}`}</TableCell>
+              <TableCell>
+                {p.type === 'PERCENT'
+                  ? `${p.value}%`
+                  : p.type === 'FIXED_PRICE'
+                    ? `ล็อก ฿${p.value.toLocaleString()}`
+                    : `฿${p.value.toLocaleString()}`}
+              </TableCell>
               <TableCell>{p.minOrder ? `฿${p.minOrder.toLocaleString()}` : '—'}</TableCell>
               <TableCell>
                 {p.usedCount}
@@ -217,17 +223,32 @@ export default function PromosPage() {
                   <SelectContent>
                     {PromoTypeSchema.options.map((t) => (
                       <SelectItem key={t} value={t}>
-                        {t === 'PERCENT' ? 'เปอร์เซ็นต์ (%)' : 'จำนวนเงิน (฿)'}
+                        {t === 'PERCENT'
+                          ? 'เปอร์เซ็นต์ (%)'
+                          : t === 'FIXED_PRICE'
+                            ? 'ล็อกราคา (฿)'
+                            : 'จำนวนเงิน (฿)'}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="value">มูลค่า</Label>
+                <Label htmlFor="value">
+                  {form.type === 'PERCENT'
+                    ? 'มูลค่า (%)'
+                    : form.type === 'FIXED_PRICE'
+                      ? 'ราคาที่ล็อก (บาท)'
+                      : 'มูลค่า (บาท)'}
+                </Label>
                 <Input id="value" type="number" min={1} value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
               </div>
             </div>
+            {form.type === 'FIXED_PRICE' && (
+              <p className="text-xs text-muted-foreground">
+                ลูกค้าจะจ่ายตามราคานี้แทนราคาที่ระบบคำนวณ (จะไม่คิดเกินราคาปกติหากถูกกว่า) — แนะนำให้ตั้ง “ราคาขั้นต่ำ” เพื่อจำกัดเฉพาะงานที่เข้าเงื่อนไข
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label htmlFor="minOrder">ราคาขั้นต่ำ (บาท)</Label>

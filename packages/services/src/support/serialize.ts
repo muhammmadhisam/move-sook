@@ -106,6 +106,9 @@ export function toJobDto(job: Job): JobDto {
       ? job.codCommissionApprovedAt.toISOString()
       : null,
     codCommissionRejectedReason: job.codCommissionRejectedReason,
+    codCollectionMethod: job.codCollectionMethod,
+    codCollectionSlipUrl: job.codCollectionSlipUrl,
+    codCollectedAt: job.codCollectedAt ? job.codCollectedAt.toISOString() : null,
     pricingMode: job.pricingMode,
     priceQuoted: job.priceQuoted,
     promoCode: job.promoCode,

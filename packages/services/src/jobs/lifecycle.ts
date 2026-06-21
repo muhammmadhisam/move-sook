@@ -18,9 +18,11 @@ import {
   type JobDto,
   type JobListResponse,
   type ListJobsQuery,
+  type RecordCodCollectionInput,
   type SetJobProofInput,
   type UpdateJobStatusInput,
 } from '@movesook/shared';
+import { getEnv } from '../runtime/env';
 import {
   evaluatePromo,
   getBaseFare,
@@ -397,6 +399,50 @@ export async function setJobProof(
   return toJobDto(updated);
 }
 
+/**
+ * DRIVER records how they collected the COD cash remainder from the customer
+ * (CASH or TRANSFER) before marking the delivery done. TRANSFER must carry a
+ * proof slip. Only valid for COD jobs the driver currently holds.
+ */
+export async function recordCodCollection(
+  sub: string,
+  jobId: string,
+  input: RecordCodCollectionInput,
+): Promise<JobDto> {
+  const { method } = input;
+  // Slip is only meaningful for a transfer; cash never stores one.
+  const slipUrl = method === 'TRANSFER' ? (input.slipUrl ?? null) : null;
+  if (method === 'TRANSFER' && !slipUrl) {
+    throw new HTTPException(422, { message: 'กรุณาแนบรูปหลักฐานการโอน' });
+  }
+
+  const driver = await prisma.driver.findUnique({ where: { userId: sub } });
+  if (!driver) throw new HTTPException(403, { message: 'Not a driver' });
+  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  if (!job) throw new HTTPException(404, { message: 'Job not found' });
+  if (job.driverId !== driver.id) throw new HTTPException(403, { message: 'Not your job' });
+  if (job.paymentMethod !== 'COD') {
+    throw new HTTPException(422, { message: 'งานนี้ไม่ใช่แบบเก็บเงินปลายทาง' });
+  }
+  // Recorded while the job is still in the driver's hands (before "แจ้งส่งสำเร็จ")
+  // or while awaiting admin confirmation (allows a correction before it closes).
+  if (!isInHand(job.status) && job.status !== 'PENDING_CONFIRMATION') {
+    throw new HTTPException(422, {
+      message: 'บันทึกการรับเงินได้เฉพาะงานที่กำลังดำเนินการ',
+    });
+  }
+
+  const updated = await prisma.job.update({
+    where: { id: jobId },
+    data: {
+      codCollectionMethod: method,
+      codCollectionSlipUrl: slipUrl,
+      codCollectedAt: new Date(),
+    },
+  });
+  return toJobDto(updated);
+}
+
 /** CUSTOMER cancels their own job (only while not yet picked up). */
 export async function cancelJob(sub: string, id: string): Promise<JobDto> {
   const job = await prisma.job.findUnique({
@@ -714,6 +760,39 @@ export async function updateJobStatus(
   // Delivery success is confirmed by an admin only; a driver marks PENDING_CONFIRMATION.
   if (!DRIVER_ADVANCEABLE.includes(next)) {
     throw new HTTPException(403, { message: 'ต้องให้แอดมินยืนยันการส่งสำเร็จ' });
+  }
+  // COD: the driver must record how they collected the cash from the customer
+  // (เงินสด/โอน + slip) before declaring the delivery done.
+  if (next === 'PENDING_CONFIRMATION' && job.paymentMethod === 'COD' && !job.codCollectedAt) {
+    throw new HTTPException(422, {
+      message: 'กรุณาบันทึกการรับเงินจากลูกค้าก่อนแจ้งส่งสำเร็จ',
+    });
+  }
+  // Geofence: marking a delivery done requires the driver to actually be at the
+  // destination. Enforced in production only (geocoding/GPS imprecision + local
+  // testing convenience), and only when the job has destination coordinates and the
+  // admin-configured radius is non-zero (0 = geofence off).
+  if (
+    next === 'PENDING_CONFIRMATION' &&
+    getEnv().NODE_ENV === 'production' &&
+    job.destLat != null &&
+    job.destLng != null
+  ) {
+    const { deliveryGeofenceMeters } = await getSystemSettings();
+    if (deliveryGeofenceMeters > 0) {
+      if (input.lat == null || input.lng == null) {
+        throw new HTTPException(422, {
+          message: 'ต้องเปิดตำแหน่ง (GPS) เพื่อยืนยันว่าอยู่ที่จุดส่งก่อนแจ้งส่งสำเร็จ',
+        });
+      }
+      const distM = haversineKm(input.lat, input.lng, job.destLat, job.destLng) * 1000;
+      if (distM > deliveryGeofenceMeters) {
+        const limitKm = (deliveryGeofenceMeters / 1000).toFixed(deliveryGeofenceMeters % 1000 === 0 ? 0 : 1);
+        throw new HTTPException(422, {
+          message: `คุณอยู่ห่างจุดส่งเกินกำหนด (ต้องอยู่ในระยะ ${limitKm} กม.) จึงจะแจ้งส่งสำเร็จได้`,
+        });
+      }
+    }
   }
 
   // Flip status. The commission ledger is written when an admin confirms DELIVERED.

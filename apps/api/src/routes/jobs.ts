@@ -8,6 +8,7 @@ import {
   EstimateJobInput,
   FlagJobIllegalInput,
   ListJobsQuery,
+  RecordCodCollectionInput,
   RequestDestChangeInput,
   SetJobProofInput,
   UpdateJobStatusInput,
@@ -36,6 +37,7 @@ import {
   getServiceAreas,
   getTrackSnapshot,
   listJobs,
+  recordCodCollection,
   requestDestChange,
   setJobProof,
   switchToCod,
@@ -205,6 +207,17 @@ export const jobRoutes = new Hono<AppEnv>()
     zValidator('json', SetJobProofInput),
     async (c) =>
       c.json(await setJobProof(c.get('claims').sub, c.req.param('id'), c.req.valid('json'))),
+  )
+
+  // DRIVER records how they collected the COD cash from the customer (เงินสด/โอน + slip)
+  // before marking the delivery done.
+  .post(
+    '/:id/cod-collection',
+    authenticate('user'),
+    requireRole('DRIVER'),
+    zValidator('json', RecordCodCollectionInput),
+    async (c) =>
+      c.json(await recordCodCollection(c.get('claims').sub, c.req.param('id'), c.req.valid('json'))),
   )
 
   // CUSTOMER cancels their own job (only while not yet picked up).

@@ -8,9 +8,11 @@ import {
   useMap,
   type MapMouseEvent,
 } from '@vis.gl/react-google-maps';
-import { Maximize2 } from 'lucide-react';
+import { LocateFixed, Maximize2 } from 'lucide-react';
 import {
+  Button,
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -57,6 +59,53 @@ function RecenterMap({ mapId, target }: { mapId: string; target: LatLng | null }
 }
 
 /**
+ * "My location" button overlaid on the map. Asks the browser for the device's
+ * current position, then pans/zooms there and drops the pin (same path as a tap,
+ * so the address + province get reverse-geocoded too).
+ */
+function MyLocationButton({
+  mapId,
+  onPick,
+}: {
+  mapId: string;
+  onPick: (point: LatLng) => void;
+}) {
+  const map = useMap(mapId);
+  const [locating, setLocating] = useState(false);
+
+  const handleLocate = () => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const point = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        onPick(point);
+        if (map) {
+          map.panTo(point);
+          map.setZoom(16);
+        }
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleLocate}
+      disabled={locating}
+      aria-label="ไปยังตำแหน่งของฉัน"
+      className="absolute bottom-2 left-2 z-10 flex items-center gap-1 rounded-md border bg-background/90 px-2 py-1 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-background disabled:opacity-60"
+    >
+      <LocateFixed className={`h-3.5 w-3.5 ${locating ? 'animate-pulse' : ''}`} />
+      ตำแหน่งของฉัน
+    </button>
+  );
+}
+
+/**
  * The map itself, rendered inside APIProvider so it can use the geocoding
  * library. Clicking sets a marker and, when onResolve is given, reverse-geocodes
  * the point into a formatted address + canonical Thai province.
@@ -88,29 +137,38 @@ function PickerMap({
     [onResolve],
   );
 
+  const pickPoint = useCallback(
+    (point: LatLng) => {
+      onChange(point);
+      void resolve(point);
+    },
+    [onChange, resolve],
+  );
+
   const handleClick = (event: MapMouseEvent) => {
     const latLng = event.detail.latLng;
     if (!latLng) return;
-    const point = { lat: latLng.lat, lng: latLng.lng };
-    onChange(point);
-    void resolve(point);
+    pickPoint({ lat: latLng.lat, lng: latLng.lng });
   };
 
   return (
-    <Map
-      id={id}
-      defaultCenter={center}
-      defaultZoom={value ? 15 : 11}
-      gestureHandling="greedy"
-      clickableIcons={false}
-      disableDefaultUI
-      zoomControl
-      onClick={handleClick}
-      style={{ width: '100%', height: '100%' }}
-    >
-      {value && <Marker position={value} icon={icon} />}
-      <RecenterMap mapId={id} target={value} />
-    </Map>
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <Map
+        id={id}
+        defaultCenter={center}
+        defaultZoom={value ? 15 : 11}
+        gestureHandling="greedy"
+        clickableIcons={false}
+        disableDefaultUI
+        zoomControl
+        onClick={handleClick}
+        style={{ width: '100%', height: '100%' }}
+      >
+        {value && <Marker position={value} icon={icon} />}
+        <RecenterMap mapId={id} target={value} />
+      </Map>
+      <MyLocationButton mapId={id} onPick={pickPoint} />
+    </div>
   );
 }
 
@@ -169,14 +227,20 @@ export function LocationPicker({
       </div>
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
-        <DialogContent className="flex h-[85vh] max-w-3xl flex-col gap-3 p-4 sm:p-6">
+        {/*
+          Full dynamic-viewport height on phones (h-[100dvh] dodges mobile browser
+          chrome that made the old 85vh overflow & hide the close button); a
+          centered card on sm+. min-h-0 lets the map flex-shrink instead of
+          pushing the footer off-screen.
+        */}
+        <DialogContent className="flex h-[100dvh] max-w-3xl flex-col gap-3 rounded-none p-4 sm:h-[85vh] sm:rounded-xl sm:p-6">
           <DialogHeader>
             <DialogTitle>{expandLabel}</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
             แตะบนแผนที่เพื่อปักหมุด · เลื่อน/ซูมเพื่อหาตำแหน่งให้แม่นยำ
           </p>
-          <div className="flex-1 overflow-hidden rounded-lg border">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
             {expanded && (
               <PickerMap
                 id={`${baseId}-expanded`}
@@ -188,6 +252,12 @@ export function LocationPicker({
               />
             )}
           </div>
+          {/* Always-visible, thumb-friendly confirm/close at the bottom. */}
+          <DialogClose asChild>
+            <Button type="button" className="w-full">
+              {value ? 'ยืนยันตำแหน่งนี้' : 'เสร็จสิ้น'}
+            </Button>
+          </DialogClose>
         </DialogContent>
       </Dialog>
     </APIProvider>

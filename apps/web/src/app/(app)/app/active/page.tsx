@@ -9,10 +9,24 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   PreviewableImage,
   cn,
 } from '@movesook/ui';
-import { isInHand, type JobDto, type JobListResponse, type JobStatus } from '@movesook/shared';
+import {
+  DEFAULT_SYSTEM_SETTINGS,
+  isInHand,
+  type JobDto,
+  type JobListResponse,
+  type JobStatus,
+  type PublicSystemConfig,
+} from '@movesook/shared';
 
 type TabKey = 'active' | 'done';
 const TAB_GROUPS: Record<TabKey, Set<JobStatus>> = {
@@ -25,12 +39,20 @@ const TABS: { key: TabKey; label: string }[] = [
 ];
 import { FileText, Flag, MapPin, Package } from 'lucide-react';
 import { api, API_BASE_URL } from '@/lib/api';
+import { useGeolocation } from '@/hooks/use-geolocation';
+import { distanceKm, formatDistance } from '@/lib/geo';
 import { ImageUploadGallery } from '@/components/image-upload-gallery';
+import { CodCollectionCard } from '@/components/cod-collection-card';
 import {
   JOB_STATUS_LABEL,
   JOB_STATUS_VARIANT,
   nextForwardStatus,
 } from '@/lib/job-display';
+
+// Marking a delivery done is gated on the driver being within the admin-configured radius
+// of the job's destination. Enforced in production only — geocoding/GPS precision plus
+// local-testing convenience make it impractical to gate in dev.
+const ENFORCE_DELIVERY_GEOFENCE = process.env.NODE_ENV === 'production';
 
 async function fetchActiveJobs(): Promise<JobListResponse> {
   const res = await api.jobs.$get({ query: { mine: 'true' } });
@@ -41,15 +63,38 @@ async function fetchActiveJobs(): Promise<JobListResponse> {
 export default function ActiveJobsPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabKey>('active');
+  // Pickup requires the driver to acknowledge responsibility before the ACCEPTED -> PICKED_UP
+  // transition. We stage the job id here and only advance once they tick the consent box.
+  const [pickupConsentJobId, setPickupConsentJobId] = useState<string | null>(null);
+  const [pickupConsentChecked, setPickupConsentChecked] = useState(false);
+  // Driver's live position — used to gate marking a delivery done within the destination area.
+  const geo = useGeolocation();
+  // Admin-configured delivery geofence radius (metres; 0 = off).
+  const sysConfig = useQuery({
+    queryKey: ['system', 'public'],
+    queryFn: async (): Promise<PublicSystemConfig> => {
+      const res = await api.system.public.$get();
+      if (!res.ok) throw new Error('โหลดการตั้งค่าไม่สำเร็จ');
+      return (await res.json()) as PublicSystemConfig;
+    },
+  });
+  const geofenceMeters =
+    sysConfig.data?.deliveryGeofenceMeters ?? DEFAULT_SYSTEM_SETTINGS.deliveryGeofenceMeters;
   const jobs = useQuery({ queryKey: ['active-jobs'], queryFn: fetchActiveJobs });
 
   const advance = useMutation({
-    mutationFn: async (args: { id: string; status: JobStatus }) => {
+    mutationFn: async (args: { id: string; status: JobStatus; lat?: number; lng?: number }) => {
       const res = await api.jobs[':id'].status.$patch({
         param: { id: args.id },
-        json: { status: args.status },
+        json: {
+          status: args.status,
+          ...(args.lat != null && args.lng != null ? { lat: args.lat, lng: args.lng } : {}),
+        },
       });
-      if (!res.ok) throw new Error('อัปเดตสถานะไม่สำเร็จ');
+      if (!res.ok) {
+        const err = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(err?.message ?? 'อัปเดตสถานะไม่สำเร็จ');
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -237,23 +282,78 @@ export default function ActiveJobsPage() {
                   />
                 )}
 
+                {/* COD: record how the customer paid before the delivery can be marked done. */}
+                {job.paymentMethod === 'COD' &&
+                  (isInHand(job.status) || job.status === 'PENDING_CONFIRMATION') && (
+                    <CodCollectionCard job={job} />
+                  )}
+
                 {job.status === 'PENDING_CONFIRMATION' && (
                   <p className="rounded-lg border border-dashed bg-muted p-3 text-center text-sm text-muted-foreground">
                     แจ้งส่งสำเร็จแล้ว · รอแอดมินยืนยัน
                   </p>
                 )}
 
-                {next && (
-                  <Button
-                    className="w-full"
-                    disabled={advance.isPending}
-                    onClick={() => advance.mutate({ id: job.id, status: next })}
-                  >
-                    {next === 'PENDING_CONFIRMATION'
-                      ? 'แจ้งส่งสำเร็จ'
-                      : `อัปเดตเป็น “${JOB_STATUS_LABEL[next]}”`}
-                  </Button>
-                )}
+                {next &&
+                  (() => {
+                    const isDelivery = next === 'PENDING_CONFIRMATION';
+                    // COD delivery can't be declared until the driver records the payment.
+                    const codBlocks =
+                      isDelivery && job.paymentMethod === 'COD' && !job.codCollectedAt;
+                    // Picking up the parcel requires a responsibility acknowledgement first.
+                    const needsPickupConsent = next === 'PICKED_UP';
+                    // Geofence: the driver must be within the destination area to mark a
+                    // delivery done. Enforced in production only, and only when the admin
+                    // has a non-zero radius configured.
+                    const geofenceKm = geofenceMeters / 1000;
+                    const dest =
+                      job.destLat != null && job.destLng != null
+                        ? { lat: job.destLat, lng: job.destLng }
+                        : null;
+                    const distToDest =
+                      geo.position && dest ? distanceKm(geo.position, dest) : null;
+                    const geoBlocks =
+                      ENFORCE_DELIVERY_GEOFENCE &&
+                      isDelivery &&
+                      geofenceMeters > 0 &&
+                      dest != null &&
+                      (distToDest == null || distToDest > geofenceKm);
+                    return (
+                      <>
+                        <Button
+                          className="w-full"
+                          disabled={advance.isPending || codBlocks || geoBlocks}
+                          onClick={() => {
+                            if (needsPickupConsent) {
+                              setPickupConsentChecked(false);
+                              setPickupConsentJobId(job.id);
+                              return;
+                            }
+                            // Send the driver's position with the delivery so the API can
+                            // verify the destination geofence.
+                            advance.mutate({
+                              id: job.id,
+                              status: next,
+                              ...(isDelivery && geo.position
+                                ? { lat: geo.position.lat, lng: geo.position.lng }
+                                : {}),
+                            });
+                          }}
+                        >
+                          {isDelivery
+                            ? 'แจ้งส่งสำเร็จ'
+                            : `อัปเดตเป็น “${JOB_STATUS_LABEL[next]}”`}
+                        </Button>
+                        {geoBlocks && (
+                          <p className="rounded-lg border border-dashed border-amber-300 bg-amber-50 p-2.5 text-center text-xs text-amber-700">
+                            {distToDest == null
+                              ? 'เปิดการเข้าถึงตำแหน่ง (GPS) เพื่อยืนยันว่าคุณอยู่ที่จุดส่ง จึงจะกดส่งสำเร็จได้'
+                              : `คุณอยู่ห่างจุดส่ง ${formatDistance(distToDest)} · ต้องอยู่ในระยะ ${formatDistance(geofenceKm)} จึงจะกดส่งสำเร็จได้`}
+                          </p>
+                        )}
+                      </>
+                    );
+                  })()}
 
                 {/* Trust & safety: report prohibited/illegal cargo (no penalty to the driver). */}
                 {isInHand(job.status) && (
@@ -292,6 +392,64 @@ export default function ActiveJobsPage() {
           <Link href="/app">หน้าหลัก</Link>
         </Button>
       </div>
+
+      {/* Driver responsibility consent — shown before confirming pickup (ACCEPTED -> PICKED_UP). */}
+      <Dialog
+        open={pickupConsentJobId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPickupConsentJobId(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>ยืนยันการรับพัสดุ</DialogTitle>
+            <DialogDescription>
+              เมื่อรับพัสดุแล้ว พัสดุจะอยู่ในความดูแลของคุณจนกว่าจะส่งถึงปลายทาง
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-lg border bg-muted/40 p-3 text-sm leading-relaxed text-muted-foreground">
+            กรุณาตรวจสอบสภาพพัสดุและถ่ายรูปก่อนรับของทุกครั้ง
+            หากเกิดความเสียหาย สูญหาย หรือมีปัญหาเกี่ยวกับพัสดุระหว่างการขนส่ง
+            คุณในฐานะคนขับเป็นผู้รับผิดชอบตามนโยบายของ MoveSook
+          </div>
+
+          <div className="flex items-start gap-2.5">
+            <Checkbox
+              checked={pickupConsentChecked}
+              onCheckedChange={setPickupConsentChecked}
+              className="mt-0.5"
+            />
+            <span
+              className="cursor-pointer text-sm"
+              onClick={() => setPickupConsentChecked((v) => !v)}
+            >
+              ข้าพเจ้าได้ตรวจสอบพัสดุแล้ว และยินยอมรับผิดชอบกรณีพัสดุมีปัญหา
+            </span>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => setPickupConsentJobId(null)}
+            >
+              ยกเลิก
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={!pickupConsentChecked || advance.isPending}
+              onClick={() => {
+                if (!pickupConsentJobId) return;
+                advance.mutate({ id: pickupConsentJobId, status: 'PICKED_UP' });
+                setPickupConsentJobId(null);
+              }}
+            >
+              ยืนยันรับพัสดุ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </main>
   );
 }

@@ -18,3 +18,4 @@ export * from './promo';
 export * from './referral';
 export * from './blog';
 export * from './ledger';
+export * from './tour';

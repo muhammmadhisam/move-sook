@@ -7,6 +7,23 @@ import { Gift, Copy, Check } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@movesook/ui';
 import type { ReferralResponse } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const REFERRAL_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="referral-head"]',
+    popover: {
+      title: 'แนะนำเพื่อน รับส่วนลด',
+      description: 'แชร์โค้ดของคุณให้เพื่อน เมื่อเพื่อนใช้บริการครบเงื่อนไข ทั้งคุณและเพื่อนจะได้รับส่วนลด',
+    },
+  },
+  {
+    popover: {
+      title: 'มีโค้ดจากเพื่อน?',
+      description: 'ถ้าเพื่อนส่งโค้ดมาให้ กรอกในช่อง “มีโค้ดแนะนำ?” เพื่อรับสิทธิ์ส่วนลด',
+    },
+  },
+];
 
 export default function ReferralPage() {
   const queryClient = useQueryClient();
@@ -51,7 +68,8 @@ export default function ReferralPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
-      <div className="flex items-center gap-2">
+      <PageTour id="referral" steps={REFERRAL_TOUR} />
+      <div data-tour="referral-head" className="flex items-center gap-2">
         <Gift className="h-5 w-5 text-primary" />
         <h1 className="text-xl font-semibold tracking-tight">แนะนำเพื่อน รับส่วนลด</h1>
       </div>

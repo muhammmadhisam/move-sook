@@ -27,6 +27,17 @@ import {
   type Gender,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const PROFILE_EDIT_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="profile-edit-head"]',
+    popover: {
+      title: 'แก้ไขข้อมูลส่วนตัว',
+      description: 'อัปเดตชื่อ เบอร์ติดต่อ และข้อมูลอื่น ๆ ทุกช่องไม่บังคับ กรอกเฉพาะที่ต้องการแล้วบันทึก',
+    },
+  },
+];
 
 // Self-serve customer profile editor. Every field is optional — nothing here is
 // required to use the app; it just lets customers keep their details on file.
@@ -105,9 +116,10 @@ export default function ProfileEditPage() {
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
+      <PageTour id="profile-edit" steps={PROFILE_EDIT_TOUR} />
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">ข้อมูลส่วนตัว</CardTitle>
+          <CardTitle data-tour="profile-edit-head" className="text-lg">ข้อมูลส่วนตัว</CardTitle>
           <p className="text-sm text-muted-foreground">
             กรอกเฉพาะข้อมูลที่ต้องการ — ทุกช่องไม่บังคับ
           </p>

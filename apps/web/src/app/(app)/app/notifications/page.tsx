@@ -4,14 +4,33 @@ import Link from 'next/link';
 import { Badge, Button, Card, CardContent } from '@movesook/ui';
 import { NOTIFICATION_TYPE_LABEL } from '@movesook/shared';
 import { useNotifications } from '@/hooks/use-notifications';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const NOTIFICATIONS_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="notifications-head"]',
+    popover: {
+      title: 'การแจ้งเตือน',
+      description:
+        'อัปเดตทุกอย่างเกี่ยวกับงานของคุณ — มีคนขับรับงาน สถานะเปลี่ยน หรือต้องดำเนินการต่อ จะแจ้งที่นี่',
+    },
+  },
+  {
+    popover: {
+      title: 'อ่านทั้งหมด',
+      description: 'แตะการแจ้งเตือนเพื่อเปิดงานที่เกี่ยวข้อง หรือกด “อ่านทั้งหมด” เพื่อเคลียร์จุดแดง',
+    },
+  },
+];
 
 export default function NotificationsPage() {
   const { items, isLoading, unreadCount, markRead, markAllRead } = useNotifications();
 
   return (
     <main className="mx-auto max-w-md p-6">
+      <PageTour id="notifications" steps={NOTIFICATIONS_TOUR} />
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">การแจ้งเตือน</h1>
+        <h1 data-tour="notifications-head" className="text-2xl font-semibold tracking-tight">การแจ้งเตือน</h1>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" onClick={() => markAllRead.mutate()}>
             อ่านทั้งหมด

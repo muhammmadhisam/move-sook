@@ -129,29 +129,8 @@ export async function createJob(sub: string, input: AdminCreateJobInput): Promis
     }
   }
 
-  // Apply a promo code (if any) against the quoted price.
-  let priceQuoted = input.priceQuoted ?? null;
-  let discountAmount: number | null = null;
-  let promoCode: string | null = null;
-  if (input.promoCode && priceQuoted !== null) {
-    const code = input.promoCode.trim().toUpperCase();
-    const promo = await prisma.promoCode.findUnique({ where: { code } });
-    const now = new Date();
-    if (
-      !promo ||
-      !promo.isActive ||
-      (promo.expiresAt && promo.expiresAt <= now) ||
-      (promo.maxUses !== null && promo.usedCount >= promo.maxUses) ||
-      (promo.minOrder !== null && priceQuoted < promo.minOrder)
-    ) {
-      throw new HTTPException(422, { message: 'โค้ดส่วนลดใช้ไม่ได้' });
-    }
-    discountAmount = computeDiscount(priceQuoted, promo.type, promo.value);
-    priceQuoted = priceQuoted - discountAmount;
-    promoCode = code;
-  }
-
-  // Resolve the customer: reuse an existing one, or record a new offline customer.
+  // Resolve the customer first (the promo whitelist check below needs it): reuse an
+  // existing one, or record a new offline customer.
   let customerId = input.customerId;
   if (customerId) {
     const exists = await prisma.customer.findUnique({ where: { id: customerId } });
@@ -166,6 +145,35 @@ export async function createJob(sub: string, input: AdminCreateJobInput): Promis
       },
     });
     customerId = created.id;
+  }
+
+  // Apply a promo code (if any) against the quoted price.
+  let priceQuoted = input.priceQuoted ?? null;
+  let discountAmount: number | null = null;
+  let promoCode: string | null = null;
+  if (input.promoCode && priceQuoted !== null) {
+    const code = input.promoCode.trim().toUpperCase();
+    const promo = await prisma.promoCode.findUnique({
+      where: { code },
+      include: { customers: { select: { customerId: true } } },
+    });
+    const now = new Date();
+    if (
+      !promo ||
+      !promo.isActive ||
+      (promo.expiresAt && promo.expiresAt <= now) ||
+      (promo.maxUses !== null && promo.usedCount >= promo.maxUses) ||
+      (promo.minOrder !== null && priceQuoted < promo.minOrder)
+    ) {
+      throw new HTTPException(422, { message: 'โค้ดส่วนลดใช้ไม่ได้' });
+    }
+    // Customer whitelist: a restricted code only applies to its listed customers.
+    if (promo.customers.length > 0 && !promo.customers.some((w) => w.customerId === customerId)) {
+      throw new HTTPException(422, { message: 'โค้ดนี้ใช้ได้เฉพาะลูกค้าที่กำหนดเท่านั้น' });
+    }
+    discountAmount = computeDiscount(priceQuoted, promo.type, promo.value);
+    priceQuoted = priceQuoted - discountAmount;
+    promoCode = code;
   }
 
   const paymentMethod = input.paymentMethod ?? 'PREPAID';

@@ -34,7 +34,24 @@ import { JobRouteMap, type LatLng } from '@/components/job-route-map';
 import { useAuth } from '@/hooks/use-auth';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { useVehicleLabels } from '@/hooks/use-vehicle-labels';
+import { PageTour, type TourStep } from '@/components/tour/tour';
 import { distanceKm, formatDistance, directionsUrl } from '@/lib/geo';
+
+const DRIVER_FEED_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="feed-head"]',
+    popover: {
+      title: 'งานที่คุณรับได้',
+      description: 'งานเปิดใหม่ในจังหวัดที่คุณให้บริการจะแสดงที่นี่ คนขับคนแรกที่กด “รับงาน” จะได้งานทันที',
+    },
+  },
+  {
+    popover: {
+      title: 'อย่าลืมเปิดรับงาน',
+      description: 'ต้องเปิดสถานะออนไลน์ที่หน้าโปรไฟล์ก่อน จึงจะกดรับงานได้ ระยะทางจากตำแหน่งคุณจะแสดงในแต่ละการ์ด',
+    },
+  },
+];
 
 async function fetchJobs(): Promise<JobListResponse> {
   const res = await api.jobs.$get({ query: {} });
@@ -177,7 +194,8 @@ export default function JobsPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับได้</h1>
+      <PageTour id="driver-feed" steps={DRIVER_FEED_TOUR} />
+      <h1 data-tour="feed-head" className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับได้</h1>
       {offDuty && (
         <p className="mb-4 rounded-lg border border-warning/50 bg-warning/10 p-3 text-sm">
           คุณปิดรับงานอยู่ — เปิดสถานะออนไลน์ที่หน้าโปรไฟล์ก่อนจึงจะรับงานได้

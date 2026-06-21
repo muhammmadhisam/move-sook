@@ -4,7 +4,9 @@ import {
   REFERRAL_REWARD_THB,
   type CustomerProfileDto,
   type ListNotificationsQuery,
+  type MarkTourSeenInput,
   type MeResponse,
+  type MeToursResponse,
   type NotificationDto,
   type ReferralResponse,
   type UpdateCustomerProfileInput,
@@ -239,4 +241,26 @@ export async function markAllNotificationsRead(sub: string): Promise<{ updated: 
     data: { readAt: new Date() },
   });
   return { updated: result.count };
+}
+
+/** Guided tours the user has already completed/skipped (with the version seen). */
+export async function listTourSeen(sub: string): Promise<MeToursResponse> {
+  const rows = await prisma.tourSeen.findMany({
+    where: { userId: sub },
+    select: { tourId: true, version: true },
+  });
+  return { tours: rows };
+}
+
+/** Record a tour as learned (idempotent upsert). Returns the refreshed list. */
+export async function markTourSeen(
+  sub: string,
+  input: MarkTourSeenInput,
+): Promise<MeToursResponse> {
+  await prisma.tourSeen.upsert({
+    where: { userId_tourId: { userId: sub, tourId: input.tourId } },
+    create: { userId: sub, tourId: input.tourId, version: input.version },
+    update: { version: input.version, seenAt: new Date() },
+  });
+  return listTourSeen(sub);
 }

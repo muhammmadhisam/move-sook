@@ -17,7 +17,7 @@ import {
   isTerminalStatus,
 } from '@movesook/shared';
 import type { AppEnv } from '../lib/context';
-import { authenticate, requireRole } from '../middleware/auth';
+import { authenticate, optionalUser, requireRole } from '../middleware/auth';
 import {
   acceptJob,
   authorizeTrack,
@@ -58,8 +58,10 @@ export const jobRoutes = new Hono<AppEnv>()
   .get('/service-areas', async (c) => c.json(await getServiceAreas()))
 
   // Public: full itemised quote for a specific trip + an optional promo-code preview.
-  .post('/estimate', zValidator('json', EstimateJobInput), async (c) =>
-    c.json(await estimateJob(c.req.valid('json'))),
+  // optionalUser attaches the session (if any) so customer-restricted promos preview
+  // correctly for the logged-in customer without forcing auth on anonymous callers.
+  .post('/estimate', optionalUser, zValidator('json', EstimateJobInput), async (c) =>
+    c.json(await estimateJob(c.req.valid('json'), c.get('claims')?.sub)),
   )
 
   // USER creates and publishes a moving job.

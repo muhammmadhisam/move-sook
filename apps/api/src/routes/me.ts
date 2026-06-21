@@ -3,6 +3,7 @@ import { zValidator } from '@hono/zod-validator';
 import {
   ApplyReferralInput,
   ListNotificationsQuery,
+  MarkTourSeenInput,
   UpdateCustomerProfileInput,
 } from '@movesook/shared';
 import {
@@ -12,8 +13,10 @@ import {
   getProfile,
   getReferral,
   listNotifications,
+  listTourSeen,
   markAllNotificationsRead,
   markNotificationRead,
+  markTourSeen,
   updateProfile,
 } from '@movesook/services/me';
 import type { AppEnv } from '../lib/context';
@@ -62,4 +65,12 @@ export const meRoutes = new Hono<AppEnv>()
   // Mark all read.
   .post('/notifications/read-all', authenticate('user'), async (c) =>
     c.json(await markAllNotificationsRead(c.get('claims').sub)),
+  )
+
+  // Guided tours the user has already learned (onboarding state).
+  .get('/tours', authenticate('user'), async (c) => c.json(await listTourSeen(c.get('claims').sub)))
+
+  // Mark a guided tour as learned (completed or skipped).
+  .post('/tours', authenticate('user'), zValidator('json', MarkTourSeenInput), async (c) =>
+    c.json(await markTourSeen(c.get('claims').sub, c.req.valid('json')), 201),
   );

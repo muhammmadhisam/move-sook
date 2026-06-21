@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ImageIcon, Zap, CalendarDays } from 'lucide-react';
 import { toast } from 'sonner';
+import { PageTour, type TourStep } from '@/components/tour/tour';
 import {
   Button,
   Card,
@@ -933,13 +934,90 @@ export default function NewJobPage() {
     create.mutate();
   };
 
+  // Guided tour. Steps are contextual to the current wizard step so we only ever
+  // point at elements that are actually on screen. Published to the header lightbulb
+  // (and auto-run once for new users) via <PageTour> below.
+  const tourSteps = useMemo<TourStep[]>(() => {
+    const intro: TourStep = {
+      element: '[data-tour="steps"]',
+      popover: {
+        title: 'โพสต์งานใน 4 ขั้นตอน',
+        description:
+          'กรอกรายละเอียดของ → จุดรับ → ปลายทาง → สรุปและยืนยัน ระบบจะบันทึกร่างให้อัตโนมัติ ออกไปแล้วกลับมากรอกต่อได้',
+      },
+    };
+
+    const byStep: Record<number, TourStep[]> = {
+      1: [
+        {
+          element: '[data-tour="items"]',
+          popover: {
+            title: 'รายการของที่ต้องขน',
+            description: 'กด “เพิ่มรายการ” ใส่ชื่อของ จำนวน และรูปถ่ายได้ ยิ่งละเอียด คนขับยิ่งประเมินงานได้แม่น',
+          },
+        },
+        {
+          element: '[data-tour="vehicle"]',
+          popover: {
+            title: 'เลือกประเภทรถ',
+            description: 'เลือกขนาดรถให้เหมาะกับปริมาณของ มีรูปตัวอย่างรถให้ดูประกอบ',
+          },
+        },
+        {
+          element: '[data-tour="schedule"]',
+          popover: {
+            title: 'เวลาที่ต้องการ',
+            description: '“ไปตอนนี้” ให้คนขับที่ว่างมารับงานทันที หรือเลือก “นัดเวลา” เพื่อระบุวัน–เวลาเอง',
+          },
+        },
+        {
+          element: '[data-tour="phone"]',
+          popover: {
+            title: 'เบอร์ติดต่อหน้างาน',
+            description: 'คนขับใช้เบอร์นี้โทรประสานหน้างาน ระบบบันทึกเป็นค่าเริ่มต้นในโปรไฟล์ให้อัตโนมัติ',
+          },
+        },
+      ],
+      2: [
+        {
+          element: '[data-tour="origin"]',
+          popover: {
+            title: 'จุดรับของ (ต้นทาง)',
+            description: 'ค้นหาสถานที่ กรอกที่อยู่ เลือกจังหวัด และปักหมุดบนแผนที่เพื่อให้ราคาประเมินแม่นยำ',
+          },
+        },
+      ],
+      3: [
+        {
+          element: '[data-tour="dest"]',
+          popover: {
+            title: 'ปลายทาง',
+            description: 'ระบุที่อยู่ปลายทาง ชั้น และลิฟต์ — มีผลกับค่าขึ้น–ลงชั้นในการคิดราคา',
+          },
+        },
+      ],
+      4: [
+        {
+          element: '[data-tour="summary"]',
+          popover: {
+            title: 'สรุปและยืนยัน',
+            description: 'ตรวจราคาประเมิน เลือกวิธีคิดราคา/ชำระเงิน ใส่โค้ดส่วนลด และยอมรับข้อตกลงก่อนกดยืนยัน',
+          },
+        },
+      ],
+    };
+
+    return [intro, ...(byStep[step] ?? [])];
+  }, [step]);
+
   return (
     <main className="mx-auto max-w-md p-6">
+      <PageTour id="jobs-new" steps={tourSteps} />
       <Card>
         <CardHeader>
           <CardTitle>โพสต์งานขนย้าย</CardTitle>
           {/* Step indicator */}
-          <div className="mt-3 flex items-center gap-1">
+          <div data-tour="steps" className="mt-3 flex items-center gap-1">
             {STEPS.map((label, i) => {
               const n = i + 1;
               const active = n === step;
@@ -976,7 +1054,7 @@ export default function NewJobPage() {
           {/* Step 1 — รายละเอียด */}
           {step === 1 && (
             <>
-              <div className="grid gap-2">
+              <div data-tour="items" className="grid gap-2">
                 <Label>รายการของที่ต้องการขน</Label>
                 {items.length === 0 ? (
                   <div className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
@@ -1074,7 +1152,7 @@ export default function NewJobPage() {
                 )}
               </div>
 
-              <div className="grid gap-2">
+              <div data-tour="vehicle" className="grid gap-2">
                 <Label>ประเภทรถ</Label>
                 <Select value={form.vehicleType} onValueChange={(v) => set('vehicleType')(v)}>
                   <SelectTrigger>
@@ -1110,7 +1188,7 @@ export default function NewJobPage() {
                 ต้องการคนช่วยยก/ขนของ
               </label>
 
-              <div className="grid gap-2">
+              <div data-tour="schedule" className="grid gap-2">
                 <Label>วัน–เวลาที่ต้องการขนย้าย</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {(
@@ -1212,7 +1290,7 @@ export default function NewJobPage() {
                 })()}
               </div>
 
-              <div className="grid gap-2">
+              <div data-tour="phone" className="grid gap-2">
                 <Label htmlFor="contactPhone">เบอร์ติดต่อหน้างาน</Label>
                 <Input
                   id="contactPhone"
@@ -1241,7 +1319,7 @@ export default function NewJobPage() {
 
           {/* Step 2 — ที่รับ (ต้นทาง) */}
           {step === 2 && (
-            <div className="grid gap-2">
+            <div data-tour="origin" className="grid gap-2">
               <Label>จุดรับของ (ต้นทาง)</Label>
               <PlaceAutocomplete
                 placeholder="ค้นหาสถานที่ต้นทาง"
@@ -1308,7 +1386,7 @@ export default function NewJobPage() {
 
           {/* Step 3 — ปลายทาง */}
           {step === 3 && (
-            <div className="grid gap-2">
+            <div data-tour="dest" className="grid gap-2">
               <Label>ปลายทาง</Label>
               <PlaceAutocomplete
                 placeholder="ค้นหาสถานที่ปลายทาง"
@@ -1369,6 +1447,7 @@ export default function NewJobPage() {
 
           {/* Step 4 — สรุปรายละเอียดทั้งหมดก่อนยืนยัน (read-only) */}
           {step === 4 && (
+            <div data-tour="summary">
             <SummaryStep
               form={form}
               items={filledItems}
@@ -1391,6 +1470,7 @@ export default function NewJobPage() {
               itemCategory={itemCategory}
               vehicleLabel={vehicleLabel(form.vehicleType)}
             />
+            </div>
           )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}

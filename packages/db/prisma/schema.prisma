@@ -171,11 +171,28 @@ model User {
   consents        ConsentRecord[] @relation("UserConsents")
   customerNotes   CustomerNote[] @relation("NoteAuthor")
   ledgerEntries   LedgerEntry[]  @relation("LedgerCreator")
+  toursSeen       TourSeen[]     @relation("UserTours") // guided-tour completions (onboarding)
   anonymizedAt    DateTime? // PDPA erasure: PII scrubbed but row kept for accounting integrity
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   @@index([role])
+}
+
+// Per-user record of which guided tours (driver.js onboarding) a user has completed
+// or skipped. Absence of a row (or a lower version) means "not yet learned" — the UI
+// highlights the help button and auto-runs the tour. `version` lets us re-show a tour
+// after meaningful changes by bumping it on the client.
+model TourSeen {
+  id      String   @id @default(cuid())
+  userId  String
+  tourId  String
+  version Int      @default(1)
+  seenAt  DateTime @default(now())
+  user    User     @relation("UserTours", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tourId])
+  @@index([userId])
 }
 
 model Customer {
@@ -202,6 +219,7 @@ model Customer {
   createdBy   User?    @relation("CustomerCreatedBy", fields: [createdById], references: [id])
   jobs        Job[]
   notes       CustomerNote[]
+  promoGrants PromoCodeCustomer[] // promo codes whitelisted to this customer
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -575,6 +593,22 @@ model PromoCode {
   isActive   Boolean   @default(true)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+  // Optional customer whitelist. EMPTY = public (any customer may use it);
+  // NON-EMPTY = usable only by the listed customers.
+  customers  PromoCodeCustomer[]
+}
+
+// Join row restricting a promo code to a specific customer. The presence of ANY
+// row for a code flips that code from public to whitelist-only.
+model PromoCodeCustomer {
+  promoCode  String
+  customerId String
+  promo      PromoCode @relation(fields: [promoCode], references: [code], onDelete: Cascade)
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+
+  @@id([promoCode, customerId])
+  @@index([customerId])
 }
 
 model BlogPost {

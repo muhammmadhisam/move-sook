@@ -28,20 +28,105 @@ import {
 import {
   JOB_STATUS_LABEL,
   PromoTypeSchema,
+  type CustomerDto,
   type Paged,
   type PromoCodeDto,
+  type PromoCustomerDto,
   type PromoRedemptionDto,
   type PromoType,
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { Pager, SortHead, useTableState } from '@/components/data-table';
 
+/**
+ * Search-and-pick list of customers a promo is restricted to. Empty = public code.
+ * Searches the admin customers endpoint; click a result to add, click a chip to remove.
+ */
+function CustomerPicker({
+  value,
+  onChange,
+}: {
+  value: PromoCustomerDto[];
+  onChange: (next: PromoCustomerDto[]) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const trimmed = search.trim();
+  const results = useQuery({
+    queryKey: ['admin', 'customers', 'picker', trimmed],
+    enabled: trimmed.length > 0,
+    queryFn: async (): Promise<{ items: CustomerDto[] }> => {
+      const res = await api.admin.customers.$get({ query: { search: trimmed } });
+      if (!res.ok) throw new Error('ค้นหาลูกค้าไม่สำเร็จ');
+      return (await res.json()) as { items: CustomerDto[] };
+    },
+  });
+
+  const add = (c: CustomerDto) => {
+    if (!value.some((v) => v.id === c.id)) {
+      onChange([...value, { id: c.id, name: c.name, phone: c.phone }]);
+    }
+    setSearch('');
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1">
+        {value.length === 0 && (
+          <span className="text-xs text-muted-foreground">ทุกคนใช้ได้ (ไม่จำกัด)</span>
+        )}
+        {value.map((c) => (
+          <Badge key={c.id} variant="secondary" className="gap-1">
+            {c.name ?? c.phone ?? c.id.slice(0, 6)}
+            <button
+              type="button"
+              className="ml-0.5 text-muted-foreground hover:text-foreground"
+              onClick={() => onChange(value.filter((v) => v.id !== c.id))}
+            >
+              ×
+            </button>
+          </Badge>
+        ))}
+      </div>
+      <Input
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="ค้นหาลูกค้าด้วยชื่อหรือเบอร์…"
+      />
+      {trimmed.length > 0 && (
+        <div className="max-h-40 overflow-y-auto rounded-md border">
+          {results.data?.items
+            .filter((c) => !value.some((v) => v.id === c.id))
+            .map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
+                onClick={() => add(c)}
+              >
+                {c.name ?? 'ไม่มีชื่อ'}
+                {c.phone ? <span className="text-muted-foreground"> · {c.phone}</span> : null}
+              </button>
+            ))}
+          {results.data && results.data.items.filter((c) => !value.some((v) => v.id === c.id)).length === 0 && (
+            <p className="px-3 py-1.5 text-sm text-muted-foreground">
+              {results.isLoading ? 'กำลังค้นหา…' : 'ไม่พบลูกค้า'}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PromosPage() {
   const queryClient = useQueryClient();
   const tbl = useTableState('createdAt');
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ code: '', type: 'PERCENT' as PromoType, value: '', minOrder: '', maxUses: '' });
+  const [customers, setCustomers] = useState<PromoCustomerDto[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState<PromoCodeDto | null>(null); // promo whose whitelist is being edited
+  const [editCustomers, setEditCustomers] = useState<PromoCustomerDto[]>([]);
   const [viewing, setViewing] = useState<string | null>(null); // code whose redemption log is open
   const [usagePage, setUsagePage] = useState(1);
 
@@ -78,6 +163,7 @@ export default function PromosPage() {
           value: Number(form.value),
           ...(form.minOrder.trim() ? { minOrder: Number(form.minOrder) } : {}),
           ...(form.maxUses.trim() ? { maxUses: Number(form.maxUses) } : {}),
+          ...(customers.length ? { customerIds: customers.map((c) => c.id) } : {}),
         },
       });
       if (!res.ok) {
@@ -89,9 +175,26 @@ export default function PromosPage() {
     onSuccess: () => {
       setCreating(false);
       setForm({ code: '', type: 'PERCENT', value: '', minOrder: '', maxUses: '' });
+      setCustomers([]);
       queryClient.invalidateQueries({ queryKey: ['admin', 'promos'] });
     },
     onError: (e: Error) => setError(e.message),
+  });
+
+  // Replace an existing promo's customer whitelist.
+  const saveWhitelist = useMutation({
+    mutationFn: async () => {
+      const res = await api.admin.promos[':code'].$patch({
+        param: { code: editing!.code },
+        json: { customerIds: editCustomers.map((c) => c.id) },
+      });
+      if (!res.ok) throw new Error('บันทึกลูกค้าไม่สำเร็จ');
+      return res.json();
+    },
+    onSuccess: () => {
+      setEditing(null);
+      queryClient.invalidateQueries({ queryKey: ['admin', 'promos'] });
+    },
   });
 
   const toggle = useMutation({
@@ -120,6 +223,7 @@ export default function PromosPage() {
         <Button
           onClick={() => {
             setError(null);
+            setCustomers([]);
             setCreating(true);
           }}
         >
@@ -141,7 +245,14 @@ export default function PromosPage() {
         <TableBody>
           {promos.data?.items.map((p) => (
             <TableRow key={p.code}>
-              <TableCell className="font-mono font-medium">{p.code}</TableCell>
+              <TableCell className="font-mono font-medium">
+                {p.code}
+                {p.customers.length > 0 && (
+                  <Badge variant="outline" className="ml-2 font-sans text-[10px]">
+                    เฉพาะ {p.customers.length} คน
+                  </Badge>
+                )}
+              </TableCell>
               <TableCell>
                 {p.type === 'PERCENT'
                   ? `${p.value}%`
@@ -161,6 +272,16 @@ export default function PromosPage() {
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setEditCustomers(p.customers);
+                      setEditing(p);
+                    }}
+                  >
+                    ลูกค้า
+                  </Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -259,6 +380,10 @@ export default function PromosPage() {
                 <Input id="maxUses" type="number" min={1} value={form.maxUses} onChange={(e) => setForm({ ...form, maxUses: e.target.value })} />
               </div>
             </div>
+            <div className="space-y-1">
+              <Label>จำกัดเฉพาะลูกค้า (ไม่บังคับ)</Label>
+              <CustomerPicker value={customers} onChange={setCustomers} />
+            </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
           <DialogFooter>
@@ -267,6 +392,26 @@ export default function PromosPage() {
             </Button>
             <Button onClick={onCreate} disabled={create.isPending}>
               {create.isPending ? 'กำลังสร้าง…' : 'สร้าง'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>จำกัดลูกค้า — {editing?.code}</DialogTitle>
+            <DialogDescription>
+              เลือกลูกค้าที่ใช้โค้ดนี้ได้ — ถ้าไม่เลือกเลย ทุกคนจะใช้ได้
+            </DialogDescription>
+          </DialogHeader>
+          <CustomerPicker value={editCustomers} onChange={setEditCustomers} />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={saveWhitelist.isPending}>
+              ยกเลิก
+            </Button>
+            <Button onClick={() => saveWhitelist.mutate()} disabled={saveWhitelist.isPending}>
+              {saveWhitelist.isPending ? 'กำลังบันทึก…' : 'บันทึก'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -27,6 +27,18 @@ import { ReviewDialog } from '@/components/review-dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { useJobTrack } from '@/hooks/use-job-track';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT, jobDest, jobOrigin } from '@/lib/job-display';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const JOB_DETAIL_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="job-detail-head"]',
+    popover: {
+      title: 'ติดตามงานนี้',
+      description:
+        'ดูสถานะล่าสุด ตำแหน่งคนขับแบบเรียลไทม์ รายละเอียดของ และข้อมูลติดต่อคนขับได้จากหน้านี้',
+    },
+  },
+];
 
 // Statuses where raising a dispute makes sense (a driver is involved through delivery).
 const DISPUTABLE = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT', 'PENDING_CONFIRMATION', 'DELIVERED']);
@@ -104,7 +116,8 @@ export default function JobDetailPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight">ติดตามงาน</h1>
+      <PageTour id="job-detail" steps={JOB_DETAIL_TOUR} />
+      <h1 data-tour="job-detail-head" className="mb-4 text-2xl font-semibold tracking-tight">ติดตามงาน</h1>
 
       {job.isLoading && <p className="text-sm text-muted-foreground">กำลังโหลด…</p>}
       {job.isError && (

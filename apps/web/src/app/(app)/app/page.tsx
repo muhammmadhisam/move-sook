@@ -26,11 +26,46 @@ import type {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
+import { PageTour, type TourStep } from '@/components/tour/tour';
 import { AvailabilityToggle } from '@/components/availability-toggle';
 import { DriverAppealDialog } from '@/components/driver-appeal-dialog';
 import { IncentivesCard } from '@/components/incentives-card';
 import { DriverJobsMap } from '@/components/driver-jobs-map';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT } from '@/lib/job-display';
+
+// First-run welcome tour — the onboarding a brand-new user sees right after login.
+// Mostly centered explainers plus anchors on always-present chrome (bottom nav,
+// help button) so it works for both customers and drivers.
+const HOME_TOUR: TourStep[] = [
+  {
+    popover: {
+      title: 'ยินดีต้อนรับสู่ MoveSook 👋',
+      description:
+        'แพลตฟอร์มหาคนขับขนย้ายของแบบออนดีมานด์ โพสต์งาน คนขับที่ว่างใกล้คุณรับงานได้ทันที มาดูวิธีใช้งานกันสั้น ๆ',
+    },
+  },
+  {
+    element: '[data-tour="post-cta"]',
+    popover: {
+      title: 'เริ่มจากตรงนี้',
+      description: 'กด “โพสต์งานขนย้าย” กรอกของที่จะย้าย ต้นทาง–ปลายทาง แล้วรอคนขับมารับงาน',
+    },
+  },
+  {
+    element: '[data-tour="bottom-nav"]',
+    popover: {
+      title: 'เมนูหลัก',
+      description: 'สลับหน้าได้จากแถบด้านล่าง — หน้าหลัก งานของฉัน การแจ้งเตือน และโปรไฟล์',
+    },
+  },
+  {
+    element: '[data-tour="help-button"]',
+    popover: {
+      title: 'ดูคำแนะนำซ้ำได้เสมอ',
+      description: 'กดปุ่มรูปหลอดไฟมุมขวาบนเพื่อเปิดคำแนะนำของแต่ละหน้าใหม่ได้ทุกเมื่อ',
+    },
+  },
+];
 
 // Authenticated home dashboard. The (app) layout's AppShell redirects
 // unauthenticated visitors to /login, so `me` is present here in practice.
@@ -42,6 +77,7 @@ export default function AppHomePage() {
   const name = me.displayName ?? 'ผู้ใช้';
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
+      <PageTour id="home" steps={HOME_TOUR} />
       <div>
         <p className="text-sm text-muted-foreground">สวัสดี</p>
         <h2 className="text-xl font-semibold tracking-tight">{name}</h2>
@@ -247,6 +283,7 @@ function CustomerHome() {
       {/* Primary CTA — post a job */}
       <Link
         href="/app/jobs/new"
+        data-tour="post-cta"
         className="block rounded-2xl bg-primary p-4 text-primary-foreground shadow-sm transition-transform active:scale-[0.99]"
       >
         <div className="flex items-center gap-3">

@@ -32,6 +32,18 @@ import {
 } from '@movesook/shared';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const DRIVER_EDIT_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="driver-edit-head"]',
+    popover: {
+      title: 'แก้ไขข้อมูลคนขับ',
+      description:
+        'อัปเดตข้อมูลส่วนตัว รถ และเอกสารได้ที่นี่ ถ้าใบสมัครถูกตีกลับ แก้ไขแล้วบันทึกเพื่อส่งตรวจสอบใหม่อีกครั้ง',
+    },
+  },
+];
 
 // Vehicle photo angles the driver uploads (front/back/left/right + plate).
 const VEHICLE_PHOTOS = [
@@ -197,9 +209,10 @@ export default function DriverEditPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
+      <PageTour id="driver-edit" steps={DRIVER_EDIT_TOUR} />
       <Card>
         <CardHeader>
-          <CardTitle>ข้อมูลคนขับ</CardTitle>
+          <CardTitle data-tour="driver-edit-head">ข้อมูลคนขับ</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {/* ── ข้อมูลส่วนตัว ── */}

@@ -2,6 +2,14 @@ import { z } from 'zod';
 import { JobStatusSchema, PromoTypeSchema, type PromoType } from '../enums';
 import { PageQuery } from './pagination';
 
+/** A customer a promo is whitelisted to. */
+export const PromoCustomerDto = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  phone: z.string().nullable(),
+});
+export type PromoCustomerDto = z.infer<typeof PromoCustomerDto>;
+
 export const PromoCodeDto = z.object({
   code: z.string(),
   type: PromoTypeSchema,
@@ -12,6 +20,8 @@ export const PromoCodeDto = z.object({
   expiresAt: z.string().datetime().nullable(),
   isActive: z.boolean(),
   createdAt: z.string().datetime(),
+  // Customer whitelist — empty means the code is public (usable by anyone).
+  customers: z.array(PromoCustomerDto),
 });
 export type PromoCodeDto = z.infer<typeof PromoCodeDto>;
 
@@ -42,6 +52,8 @@ export const AdminCreatePromoInput = z
     minOrder: z.number().int().min(0).optional(),
     maxUses: z.number().int().min(1).optional(),
     expiresAt: z.coerce.date().optional(),
+    // Customer whitelist (Customer ids). Omit/empty = public code.
+    customerIds: z.array(z.string()).max(1000).optional(),
   })
   .refine((v) => v.type !== 'PERCENT' || v.value <= 100, {
     message: 'ส่วนลดเปอร์เซ็นต์ต้องไม่เกิน 100',
@@ -55,6 +67,9 @@ export const AdminUpdatePromoInput = z.object({
   minOrder: z.number().int().min(0).nullable().optional(),
   maxUses: z.number().int().min(1).nullable().optional(),
   expiresAt: z.coerce.date().nullable().optional(),
+  // Replace the customer whitelist wholesale. Omit = leave unchanged;
+  // [] = clear it (make the code public again).
+  customerIds: z.array(z.string()).max(1000).optional(),
 });
 export type AdminUpdatePromoInput = z.infer<typeof AdminUpdatePromoInput>;
 

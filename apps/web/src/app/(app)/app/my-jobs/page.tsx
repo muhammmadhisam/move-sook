@@ -21,6 +21,7 @@ import { api } from '@/lib/api';
 import { JobRouteMap } from '@/components/job-route-map';
 import { PaymentSlipCard } from '@/components/payment-slip-card';
 import { ReviewDialog } from '@/components/review-dialog';
+import { PageTour, type TourStep } from '@/components/tour/tour';
 import { JOB_STATUS_LABEL, JOB_STATUS_VARIANT, jobDest, jobOrigin } from '@/lib/job-display';
 
 const CANCELLABLE = new Set(['DRAFT', 'PENDING_PAYMENT', 'POSTED', 'ACCEPTED']);
@@ -35,6 +36,22 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'active', label: 'กำลังดำเนินการ' },
   { key: 'done', label: 'เสร็จสิ้น' },
   { key: 'cancelled', label: 'ยกเลิก' },
+];
+
+const MY_JOBS_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="my-jobs-head"]',
+    popover: {
+      title: 'งานที่คุณจ้าง',
+      description: 'งานขนย้ายที่คุณโพสต์ทั้งหมดอยู่ที่นี่ ติดตามสถานะ อัปโหลดสลิป และให้คะแนนคนขับได้จากหน้านี้',
+    },
+  },
+  {
+    popover: {
+      title: 'แท็บสถานะ',
+      description: 'สลับดู “กำลังดำเนินการ”, “เสร็จสิ้น” และ “ยกเลิก” งานที่รอชำระเงินจะแจ้งให้แนบสลิปที่นี่',
+    },
+  },
 ];
 
 // Active-job progress steps shown under the card.
@@ -279,9 +296,10 @@ export default function MyJobsPage() {
 
   return (
     <main className="mx-auto max-w-md px-4 py-6">
+      <PageTour id="my-jobs" steps={MY_JOBS_TOUR} />
       {/* Header */}
       <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">งานของฉัน</h1>
+        <h1 data-tour="my-jobs-head" className="text-2xl font-bold tracking-tight">งานของฉัน</h1>
         <Button asChild size="sm">
           <Link href="/app/jobs/new">+ โพสต์งาน</Link>
         </Button>

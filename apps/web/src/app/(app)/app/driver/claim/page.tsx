@@ -7,6 +7,17 @@ import { toast } from 'sonner';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from '@movesook/ui';
 import { ClaimDriverInput } from '@movesook/shared';
 import { api } from '@/lib/api';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const DRIVER_CLAIM_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="claim-head"]',
+    popover: {
+      title: 'กรอกโค้ดเชิญคนขับ',
+      description: 'แอดมินจะส่งโค้ดเชิญให้หลังสร้างใบสมัคร นำโค้ดมากรอกที่นี่เพื่อเริ่มขั้นตอนเป็นคนขับ',
+    },
+  },
+];
 
 export default function DriverClaimPage() {
   const router = useRouter();
@@ -35,9 +46,10 @@ export default function DriverClaimPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
+      <PageTour id="driver-claim" steps={DRIVER_CLAIM_TOUR} />
       <Card>
         <CardHeader>
-          <CardTitle>กรอกโค้ดเชิญคนขับ</CardTitle>
+          <CardTitle data-tour="claim-head">กรอกโค้ดเชิญคนขับ</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">

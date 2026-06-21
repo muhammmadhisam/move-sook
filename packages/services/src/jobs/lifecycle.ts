@@ -129,7 +129,7 @@ export async function createJob(sub: string, input: CreateJobInput): Promise<Job
     });
     // An invalid promo at post time is silently ignored (the customer already
     // saw why via POST /jobs/estimate); it never blocks publishing the job.
-    const promo = await evaluatePromo(input.promoCode, quote.subtotal);
+    const promo = await evaluatePromo(input.promoCode, quote.subtotal, sub);
     if (promo?.ok) {
       appliedPromoCode = promo.promo.code;
       discountAmount = promo.discount;

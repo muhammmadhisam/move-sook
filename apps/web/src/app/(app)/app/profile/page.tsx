@@ -33,11 +33,29 @@ import type {
   PublicSystemConfig,
 } from '@movesook/shared';
 import { useAuth } from '@/hooks/use-auth';
+import { PageTour, type TourStep } from '@/components/tour/tour';
 import { AvailabilityToggle } from '@/components/availability-toggle';
 import { DriverAppealDialog } from '@/components/driver-appeal-dialog';
 import { api } from '@/lib/api';
 
 const baht = (n: number) => `฿${n.toLocaleString()}`;
+
+const PROFILE_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="profile-identity"]',
+    popover: {
+      title: 'โปรไฟล์ของคุณ',
+      description: 'จัดการข้อมูลส่วนตัว เบอร์ติดต่อ และดูสถานะบัญชีได้จากหน้านี้',
+    },
+  },
+  {
+    popover: {
+      title: 'สมัคร/จัดการคนขับ',
+      description:
+        'อยากหารายได้? สมัครเป็นคนขับได้จากที่นี่ ถ้าเป็นคนขับอยู่แล้ว จะมีปุ่มเปิด–ปิดรับงานและสรุปรายได้ให้ด้วย',
+    },
+  },
+];
 
 const STATUS_BANNER: Record<
   DriverVerifyStatus,
@@ -102,8 +120,9 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-md space-y-4 p-4">
+      <PageTour id="profile" steps={PROFILE_TOUR} />
       {/* Identity */}
-      <Card>
+      <Card data-tour="profile-identity">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-lg font-semibold text-primary-foreground">

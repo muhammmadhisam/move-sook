@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useNotifications } from '@/hooks/use-notifications';
 import { DriverLocationBroadcaster } from '@/components/driver-location-broadcaster';
+import { TourButton } from '@/components/tour/tour';
 
 // Statuses where the driver is en route — broadcast GPS only during these.
 const EN_ROUTE: Set<JobStatus> = new Set(['ACCEPTED', 'PICKED_UP', 'IN_TRANSIT']);
@@ -100,6 +101,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
           )}
           <span className="text-base font-semibold tracking-tight">MoveSook</span>
+          {/* Right side: per-page guided-tour replay (hidden when the page has none) */}
+          <div className="ml-auto flex items-center">
+            <TourButton />
+          </div>
         </div>
       </header>
 
@@ -107,7 +112,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="pb-24">{children}</div>
 
       {/* Bottom tab bar — navy chrome, active tab in brand red */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-navy-800 bg-navy-900">
+      <nav data-tour="bottom-nav" className="fixed inset-x-0 bottom-0 z-30 border-t border-navy-800 bg-navy-900">
         <div className="mx-auto flex max-w-md">
           {tabs.map(({ href, label, icon: Icon, match, badge }) => {
             const active = match(pathname);

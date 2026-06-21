@@ -35,6 +35,24 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { ImageUpload } from '@/components/image-upload';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const DRIVER_APPLY_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="apply-head"]',
+    popover: {
+      title: 'สมัครเป็นคนขับ',
+      description:
+        'กรอกข้อมูลและเอกสารตามขั้นตอน เมื่อส่งแล้วทีมงานจะตรวจสอบ (โดยทั่วไปไม่เกิน 24 ชม.) อนุมัติแล้วเริ่มรับงานได้ทันที',
+    },
+  },
+  {
+    popover: {
+      title: 'เตรียมเอกสารให้พร้อม',
+      description: 'ใช้รูปบัตรประชาชน ใบขับขี่ และข้อมูลรถ ยิ่งข้อมูลครบถ้วนชัดเจน ยิ่งอนุมัติเร็ว',
+    },
+  },
+];
 
 const STEPS = ['ข้อมูลส่วนตัว', 'บัตร & ที่อยู่', 'ข้อมูลรถ & ใบขับขี่', 'รูปรถ', 'คำถามคัดกรอง'] as const;
 
@@ -185,9 +203,10 @@ export default function DriverApplyPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
+      <PageTour id="driver-apply" steps={DRIVER_APPLY_TOUR} />
       <Card>
         <CardHeader>
-          <CardTitle>สมัครเป็นคนขับ</CardTitle>
+          <CardTitle data-tour="apply-head">สมัครเป็นคนขับ</CardTitle>
           {/* Step indicator */}
           <div className="mt-3 flex items-center gap-1.5">
             {STEPS.map((label, i) => (

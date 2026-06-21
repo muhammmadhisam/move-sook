@@ -37,7 +37,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'active', label: 'กำลังทำ' },
   { key: 'done', label: 'ประวัติ' },
 ];
-import { FileText, Flag, MapPin, Package } from 'lucide-react';
+import { FileText, Flag, MapPin, Package, Phone } from 'lucide-react';
 import { api, API_BASE_URL } from '@/lib/api';
 import { useGeolocation } from '@/hooks/use-geolocation';
 import { distanceKm, formatDistance } from '@/lib/geo';
@@ -48,6 +48,24 @@ import {
   JOB_STATUS_VARIANT,
   nextForwardStatus,
 } from '@/lib/job-display';
+import { PageTour, type TourStep } from '@/components/tour/tour';
+
+const ACTIVE_TOUR: TourStep[] = [
+  {
+    element: '[data-tour="active-head"]',
+    popover: {
+      title: 'งานที่คุณรับไว้',
+      description: 'จัดการงานที่กำลังทำที่นี่ — กดอัปเดตสถานะ (รับของ → กำลังส่ง → ส่งสำเร็จ) ตามขั้นตอนงานจริง',
+    },
+  },
+  {
+    popover: {
+      title: 'ปิดงานให้ครบ',
+      description:
+        'อัปโหลดรูปหลักฐานการส่ง และต้องอยู่ในรัศมีปลายทางจึงจะกดส่งสำเร็จได้ งาน COD จะมีการ์ดเก็บเงินปลายทางให้ด้วย',
+    },
+  },
+];
 
 // Marking a delivery done is gated on the driver being within the admin-configured radius
 // of the job's destination. Enforced in production only — geocoding/GPS precision plus
@@ -145,7 +163,8 @@ export default function ActiveJobsPage() {
 
   return (
     <main className="mx-auto max-w-md p-6">
-      <h1 className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับไว้</h1>
+      <PageTour id="active" steps={ACTIVE_TOUR} />
+      <h1 data-tour="active-head" className="mb-4 text-2xl font-semibold tracking-tight">งานที่รับไว้</h1>
 
       <div className="mb-4 flex rounded-lg border bg-muted/40 p-1">
         {TABS.map((t) => {
@@ -251,6 +270,16 @@ export default function ActiveJobsPage() {
                     </a>
                   </Button>
                 </div>
+
+                {/* Call the customer — shown while the job is still active and a phone is on file. */}
+                {job.contactPhone && isInHand(job.status) && (
+                  <Button asChild variant="outline" className="w-full">
+                    <a href={`tel:${job.contactPhone}`}>
+                      <Phone className="mr-1.5 h-4 w-4" />
+                      โทรหาลูกค้า ({job.contactPhone})
+                    </a>
+                  </Button>
+                )}
 
                 {/* Proof photos — multiple allowed */}
                 {/* Pickup proof: editable while in-hand, read-only once the job is closed. */}

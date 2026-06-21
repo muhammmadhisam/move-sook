@@ -74,6 +74,21 @@ export function authenticate(kind: CookieKind) {
   });
 }
 
+/**
+ * Best-effort USER identification for otherwise-public routes. Attaches `claims`
+ * when a valid user cookie is present, and silently continues (no 401) when it is
+ * missing or invalid. Used by the public estimate endpoint so a logged-in customer
+ * can preview a promo restricted to them, without forcing auth on anonymous callers.
+ */
+export const optionalUser = createMiddleware<AppEnv>(async (c, next) => {
+  const token = getCookie(c, env.USER_COOKIE_NAME);
+  if (token) {
+    const result = await verifyJwt(token, env.JWT_SECRET, 'user');
+    if (result.ok) c.set('claims', result.claims);
+  }
+  await next();
+});
+
 /** Assert the authenticated user holds one of the allowed roles (else 403). */
 export function requireRole(...allowed: Role[]) {
   return createMiddleware<AppEnv>(async (c, next) => {

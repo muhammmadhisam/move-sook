@@ -58,7 +58,10 @@ export async function getServiceAreas(): Promise<JobServiceAreasResponse> {
 /** Full itemised quote for a specific trip (distance base + floor/helper surcharges)
  *  plus an optional promo-code preview. Mirrors what POST /jobs charges so the
  *  customer sees the real price before posting. */
-export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobResponse> {
+export async function estimateJob(
+  input: EstimateJobInput,
+  userId?: string | null,
+): Promise<EstimateJobResponse> {
   const [baseFare, pricePerKm, pricePerKmShared, floorSurcharge, helperSurcharge, surge, flatRate, perItemRate, sys] =
     await Promise.all([
       getBaseFare(),
@@ -92,7 +95,9 @@ export async function estimateJob(input: EstimateJobInput): Promise<EstimateJobR
   });
 
   // Promo is preview-only here — usedCount is incremented only at job creation.
-  const promo = await evaluatePromo(input.promoCode, quote.subtotal);
+  // Pass the (optional) session user so a logged-in customer sees a discount from a
+  // code restricted to them; anonymous callers can't preview customer-locked codes.
+  const promo = await evaluatePromo(input.promoCode, quote.subtotal, userId);
   const discountAmount = promo?.ok ? promo.discount : 0;
 
   return {

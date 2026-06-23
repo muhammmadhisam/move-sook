@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { APIProvider, Map, Marker, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, Marker, useMap, useMapsLibrary } from '@vis.gl/react-google-maps';
 import { DEST_ICON, DRIVER_ICON, PICKUP_ICON } from '@/lib/marker-icons';
 import { fetchRoutePath } from '@/lib/geo';
 
@@ -21,6 +21,38 @@ interface JobRouteMapProps {
   className?: string;
 }
 
+/**
+ * Road-following path with a two-tier source: first the API's cached Directions
+ * proxy (`fetchRoutePath`). When that returns the straight-line fallback (≤2
+ * points — i.e. the server `GOOGLE_MAPS_SERVER_KEY` is unset or routing failed),
+ * fall back to a client-side DirectionsService call using the browser Maps key,
+ * so the route still renders as an actual road path. This client call self-
+ * disables once the server key is configured (the proxy then returns >2 points).
+ */
+async function resolvePath(
+  routes: google.maps.RoutesLibrary | null,
+  from: LatLng,
+  to: LatLng,
+  opts?: { live?: boolean },
+): Promise<LatLng[]> {
+  const path = await fetchRoutePath(from, to, opts);
+  if (path.length > 2 || !routes) return path;
+  try {
+    const result = await new routes.DirectionsService().route({
+      origin: from,
+      destination: to,
+      travelMode: google.maps.TravelMode.DRIVING,
+    });
+    const overview = result.routes[0]?.overview_path;
+    if (overview && overview.length > 2) {
+      return overview.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+    }
+  } catch {
+    // Keep the straight-line fallback on any client-side routing error.
+  }
+  return path;
+}
+
 /** Fits the viewport to the available points and draws the route legs. */
 function RouteOverlay({
   origin,
@@ -32,6 +64,7 @@ function RouteOverlay({
   driver?: LatLng | null;
 }) {
   const map = useMap();
+  const routes = useMapsLibrary('routes');
 
   useEffect(() => {
     if (!map) return;
@@ -67,7 +100,7 @@ function RouteOverlay({
     // Driver → pickup leg (dashed, the "go pick up" segment). The driver endpoint
     // moves with live tracking, so this leg uses the short-TTL `live` cache.
     if (driver && origin) {
-      void fetchRoutePath(driver, origin, { live: true }).then((path) =>
+      void resolvePath(routes, driver, origin, { live: true }).then((path) =>
         draw(path, {
           geodesic: true,
           strokeOpacity: 0,
@@ -85,7 +118,7 @@ function RouteOverlay({
 
     // Pickup → dropoff leg (solid, the delivery segment).
     if (origin && dest) {
-      void fetchRoutePath(origin, dest).then((path) =>
+      void resolvePath(routes, origin, dest).then((path) =>
         draw(path, {
           geodesic: true,
           strokeColor: '#E0202A', // brand-600 (logo red)
@@ -99,7 +132,7 @@ function RouteOverlay({
       cancelled = true;
       lines.forEach((l) => l.setMap(null));
     };
-  }, [map, origin, dest, driver]);
+  }, [map, origin, dest, driver, routes]);
 
   return null;
 }

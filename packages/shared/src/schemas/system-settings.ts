@@ -154,6 +154,7 @@ export const PublicSystemConfig = z.object({
   payAccountName: z.string(),
   payAccountNumber: z.string(),
   payQrUrl: z.string(),
+  baseFare: z.number().int().min(0), // flat starting fare added to every quote before per-km (shown on the marketing pricing page)
   addressChangeFee: z.number().int().min(0), // flat base fee for a destination-change request (client previews the total)
   prohibitedItems: z.array(z.string()), // resolved banned-cargo list shown on the posting form
   // COD availability — the posting form offers the COD option only when enabled and

@@ -65,6 +65,7 @@ import { LocationPicker } from '@/components/location-picker';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
 import { ImageUpload } from '@/components/image-upload';
 import type { LatLng } from '@/components/job-route-map';
+import { DRAFT_KEY, DRAFT_TTL_MS, type JobDraft, type Lift } from '@/lib/job-draft';
 
 const PIN_GREEN = 'https://maps.google.com/mapfiles/ms/icons/green-dot.png';
 const PIN_RED = 'https://maps.google.com/mapfiles/ms/icons/red-dot.png';
@@ -73,39 +74,8 @@ const STEPS = ['รายละเอียด', 'ที่รับ', 'ปล�
 
 // Draft autosave: keep what the customer typed for 1 day so a refresh/back never
 // loses it. Cleared on successful post (or once the draft is older than the TTL).
-const DRAFT_KEY = 'movesook:new-job-draft';
-const DRAFT_TTL_MS = 24 * 60 * 60 * 1000; // 1 day
-
-// Tri-state for "has elevator": unknown keeps the field null on the server.
-type Lift = 'unknown' | 'yes' | 'no';
-
-// What we autosave to localStorage. Consent checkboxes are intentionally excluded
-// so the customer always re-acknowledges the terms before posting.
-type JobDraft = {
-  form: {
-    vehicleType: VehicleType;
-    contactPhone: string;
-    notes: string;
-    originAddress: string;
-    originProvince: string;
-    originFloor: string;
-    destAddress: string;
-    destProvince: string;
-    destFloor: string;
-    scheduledAt: string;
-  };
-  items: JobItem[];
-  needsHelpers: boolean;
-  originLift: Lift;
-  destLift: Lift;
-  origin: LatLng | null;
-  dest: LatLng | null;
-  scheduled: boolean;
-  itemCategory: CargoCategory;
-  pricingMode: PricingMode;
-  promoCode: string;
-  step: number;
-};
+// Shape + storage live in @/lib/job-draft so the pricing-page fare calculator can
+// pre-seed the same draft and this wizard restores it on mount unchanged.
 const liftToBool = (v: Lift): boolean | undefined =>
   v === 'yes' ? true : v === 'no' ? false : undefined;
 

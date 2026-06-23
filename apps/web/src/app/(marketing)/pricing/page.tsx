@@ -11,8 +11,9 @@ import {
   Calculator,
 } from 'lucide-react';
 import { PageHeader, Section, CtaBand } from '@/components/marketing/sections';
+import { FareCalculator } from '@/components/marketing/fare-calculator';
 import { getVehicleRates } from '@/lib/pricing';
-import { getCommissionPct } from '@/lib/system';
+import { getCommissionPct, getBaseFare } from '@/lib/system';
 
 // ISR: re-fetch active vehicle rates at most every 5 minutes so admin pricing
 // edits go live without a redeploy.
@@ -124,11 +125,16 @@ function FormulaChip({
   );
 }
 
-const BASE_FARE = 250; // flat starting fare (THB), AppSetting `base_fare` default
 const EXAMPLE_DISTANCE_KM = 15;
 
 export default async function PricingPage() {
-  const [vehicles, commissionPct] = await Promise.all([getVehicleRates(), getCommissionPct()]);
+  // Everything on this page is driven by live admin settings via the API: the
+  // vehicle catalog + per-km rates, the commission rate, and the flat base fare.
+  const [vehicles, commissionPct, BASE_FARE] = await Promise.all([
+    getVehicleRates(),
+    getCommissionPct(),
+    getBaseFare(),
+  ]);
 
   // Worked example uses the first vehicle that actually has a per-km rate set, so
   // the numbers always match a real row in the table. Hidden when none is priced.
@@ -143,6 +149,24 @@ export default async function PricingPage() {
         title="ราคาโปร่งใส รู้ก่อนจ่าย"
         description="ค่าบริการคำนวณอัตโนมัติจากระยะทาง ประเภทรถ และปริมาณของ คุณจะเห็นราคาที่ชัดเจนก่อนยืนยันงานเสมอ"
       />
+
+      {/* Interactive fare calculator — pick origin/destination on the map */}
+      {vehicles.length > 0 && (
+        <Section>
+          <div className="mx-auto max-w-2xl text-center">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              คำนวณค่าบริการล่วงหน้า
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
+              เลือกจุดรับของและปลายทางบนแผนที่ เลือกประเภทรถ
+              แล้วดูราคาประมาณการทันที — ไม่ต้องเข้าสู่ระบบ
+            </p>
+          </div>
+          <div className="mt-8">
+            <FareCalculator vehicles={vehicles} />
+          </div>
+        </Section>
+      )}
 
       {/* Vehicle rate cards */}
       <Section>

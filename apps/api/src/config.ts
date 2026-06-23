@@ -56,6 +56,10 @@ const EnvSchema = z.object({
   // restrict it by server IP + to the Directions/Geocoding APIs only. When
   // absent, /geo falls back to straight-line paths / null geocodes (no billing).
   GOOGLE_MAPS_SERVER_KEY: z.string().optional(),
+  // Cloudflare Turnstile secret key — verifies the bot-challenge token on the
+  // public fare calculator (POST /jobs/estimate for guests). When unset, the
+  // check is skipped (dev / not enabled). Pair with NEXT_PUBLIC_TURNSTILE_SITE_KEY.
+  TURNSTILE_SECRET_KEY: z.string().optional(),
   // Redis — backs BullMQ (LINE-push queue + repeatable maintenance jobs) and the
   // admin-login rate limiter. Required: the queue/worker layer and rate limiter
   // all depend on it.

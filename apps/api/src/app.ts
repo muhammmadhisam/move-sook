@@ -7,7 +7,7 @@ import * as Sentry from '@sentry/node';
 import { env } from './config';
 import { logger as baseLogger } from './lib/logger';
 import type { AppEnv } from './lib/context';
-import { getSystemSettings, getCommissionPct } from '@movesook/services/support';
+import { getSystemSettings, getCommissionPct, getBaseFare } from '@movesook/services/support';
 import { listPublicServiceAreas, listPublicVehiclePricing } from '@movesook/services/admin';
 import { resolveProhibitedItems, type PublicSystemConfig } from '@movesook/shared';
 import { authRoutes } from './routes/auth';
@@ -74,7 +74,11 @@ const app = new Hono<AppEnv>()
   .get('/health', (c) => c.json({ ok: true, service: 'movesook-api' }))
   // Public app config: maintenance banner + support contact (no auth).
   .get('/system/public', async (c) => {
-    const [s, commissionPct] = await Promise.all([getSystemSettings(), getCommissionPct()]);
+    const [s, commissionPct, baseFare] = await Promise.all([
+      getSystemSettings(),
+      getCommissionPct(),
+      getBaseFare(),
+    ]);
     const body: PublicSystemConfig = {
       maintenanceMode: s.maintenanceMode,
       maintenanceMessage: s.maintenanceMessage,
@@ -85,6 +89,7 @@ const app = new Hono<AppEnv>()
       payAccountName: s.payAccountName,
       payAccountNumber: s.payAccountNumber,
       payQrUrl: s.payQrUrl,
+      baseFare: Math.round(baseFare),
       addressChangeFee: s.addressChangeFee,
       prohibitedItems: resolveProhibitedItems(s.prohibitedItemsList),
       codEnabled: s.codEnabled,

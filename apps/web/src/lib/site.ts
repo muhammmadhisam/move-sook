@@ -16,6 +16,9 @@ export const SITE = {
   lineOaUrl: "https://line.me/R/ti/p/@013ogbsz",
   lineMiniAppUrl: "https://miniapp.line.me/2010389451-oorWbPjK",
   commissionPct: 12,
+  // Fallback flat starting fare (THB) when GET /system/public is unreachable;
+  // the live value comes from admin settings (AppSetting `base_fare`).
+  baseFare: 250,
 } as const;
 
 // Build a LINE Mini App deep link. Inside LINE the Mini App runs in a logged-in

@@ -351,6 +351,15 @@ export function computeAddressChangeFee(input: AddressChangeFeeInput): AddressCh
 export const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
 export const ADMIN_LOGIN_LOCKOUT_MS = 15 * 60 * 1000; // 15 minutes
 
+/**
+ * Public fare-calculator (POST /jobs/estimate) abuse cap for ANONYMOUS callers.
+ * Each guest IP may compute this many quotes per rolling window before being
+ * asked to sign in — protects the Google Maps/Directions bill the quote relies
+ * on. Logged-in users (the actual posting flow) are never limited.
+ */
+export const ESTIMATE_GUEST_MAX = 5;
+export const ESTIMATE_GUEST_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
+
 /** JWT lifetime (seconds). */
 export const USER_JWT_TTL_SEC = 60 * 60 * 24 * 30; // 30 days (LIFF sessions)
 export const ADMIN_JWT_TTL_SEC = 60 * 60 * 24; // 24 hours

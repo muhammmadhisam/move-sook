@@ -18,6 +18,8 @@ export interface ServiceEnv {
   R2_PUBLIC_URL?: string;
   /** Server-side Google Maps key for the cached Directions/Geocoding proxy. */
   GOOGLE_MAPS_SERVER_KEY?: string;
+  /** Cloudflare Turnstile secret — verifies the guest fare-calculator challenge. */
+  TURNSTILE_SECRET_KEY?: string;
   WEB_ORIGIN: string;
   ADMIN_ORIGIN: string;
   LINE_CHANNEL_ID: string;

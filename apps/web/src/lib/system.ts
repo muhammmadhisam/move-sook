@@ -5,14 +5,25 @@ import { api } from './api';
 import { SITE } from './site';
 import type { PublicSystemConfig } from '@movesook/shared';
 
-/** Current platform commission rate (%), from admin settings. */
-export async function getCommissionPct(): Promise<number> {
+/** The full public system config (GET /system/public), or null if unreachable. */
+export async function getPublicConfig(): Promise<PublicSystemConfig | null> {
   try {
     const res = await api.system.public.$get();
-    if (!res.ok) return SITE.commissionPct;
-    const cfg = (await res.json()) as PublicSystemConfig;
-    return cfg.commissionPct;
+    if (!res.ok) return null;
+    return (await res.json()) as PublicSystemConfig;
   } catch {
-    return SITE.commissionPct;
+    return null;
   }
+}
+
+/** Current platform commission rate (%), from admin settings. */
+export async function getCommissionPct(): Promise<number> {
+  const cfg = await getPublicConfig();
+  return cfg?.commissionPct ?? SITE.commissionPct;
+}
+
+/** Flat starting fare (THB) applied before per-km, from admin settings. */
+export async function getBaseFare(): Promise<number> {
+  const cfg = await getPublicConfig();
+  return cfg?.baseFare ?? SITE.baseFare;
 }

@@ -14,8 +14,12 @@ import {
   UpdateJobStatusInput,
   UploadDestChangeSlipInput,
   UploadPaymentSlipInput,
+  ESTIMATE_GUEST_MAX,
   isTerminalStatus,
 } from '@movesook/shared';
+import { HTTPException } from 'hono/http-exception';
+import { getConnInfo } from '@hono/node-server/conninfo';
+import { checkEstimateQuota, verifyTurnstile } from '@movesook/services/support';
 import type { AppEnv } from '../lib/context';
 import { authenticate, optionalUser, requireRole } from '../middleware/auth';
 import {
@@ -60,9 +64,34 @@ export const jobRoutes = new Hono<AppEnv>()
   // Public: full itemised quote for a specific trip + an optional promo-code preview.
   // optionalUser attaches the session (if any) so customer-restricted promos preview
   // correctly for the logged-in customer without forcing auth on anonymous callers.
-  .post('/estimate', optionalUser, zValidator('json', EstimateJobInput), async (c) =>
-    c.json(await estimateJob(c.req.valid('json'), c.get('claims')?.sub)),
-  )
+  .post('/estimate', optionalUser, zValidator('json', EstimateJobInput), async (c) => {
+    const sub = c.get('claims')?.sub;
+    // Anonymous callers (the public pricing-page calculator) get a per-IP cap so
+    // the free quote can't be hammered — each estimate costs a Google Directions
+    // call. Logged-in users (the actual posting flow, which re-quotes on every
+    // edit) are never limited. Keyed on the TCP peer, not a spoofable header.
+    if (!sub) {
+      const peer = getConnInfo(c).remote.address ?? 'unknown';
+      // Bot gate first: a Cloudflare Turnstile token must pass before we spend a
+      // Directions call or a quota slot (no-op when TURNSTILE_SECRET_KEY is unset).
+      const captchaOk = await verifyTurnstile(c.req.header('cf-turnstile-response'), peer);
+      if (!captchaOk) {
+        throw new HTTPException(403, {
+          message: 'การยืนยันว่าไม่ใช่บอทไม่สำเร็จ กรุณาลองใหม่อีกครั้ง',
+        });
+      }
+      const quota = await checkEstimateQuota(peer);
+      c.header('X-RateLimit-Limit', String(ESTIMATE_GUEST_MAX));
+      c.header('X-RateLimit-Remaining', String(quota.remaining));
+      if (!quota.allowed) {
+        c.header('Retry-After', String(quota.retryAfterSec));
+        throw new HTTPException(429, {
+          message: 'คุณใช้สิทธิ์คำนวณราคาครบแล้ว กรุณาเข้าสู่ระบบเพื่อคำนวณต่อ',
+        });
+      }
+    }
+    return c.json(await estimateJob(c.req.valid('json'), sub));
+  })
 
   // USER creates and publishes a moving job.
   .post(

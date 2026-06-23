@@ -8,7 +8,7 @@ import {
   useMap,
   type MapMouseEvent,
 } from '@vis.gl/react-google-maps';
-import { LocateFixed, Maximize2 } from 'lucide-react';
+import { LocateFixed, Maximize2, MapPin, Check } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -16,6 +16,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  cn,
 } from '@movesook/ui';
 import { reverseGeocodeRemote } from '@/lib/geo';
 import type { LatLng } from './job-route-map';
@@ -42,6 +43,12 @@ interface LocationPickerProps {
   /** Title for the enlarged (fullscreen) map dialog, e.g. "ปักหมุดจุดรับของ". */
   expandLabel?: string;
   className?: string;
+  /**
+   * 'inline' (default): always-on small map with an expand button — the original
+   * post-job picker behaviour. 'compact': render only a trigger button that opens
+   * the fullscreen map dialog, so screens with several locations stay uncluttered.
+   */
+  variant?: 'inline' | 'compact';
 }
 
 // Hat Yai, Songkhla — a sensible default for the southern launch area.
@@ -185,6 +192,7 @@ export function LocationPicker({
   defaultCenter,
   expandLabel = 'ปักหมุดบนแผนที่',
   className,
+  variant = 'inline',
 }: LocationPickerProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const [expanded, setExpanded] = useState(false);
@@ -205,26 +213,45 @@ export function LocationPicker({
   // the loaded Maps SDK and the same value/onChange/onResolve pin state.
   return (
     <APIProvider apiKey={apiKey}>
-      <div className={className} style={{ position: 'relative' }}>
-        <PickerMap
-          id={`${baseId}-inline`}
-          value={value}
-          onChange={onChange}
-          onResolve={onResolve}
-          icon={icon}
-          center={center}
-        />
-        {/* Expand to a large, easier-to-pin fullscreen map. */}
+      {variant === 'compact' ? (
+        // A single trigger button — the map lives only in the dialog, keeping
+        // multi-location screens (e.g. the fare calculator) clean.
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          aria-label="ขยายแผนที่"
-          className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-background/90 px-2 py-1 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-background"
+          className={cn(
+            'flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed px-3 py-2.5 text-sm font-medium transition-colors hover:bg-accent',
+            value
+              ? 'border-primary/40 text-primary'
+              : 'border-border text-muted-foreground',
+            className,
+          )}
         >
-          <Maximize2 className="h-3.5 w-3.5" />
-          ขยายแผนที่
+          {value ? <Check className="h-4 w-4" /> : <MapPin className="h-4 w-4" />}
+          {value ? 'ปักหมุดแล้ว · แตะเพื่อแก้ไข' : expandLabel}
         </button>
-      </div>
+      ) : (
+        <div className={className} style={{ position: 'relative' }}>
+          <PickerMap
+            id={`${baseId}-inline`}
+            value={value}
+            onChange={onChange}
+            onResolve={onResolve}
+            icon={icon}
+            center={center}
+          />
+          {/* Expand to a large, easier-to-pin fullscreen map. */}
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            aria-label="ขยายแผนที่"
+            className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-background/90 px-2 py-1 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-background"
+          >
+            <Maximize2 className="h-3.5 w-3.5" />
+            ขยายแผนที่
+          </button>
+        </div>
+      )}
 
       <Dialog open={expanded} onOpenChange={setExpanded}>
         {/*

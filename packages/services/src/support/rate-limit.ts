@@ -1,4 +1,9 @@
-import { ADMIN_LOGIN_LOCKOUT_MS, ADMIN_LOGIN_MAX_ATTEMPTS } from '@movesook/shared';
+import {
+  ADMIN_LOGIN_LOCKOUT_MS,
+  ADMIN_LOGIN_MAX_ATTEMPTS,
+  ESTIMATE_GUEST_MAX,
+  ESTIMATE_GUEST_WINDOW_MS,
+} from '@movesook/shared';
 import { redis } from './redis';
 import { getLogger } from '../runtime/env';
 
@@ -48,5 +53,40 @@ export async function recordSuccess(key: string): Promise<void> {
     await redis().del(cntKey(key), lockKey(key));
   } catch (err) {
     getLogger().error({ err }, '[rate-limit] recordSuccess failed');
+  }
+}
+
+// ── Public fare-calculator quota (anonymous callers only) ───────────────────
+// Fixed-window per-IP counter for POST /jobs/estimate by guests, so the free
+// pricing-page calculator can't be hammered (each quote costs a Google Directions
+// call). One INCR per attempt; the window TTL is set on the first hit so it rolls
+// from the first quote. Fails OPEN on a Redis error — a Redis blip must never
+// block legitimate browsing.
+
+const estimateKey = (ip: string) => `rl:estimate:${ip}`;
+
+export interface EstimateQuota {
+  allowed: boolean;
+  /** Quotes still available in the current window (never negative). */
+  remaining: number;
+  /** Seconds until the window resets (for a Retry-After header). */
+  retryAfterSec: number;
+}
+
+/** Count one guest estimate attempt and report whether it's within the cap. */
+export async function checkEstimateQuota(ip: string): Promise<EstimateQuota> {
+  try {
+    const key = estimateKey(ip);
+    const count = await redis().incr(key);
+    if (count === 1) await redis().pexpire(key, ESTIMATE_GUEST_WINDOW_MS);
+    const ttl = await redis().pttl(key);
+    return {
+      allowed: count <= ESTIMATE_GUEST_MAX,
+      remaining: Math.max(0, ESTIMATE_GUEST_MAX - count),
+      retryAfterSec: ttl > 0 ? Math.ceil(ttl / 1000) : Math.ceil(ESTIMATE_GUEST_WINDOW_MS / 1000),
+    };
+  } catch (err) {
+    getLogger().error({ err }, '[rate-limit] checkEstimateQuota failed (allowing)');
+    return { allowed: true, remaining: ESTIMATE_GUEST_MAX, retryAfterSec: 0 };
   }
 }

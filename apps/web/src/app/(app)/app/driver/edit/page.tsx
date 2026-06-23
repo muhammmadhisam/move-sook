@@ -225,6 +225,7 @@ export default function DriverEditPage() {
                 id="firstName"
                 value={form.firstName}
                 onChange={(e) => set('firstName')(e.target.value)}
+                placeholder="เช่น สมชาย"
               />
             </div>
             <div className="grid gap-2">
@@ -233,6 +234,7 @@ export default function DriverEditPage() {
                 id="lastName"
                 value={form.lastName}
                 onChange={(e) => set('lastName')(e.target.value)}
+                placeholder="เช่น ใจดี"
               />
             </div>
           </div>
@@ -322,6 +324,7 @@ export default function DriverEditPage() {
               id="plate"
               value={form.plateNumber}
               onChange={(e) => set('plateNumber')(e.target.value)}
+              placeholder="เช่น กข 1234 สงขลา"
             />
           </div>
 
@@ -332,6 +335,7 @@ export default function DriverEditPage() {
                 id="licenseNo"
                 value={form.licenseNo}
                 onChange={(e) => set('licenseNo')(e.target.value)}
+                placeholder="เช่น 12345678"
               />
             </div>
             <div className="grid gap-2">
@@ -360,6 +364,7 @@ export default function DriverEditPage() {
               id="phone"
               value={form.phone}
               onChange={(e) => set('phone')(e.target.value)}
+              placeholder="เช่น 081-234-5678"
             />
           </div>
 

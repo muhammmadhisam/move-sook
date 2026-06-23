@@ -249,6 +249,7 @@ export default function DriverApplyPage() {
                     id="firstName"
                     value={form.firstName}
                     onChange={(e) => set('firstName')(e.target.value)}
+                    placeholder="เช่น สมชาย"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -259,6 +260,7 @@ export default function DriverApplyPage() {
                     id="lastName"
                     value={form.lastName}
                     onChange={(e) => set('lastName')(e.target.value)}
+                    placeholder="เช่น ใจดี"
                   />
                 </div>
               </div>
@@ -430,6 +432,7 @@ export default function DriverApplyPage() {
                     id="licenseNo"
                     value={form.licenseNo}
                     onChange={(e) => set('licenseNo')(e.target.value)}
+                    placeholder="เช่น 12345678"
                   />
                 </div>
                 <div className="grid gap-2">

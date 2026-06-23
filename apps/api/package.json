@@ -23,11 +23,11 @@
     "@movesook/db": "workspace:*",
     "@movesook/services": "workspace:*",
     "@movesook/shared": "workspace:*",
-    "@sentry/node": "^8.45.0",
+    "@sentry/node": "^8.55.2",
     "dotenv": "^16.4.7",
     "hono": "^4.12.25",
     "pino": "^9.5.0",
-    "tsx": "^4.19.2",
+    "tsx": "^4.22.4",
     "zod": "^3.24.1"
   },
   "devDependencies": {

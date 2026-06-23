@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Minimal typing for the slice of the Turnstile JS API we use.
 interface TurnstileApi {
@@ -11,6 +11,7 @@ interface TurnstileApi {
       callback: (token: string) => void;
       'expired-callback'?: () => void;
       'error-callback'?: () => void;
+      'timeout-callback'?: () => void;
       theme?: 'auto' | 'light' | 'dark';
       language?: string;
       size?: 'normal' | 'flexible' | 'compact';
@@ -27,6 +28,8 @@ declare global {
 
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 const SCRIPT_ID = 'cf-turnstile-script';
+// If no token arrives in this long, surface a retry instead of hanging forever.
+const TOKEN_TIMEOUT_MS = 20_000;
 
 /** Resolve once the Turnstile script is loaded and `window.turnstile` is ready. */
 function loadTurnstile(): Promise<TurnstileApi> {
@@ -61,11 +64,12 @@ function loadTurnstile(): Promise<TurnstileApi> {
 }
 
 /**
- * Cloudflare Turnstile widget. Renders once and reports the challenge token via
- * `onToken` (and `onToken(null)` when it expires or errors). To force a fresh
- * token after one is consumed (tokens are single-use server-side), remount this
- * component by changing its React `key`. Renders nothing without a site key, so
- * the calculator degrades gracefully in dev / when the feature isn't configured.
+ * Cloudflare Turnstile widget. Renders the challenge and reports the token via
+ * `onToken` (and `onToken(null)` on expiry/error). If the script is blocked, the
+ * widget errors, or no token arrives within TOKEN_TIMEOUT_MS, it shows an inline
+ * error with a "ลองใหม่" button instead of hanging silently — so the calculate
+ * button never gets stuck on "กำลังยืนยัน…" with no way forward. Renders nothing
+ * without a site key (feature disabled / dev).
  */
 export function Turnstile({
   onToken,
@@ -76,6 +80,9 @@ export function Turnstile({
 }) {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const containerRef = useRef<HTMLDivElement>(null);
+  // Bump to re-attempt after an error/timeout.
+  const [attempt, setAttempt] = useState(0);
+  const [errored, setErrored] = useState(false);
   // Keep the latest callback without re-running the render effect.
   const onTokenRef = useRef(onToken);
   onTokenRef.current = onToken;
@@ -85,27 +92,45 @@ export function Turnstile({
     const el = containerRef.current;
     let widgetId: string | null = null;
     let cancelled = false;
+    setErrored(false);
+
+    const fail = () => {
+      if (cancelled) return;
+      onTokenRef.current(null);
+      setErrored(true);
+    };
+
+    // Backstop: a widget that neither succeeds nor fires error-callback (e.g.
+    // a slow/blocked network) still resolves to the retry UI.
+    const timer = setTimeout(fail, TOKEN_TIMEOUT_MS);
 
     void loadTurnstile()
       .then((api) => {
         if (cancelled) return;
+        // Clear any leftover iframe before (re)rendering into this element.
+        el.innerHTML = '';
         widgetId = api.render(el, {
           sitekey: siteKey,
-          callback: (token) => onTokenRef.current(token),
-          'expired-callback': () => onTokenRef.current(null),
-          'error-callback': () => onTokenRef.current(null),
+          callback: (token) => {
+            if (cancelled) return;
+            clearTimeout(timer);
+            onTokenRef.current(token);
+          },
+          'expired-callback': fail,
+          'error-callback': fail,
+          'timeout-callback': fail,
           theme: 'auto',
           language: 'th',
         });
       })
       .catch(() => {
-        // Script blocked/unreachable — leave the token null; the API fails open
-        // on its side when its secret can't reach Cloudflare either.
-        onTokenRef.current(null);
+        clearTimeout(timer);
+        fail();
       });
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
       if (widgetId && window.turnstile) {
         try {
           window.turnstile.remove(widgetId);
@@ -114,10 +139,28 @@ export function Turnstile({
         }
       }
     };
-  }, [siteKey]);
+    // `attempt` forces a fresh render on retry.
+  }, [siteKey, attempt]);
 
   if (!siteKey) return null;
-  return <div ref={containerRef} className={className} />;
+
+  return (
+    <div className={className}>
+      <div ref={containerRef} />
+      {errored && (
+        <div className="mt-1 text-center text-xs text-muted-foreground">
+          ยืนยันความปลอดภัยไม่สำเร็จ
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="ml-1 font-medium text-primary underline"
+          >
+            ลองใหม่
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** True when Turnstile is configured (a site key is present) on this build. */
